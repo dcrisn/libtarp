@@ -1,0 +1,11 @@
+tests/tests.o: tests/tests.c \
+ /home/internal.netduma.com_daniel.naita/playground/libtarp/staging/include/tarp/sllist.h \
+ /home/internal.netduma.com_daniel.naita/playground/libtarp/tarp/cohort/cohort.h
+tests/sll_tests.o: tests/sll_tests.c \
+ /home/internal.netduma.com_daniel.naita/playground/libtarp/staging/include/tarp/sllist.h \
+ /home/internal.netduma.com_daniel.naita/playground/libtarp/tarp/cohort/cohort.h
+src/sllist.o: src/sllist.c \
+ /home/internal.netduma.com_daniel.naita/playground/libtarp/staging/include/tarp/sllist.h
+/home/internal.netduma.com_daniel.naita/playground/libtarp/tarp/cohort/cohort.o: \
+ /home/internal.netduma.com_daniel.naita/playground/libtarp/tarp/cohort/cohort.c \
+ /home/internal.netduma.com_daniel.naita/playground/libtarp/tarp/cohort/cohort.h

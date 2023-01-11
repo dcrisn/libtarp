@@ -1,0 +1,26 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+MODS_STACK_H	stack.h	2;"	d
+Queue_count	stack.c	/^ssize_t Queue_count(const Queue the_queue){$/;"	f
+Queue_dequeue	stack.c	/^void *Queue_dequeue(Queue the_queue){$/;"	f
+Queue_dynamic_destroy	stack.c	/^void Queue_dynamic_destroy(Queue *queue_ptr, bool free_data){$/;"	f
+Queue_dynamic_init	stack.c	/^void Queue_dynamic_init(Queue *queue_ptr){$/;"	f
+Queue_enqueue	stack.c	/^void Queue_enqueue(Queue the_queue, void *the_item){$/;"	f
+Queue_is_same	stack.c	/^bool Queue_is_same(const Queue qA, const Queue qB, bool (*comp)(void *, void *)){$/;"	f
+Queue_join_queues	stack.c	/^void Queue_join_queues(Queue qA, Queue qB){$/;"	f
+Queue_make_item__	stack.c	/^static struct queueitem *Queue_make_item__(void *the_value){$/;"	f	file:
+Queue_peek	stack.c	/^void *Queue_peek(const Queue the_queue){$/;"	f
+Queue_static_destroy	stack.c	/^void Queue_static_destroy(Queue queue_ptr, bool free_data){$/;"	f
+Queue_static_init	stack.c	/^void Queue_static_init(Queue queue_ptr){$/;"	f
+Stack	stack.h	/^typedef struct stackc *Stack; $/;"	t	typeref:struct:stackc
+count	stack.h	/^    ssize_t count;     \/\/ number of items in the queue$/;"	m	struct:stack
+data	stack.h	/^    void *data;   \/\/ a void ptr is used so that any type can be pointed to and thus pushed onto the stack;$/;"	m	struct:stackitem
+prev	stack.h	/^    struct stackitem *prev;$/;"	m	struct:stackitem	typeref:struct:stackitem::stackitem
+q_strings_comp	stack.c	/^bool q_strings_comp(void *first, void *second){$/;"	f
+stack	stack.h	/^struct stack{$/;"	s
+stackitem	stack.h	/^struct stackitem{$/;"	s
+top	stack.h	/^    struct stackitem *top;$/;"	m	struct:stack	typeref:struct:stack::stackitem
