@@ -39,7 +39,7 @@ INCLUDE_FLAGS   := $(addprefix -I,$(INCLUDE_FLAGS))
 
 CPPFLAGS        += $(INCLUDE_FLAGS)
 
-#CFLAGS          += -fPIC
+CFLAGS          += -fPIC
 
 # 
 # get a list of data structure sub-projects paths; 
@@ -76,6 +76,7 @@ export TARP_MODS_PATH
 export TARP_COMMON_PATH  
 export MODS_SUBDIRS
 export CPPFLAGS
+export CFLAGS
 export VALGRIND
 
 #$(info TARP_TOPDIR is $(TARP_TOPDIR))
