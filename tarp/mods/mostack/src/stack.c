@@ -3,8 +3,8 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "mocom.h"
-#include "stack.h"
+#include <mocom.h>
+#include <tarp/stack.h>
 
 
 /* ********************************************************** */

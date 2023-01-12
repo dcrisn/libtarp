@@ -9,7 +9,10 @@ PROJECT_ROOT      := $(shell realpath $(CURDIR))
 STAGING_DIR       := $(PROJECT_ROOT)/staging
 
 # copy headers here to allow for system header (angle bracket) include syntax
-STAGING_HEADERS   := $(STAGING_DIR)/include
+STAGING_HEADERS   := $(STAGING_DIR)/usr/include/
+
+# copy libs here to allow linking against
+STAGING_LIBS   := $(STAGING_DIR)/usr/lib
 
 # top directory for subprojects
 TARP_TOPDIR       := $(PROJECT_ROOT)/tarp
@@ -30,12 +33,13 @@ TARP_COMMON_PATH  := $(TARP_TOPDIR)/common
 #   + the cohort path
 #   + the common helpers path
 # 
-INCLUDE_FLAGS   := $(shell find $(STAGING_HEADERS) -type d )
-INCLUDE_FLAGS   += $(TARP_COHORT_PATH)
-INCLUDE_FLAGS   += $(TARP_COMMON_PATH)
+INCLUDE_FLAGS   := $(STAGING_HEADERS)/
+INCLUDE_FLAGS   += $(TARP_COHORT_PATH)/
 INCLUDE_FLAGS   := $(addprefix -I,$(INCLUDE_FLAGS))
 
 CPPFLAGS        += $(INCLUDE_FLAGS)
+
+#CFLAGS          += -fPIC
 
 # 
 # get a list of data structure sub-projects paths; 
@@ -49,6 +53,14 @@ MODS_SUBDIRS    := $(shell find $(TARP_MODS_PATH) -mindepth 1 -maxdepth 1 -type 
 # Get only the name of each MODS directory (i.e. last path component) to allow
 # individual builds at the command line
 MODS_TARGETS    := $(foreach mod, $(MODS_SUBDIRS),$(lastword $(subst /, ,$(mod))))
+
+# the shared library containing all data structures
+OUTPUT_SHARED_LIB := libtarp.so
+LIB_OBJS          := $(foreach mod, $(MODS_SUBDIRS), $(shell find $(mod)/src -iname "*.o" 2>/dev/null))
+LIB_OBJS          += $(shell find $(TARP_COMMON_PATH) -iname "*.o")
+$(info lib objs = $(LIB_OBJS))
+
+VALGRIND_REPORT_NAME := valgrind.txt
 
 #
 # pass VALGRIND=y at the command line to run output tests binary
@@ -75,17 +87,25 @@ export VALGRIND
 
 all: mods
 
-mods:
+mods: prepare
 	@for mod in $(MODS_TARGETS); do \
 		echo; \
 		echo "[ ] Building $$mod"; \
 		$(MAKE) -C $(TARP_MODS_PATH)/$$mod; \
 		done
 
+prepare:
+	mkdir -p $(STAGING_HEADERS)
+	mkdir -p $(STAGING_LIBS)
+	find $(TARP_COMMON_PATH) -ipath "*/include" -exec dirname {} \; | uniq | xargs -I input sh -c "cp -urf input/include/* $(STAGING_HEADERS)"
+	find $(TARP_MODS_PATH) -ipath "*/include" -exec dirname {} \; | uniq | xargs -I input sh -c "cp -urf input/include/* $(STAGING_HEADERS)"
+
 clean:
 	find $(PROJECT_ROOT) -type f -iname "*.o" -delete
 	find $(PROJECT_ROOT) -type f -iname "*.d" -delete
 	find $(PROJECT_ROOT) -type d -name 'out' -exec rm -rf {}/* \;
+	find $(PROJECT_ROOT) -iname $(VALGRIND_REPORT_NAME) -delete
+	rm -rf $(STAGING_DIR)/*
 
 $(foreach mod,$(MODS_TARGETS),$(mod)_clean):
 	find $(TARP_MODS_PATH)/$$mod -type f -iname "*.o*" -delete
@@ -93,4 +113,8 @@ $(foreach mod,$(MODS_TARGETS),$(mod)_clean):
 # build inidividual MOD
 $(MODS_TARGETS) : 
 	$(MAKE) -C $(TARP_MODS_PATH)/$@
+
+$(OUTPUT_SHARED_LIB) : mods
+	@mkdir -p $(STAGING_DIR)/usr/lib/
+	$(CC) $(CFLAGS) $(CPPFLAGS) -shared $(LIB_OBJS) -o $(STAGING_DIR)/usr/lib/$(OUTPUT_SHARED_LIB)
 

@@ -13,18 +13,7 @@ TESTS_BIN    :=  $(OUT_DIR)/test
 # Flag to only run tests when objects are (re)built
 RUN_FLAG     := $(OUT_DIR)/.runtest
 
-VALGRIND_REPORT := $(OUT_DIR)/valgrind.txt
-
-
-# Copy all public headers out of ./include/ and into $(STAGING_HEADERS);
-# include/ may contain subdirectories, but they should reflect what is 
-# meant to be in and be copied into STAGING_HEADERS; that is,
-# include/tarp/* will end up in <STAGING_HEADERS>/include/tarp/;
-# <STAGING_HEADER>/include represents the root search path for
-# public headers.
-define INSTALL_HEADERS
-	cp -urf $(INCLUDE_DIR)/* $(STAGING_HEADERS)/
-endef
+VALGRIND_REPORT := $(VALGRIND_REPORT_NAME)/valgrind.txt
 
 #
 # Find .c source files in any subdirectory under the CWD
@@ -47,28 +36,28 @@ define FIND_DEPS
 endef
 
 
-.PHONY : all prepare depends build test
-
 $(FIND_SOURCES)
 $(FIND_OBJS)
 $(FIND_DEPS)
 
-#$(info SOURCES is $(SOURCES))
-#$(info OBJS is $(OBJS))
-#$(info DEPS is $(DEPS))
-#$(info INCLUDE_FLAGS is $(INCLUDE_FLAGS))
-#$(info CPPFLAGS is $(CPPFLAGS))
-#$(info VALGRIND is $(VALGRIND))
+$(info SOURCES is $(SOURCES))
+$(info OBJS is $(OBJS))
+$(info DEPS is $(DEPS))
+$(info INCLUDE_FLAGS is $(INCLUDE_FLAGS))
+$(info CPPFLAGS is $(CPPFLAGS))
+$(info VALGRIND is $(VALGRIND))
+
+.PHONY : all prepare depends build test
 
 # list of depedencies to run by default
-DEFAULT_TARGET_DEPS  := prepare depends build runtest package
+DEFAULT_TARGET_DEPS := prepare depends build runtest package
 
-all: $(DEFAULT_TARGET_DEPS)
+#all: $(DEFAULT_TARGET_DEPS)
+all: prepare depends build runtest package
 
 prepare :
 	@echo "prepare running ... "
 	@rm -f $(RUN_FLAG)
-	$(INSTALL_HEADERS)
 
 build : $(TESTS_BIN)
 
@@ -78,7 +67,7 @@ depends: prepare $(DEPS)
 
 %.d : %.c
 	@echo "shit running"
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MM $^ -MT $(@:.d=.o) -MF $@
+	$(CC) $(CPPFLAGS) -MM $^ -MT $(@:.d=.o) -MF $@
 -include $(DEPS)
 
 # build objects from sources

@@ -1,5 +1,5 @@
 #include "cohort.h"
-#include "stack.h"
+#include <tarp/stack.h>
 
 /*
    Push and pop to to the stack and check that the counter is correctly
