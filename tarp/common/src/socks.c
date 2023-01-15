@@ -9,7 +9,7 @@
 #include <netdb.h>       /* getaddrinfo() */
 #include <poll.h>        /* poll API */
 
-#include <tarp/mocom.h>
+#include <tarp/common.h>
 #include <tarp/socks.h>
 
 /* 
