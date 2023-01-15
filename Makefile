@@ -55,10 +55,12 @@ MODS_SUBDIRS    := $(shell find $(TARP_MODS_PATH) -mindepth 1 -maxdepth 1 -type 
 MODS_TARGETS    := $(foreach mod, $(MODS_SUBDIRS),$(lastword $(subst /, ,$(mod))))
 
 # the shared library containing all data structures
-OUTPUT_SHARED_LIB := libtarp.so
-LIB_OBJS          := $(foreach mod, $(MODS_SUBDIRS), $(shell find $(mod)/src -iname "*.o" 2>/dev/null))
-LIB_OBJS          += $(shell find $(TARP_COMMON_PATH) -iname "*.o")
+LIBTARP_SO        := libtarp.so
+LIBTARP_OBJS      := $(foreach mod, $(MODS_SUBDIRS), $(shell find $(mod)/src -iname "*.o" 2>/dev/null))
+LIBTARP_OBJS      += $(shell find $(TARP_COMMON_PATH) -iname "*.o")
 $(info lib objs = $(LIB_OBJS))
+
+LIBTARP_UTILS_SO  := libtarp-utils.so
 
 VALGRIND_REPORT_NAME := valgrind.txt
 
@@ -78,6 +80,7 @@ export MODS_SUBDIRS
 export CPPFLAGS
 export CFLAGS
 export VALGRIND
+export VALGRIND_REPORT_NAME
 
 #$(info TARP_TOPDIR is $(TARP_TOPDIR))
 #$(info TARP_MODS_PATH is $(TARP_MODS_PATH))
@@ -86,9 +89,9 @@ export VALGRIND
 
 .PHONY: all mods clean
 
-all: mods
+all: $(LIBTARP_UTILS_SO) mods $(LIBTARP_SO)
 
-mods: prepare
+mods: prepare $(LIBTARP_UTILS_SO)
 	@for mod in $(MODS_TARGETS); do \
 		echo; \
 		echo "[ ] Building $$mod"; \
@@ -112,10 +115,12 @@ $(foreach mod,$(MODS_TARGETS),$(mod)_clean):
 	find $(TARP_MODS_PATH)/$$mod -type f -iname "*.o*" -delete
 
 # build inidividual MOD
-$(MODS_TARGETS) : 
+$(MODS_TARGETS) : prepare $(LIBTARP_UTILS_SO)
 	$(MAKE) -C $(TARP_MODS_PATH)/$@
 
-$(OUTPUT_SHARED_LIB) : mods
-	@mkdir -p $(STAGING_DIR)/usr/lib/
-	$(CC) $(CFLAGS) $(CPPFLAGS) -shared $(LIB_OBJS) -o $(STAGING_DIR)/usr/lib/$(OUTPUT_SHARED_LIB)
+$(LIBTARP_SO) : mods
+	$(CC) $(CFLAGS) $(CPPFLAGS) -shared $(LIBTARP_OBJS) -o $(STAGING_DIR)/usr/lib/$(LIBTARP_SO)
+
+$(LIBTARP_UTILS_SO) : prepare
+	$(MAKE) -C $(TARP_COMMON_PATH)
 

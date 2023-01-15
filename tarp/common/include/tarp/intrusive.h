@@ -43,7 +43,7 @@
  *     node object.
  */
 #define container_of(ptr, type, member) (type *)(void *) ( (char *)ptr - offsetof(type, member))
-
+                     //list_cursor, struct testnode, link
 /*
  * Mnemonic for container_of() used when iterating over the linked list
  * to obtain for each node (or for a given node) its enclosing structure.

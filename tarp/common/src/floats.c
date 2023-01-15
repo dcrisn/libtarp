@@ -1,7 +1,7 @@
 #include <math.h>  /* pow(), round() */
 #include <float.h> /* FLT_EPSILON) */
 
-#include "floats.h"
+#include <tarp/floats.h>
 
 /*
  * Truncate off the decimal part -- equivalent to trunc() in math.h .*/

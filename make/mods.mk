@@ -13,14 +13,13 @@ TESTS_BIN    :=  $(OUT_DIR)/test
 # Flag to only run tests when objects are (re)built
 RUN_FLAG     := $(OUT_DIR)/.runtest
 
-VALGRIND_REPORT := $(VALGRIND_REPORT_NAME)/valgrind.txt
+VALGRIND_REPORT := $(OUT_DIR)/$(VALGRIND_REPORT_NAME)
 
 #
 # Find .c source files in any subdirectory under the CWD
 # at any nesting level
 define FIND_SOURCES
  $(eval SOURCES += $(shell find . -type f -iname "*.c"))
- $(eval SOURCES += $(shell find $(TARP_COHORT_PATH) -type f -iname "*.c"))
 endef
 
 #

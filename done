@@ -1,0 +1,6 @@
+lib objs =      
+mkdir -p /home/vcsaturninus/common/repos/libtarp/staging/usr/include/
+mkdir -p /home/vcsaturninus/common/repos/libtarp/staging/usr/lib
+find /home/vcsaturninus/common/repos/libtarp/tarp/common -ipath "*/include" -exec dirname {} \; | uniq | xargs -I input sh -c "cp -urf input/include/* /home/vcsaturninus/common/repos/libtarp/staging/usr/include/"
+find /home/vcsaturninus/common/repos/libtarp/tarp/mods -ipath "*/include" -exec dirname {} \; | uniq | xargs -I input sh -c "cp -urf input/include/* /home/vcsaturninus/common/repos/libtarp/staging/usr/include/"
+make -C /home/vcsaturninus/common/repos/libtarp/tarp/mods/circular
