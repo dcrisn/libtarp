@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <stdarg.h>
 
-#include "mocom.h"
+#include <tarp/mocom.h>
 
 /*
  * This function is what realloc should be, it behaves like

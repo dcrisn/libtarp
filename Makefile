@@ -1,6 +1,6 @@
-# Recursive top-level Makefile to build subprojects; 
+# Recursive top-level Makefile to build subprojects;
 # This Makefile defines various reference path variables
-# and exports them to any child makefiles recursively 
+# and exports them to any child makefiles recursively
 # invoked;
 #
 PROJECT_ROOT      := $(shell realpath $(CURDIR))
@@ -32,7 +32,7 @@ TARP_COMMON_PATH  := $(TARP_TOPDIR)/common
 #   + the STAGING_HEADERS dir (see above) and all its subdirectories;
 #   + the cohort path
 #   + the common helpers path
-# 
+#
 INCLUDE_FLAGS   := $(STAGING_HEADERS)/
 INCLUDE_FLAGS   += $(TARP_COHORT_PATH)/
 INCLUDE_FLAGS   := $(addprefix -I,$(INCLUDE_FLAGS))
@@ -40,9 +40,10 @@ INCLUDE_FLAGS   := $(addprefix -I,$(INCLUDE_FLAGS))
 CPPFLAGS        += $(INCLUDE_FLAGS)
 
 CFLAGS          += -fPIC
+LDFLAGS         += -L$(STAGING_LIBS)
 
-# 
-# get a list of data structure sub-projects paths; 
+#
+# get a list of data structure sub-projects paths;
 # This top-level Makefile will invoke each subproject's Makefile
 # recursively;
 # Each subproject must have its Makefile in its top-level directory;
@@ -56,11 +57,14 @@ MODS_TARGETS    := $(foreach mod, $(MODS_SUBDIRS),$(lastword $(subst /, ,$(mod))
 
 # the shared library containing all data structures
 LIBTARP_SO        := libtarp.so
-LIBTARP_OBJS      := $(foreach mod, $(MODS_SUBDIRS), $(shell find $(mod)/src -iname "*.o" 2>/dev/null))
-LIBTARP_OBJS      += $(shell find $(TARP_COMMON_PATH) -iname "*.o")
+LIBTARP_SRC       := $(foreach mod, $(MODS_SUBDIRS), $(shell find $(mod)/src -iname "*.c" 2>/dev/null))
+LIBTARP_OBJS      := $(LIBTARP_SRC:.c=.o)
 $(info lib objs = $(LIB_OBJS))
 
-LIBTARP_UTILS_SO  := libtarp-utils.so
+LIBTARP_UTILS_SO   := libtarputils.so
+LIBTARP_UTILS_SRC  := $(shell find $(TARP_COMMON_PATH)/src -iname "*.c")
+LIBTARP_UTILS_OBJS := $(LIBTARP_UTILS_SRC:.c=.o)
+$(info libtarp utils objects $(LIBTARP_UTILS_OBJS))
 
 VALGRIND_REPORT_NAME := valgrind.txt
 
@@ -69,18 +73,20 @@ VALGRIND_REPORT_NAME := valgrind.txt
 # through valgrind
 VALGRIND := $(filter y,$(VALGRIND))
 
-export PROJECT_ROOT      
-export STAGING_DIR       
-export STAGING_HEADERS  
-export TARP_TOPDIR       
-export TARP_COHORT_PATH  
-export TARP_MODS_PATH    
-export TARP_COMMON_PATH  
+export PROJECT_ROOT
+export STAGING_DIR
+export STAGING_HEADERS
+export TARP_TOPDIR
+export TARP_COHORT_PATH
+export TARP_MODS_PATH
+export TARP_COMMON_PATH
 export MODS_SUBDIRS
 export CPPFLAGS
 export CFLAGS
+export LDFLAGS
 export VALGRIND
 export VALGRIND_REPORT_NAME
+export LIBTARP_UTILS_SO
 
 #$(info TARP_TOPDIR is $(TARP_TOPDIR))
 #$(info TARP_MODS_PATH is $(TARP_MODS_PATH))
@@ -119,8 +125,9 @@ $(MODS_TARGETS) : prepare $(LIBTARP_UTILS_SO)
 	$(MAKE) -C $(TARP_MODS_PATH)/$@
 
 $(LIBTARP_SO) : mods
-	$(CC) $(CFLAGS) $(CPPFLAGS) -shared $(LIBTARP_OBJS) -o $(STAGING_DIR)/usr/lib/$(LIBTARP_SO)
+	$(CC) $(CFLAGS) $(CPPFLAGS) -shared $(LIBTARP_OBJS) -ltarputils $(LDFLAGS) -o $(STAGING_DIR)/usr/lib/$(LIBTARP_SO)
 
 $(LIBTARP_UTILS_SO) : prepare
 	$(MAKE) -C $(TARP_COMMON_PATH)
+	$(CC) $(CFLAGS) $(CPPFLAGS) -shared $(LIBTARP_UTILS_OBJS) -lm $(LDFLAGS) -o $(STAGING_DIR)/usr/lib/$(LIBTARP_UTILS_SO)
 

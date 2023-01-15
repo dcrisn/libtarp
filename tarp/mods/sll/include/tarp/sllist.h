@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include "intrusive.h"
+#include "tarp/intrusive.h"
 
 // ===============================================================
 // -------- Intrusive singly linked list implementation ----------

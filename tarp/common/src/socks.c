@@ -9,8 +9,8 @@
 #include <netdb.h>       /* getaddrinfo() */
 #include <poll.h>        /* poll API */
 
-#include "mocom.h"
-#include "socks.h"
+#include <tarp/mocom.h>
+#include <tarp/socks.h>
 
 /* 
  * Let this be non-ancillary data (int32_t) accompanying ancillary data

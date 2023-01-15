@@ -1,6 +1,10 @@
 #include <math.h>          /* pow */
 #include <errno.h>
 #include <stdio.h>         /* perror */
+#include <time.h>
+#include <string.h>        /* memset */
+#include <stdint.h>
+#include <stdbool.h>
 
 #include <tarp/floats.h>
 #include <tarp/timeutils.h>
@@ -94,9 +98,13 @@ void timespec_diff(struct timespec *a, struct timespec *b, struct timespec *c){
  * To use the default, -1 should be specified as the argument.
  */
 uint64_t msts(clockid_t clock){
+    int rc = 0;
     struct timespec now = {0};
     clock = (clock == -1) ? CLOCK_REALTIME : clock;
-    clock_gettime(clock, &now);
+    if (( rc = clock_gettime(clock, &now)) == -1){
+        fprintf(stderr, "Clock_gettime error in %s() : '%s'\n", __func__, strerror(errno));
+        return 0;
+    }
     return timespec_to_ms(&now);
 }
 
@@ -124,3 +132,45 @@ bool time_expired(struct timespec *a, clockid_t clock){
     return (timespec_cmp(a, &now) >= 0);
 }
 
+/* 
+ * Takes a ms timestamp and calls clock_nanosleep based on it.
+ * If nanosleep should be restarted on EINTR, pass true for nointer.
+ */
+int mssleep(uint64_t ms, bool uninterruptible){
+    int clock = CLOCK_MONOTONIC;
+
+    struct timespec deadline = {};
+    memset(&deadline, 0, sizeof(struct timespec));
+
+    ms_to_timespec(msts(clock) + ms, &deadline);
+    bool failed = (clock_nanosleep(clock, TIMER_ABSTIME, &deadline, NULL) == -1);
+    if (failed){
+        if (uninterruptible && errno == EINTR){
+            errno = 0;
+            while ( (failed = ( clock_nanosleep(clock, TIMER_ABSTIME, &deadline, NULL) == -1 )) \
+                    && errno == EINTR){
+                errno = 0;
+                continue;
+            }
+        }
+        if (failed){
+            fprintf(stderr, "clock_nanosleep() error in %s() : '%s'\n", __func__, strerror(errno));
+            return -1;
+        }
+        return 0;
+    }
+}
+
+/*
+ * Convert a timespec to a string representation that can be printed out.
+ * The value returned by snprintf is returned or -1 if any of the arguments
+ * to this function are invalid.
+ *
+ * specname is the name of the timespec to print it with; if NULL, no name will
+ * be used.
+ */
+int timespec_tostring(const struct timespec *time, const char *specname, char buff[], size_t buffsz){
+    if (!time || !buff || buffsz < 0) return -1;
+    return snprintf(buff, buffsz, "struct timespec %s = {.tv_sec = %li, .tv_nsec=%li}", \
+            specname ? specname : "", time->tv_sec, time->tv_nsec);
+}

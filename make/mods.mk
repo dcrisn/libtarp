@@ -15,11 +15,14 @@ RUN_FLAG     := $(OUT_DIR)/.runtest
 
 VALGRIND_REPORT := $(OUT_DIR)/$(VALGRIND_REPORT_NAME)
 
+PACKAGE_HOOK += prepare build runtest
+
 #
 # Find .c source files in any subdirectory under the CWD
 # at any nesting level
 define FIND_SOURCES
  $(eval SOURCES += $(shell find . -type f -iname "*.c"))
+ $(eval SOURCES += $(shell find $(TARP_COHORT_PATH) -type f -iname "*.c"))
 endef
 
 #
@@ -72,7 +75,7 @@ depends: prepare $(DEPS)
 # build objects from sources
 $(TESTS_BIN) : $(OBJS)
 	@touch $(RUN_FLAG)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDDFLAGS) $^ -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 runtest: $(TESTS_BIN)
 ifeq ($(VALGRIND),y)
@@ -94,9 +97,9 @@ else
 endif
 
 %.o : %.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDDFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< $(LDFLAGS) -o $@
 
-package: prepare build runtest
+package: $(PACKAGE_HOOK)
 	@ printf "\n[ ] Preparing files for packaging ...\n"
 
 

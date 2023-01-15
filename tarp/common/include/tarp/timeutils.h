@@ -14,6 +14,7 @@ void timespec_diff(struct timespec *a, struct timespec *b, struct timespec *c);
 uint64_t msts(clockid_t clock);
 void ms_to_timespec(uint64_t ms, struct timespec *timespec);
 bool time_expired(struct timespec *a, clockid_t clock);
-
+int mssleep(uint64_t ms, bool uninterruptible);
+int timespec_tostring(const struct timespec *time, const char *specname, char buff[], size_t buffsz);
 
 #endif

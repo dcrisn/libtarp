@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include "mobit.h"
+#include <tarp/mobit.h>
 
 /*
  * True if bit at position N in NUM is set, else

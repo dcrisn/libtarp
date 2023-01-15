@@ -5,8 +5,8 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#include "demonic.h"
-#include "mocom.h"
+#include <tarp/demonic.h>
+#include <tarp/mocom.h>
 
 /*
  * Turn the calling process into a daemon.

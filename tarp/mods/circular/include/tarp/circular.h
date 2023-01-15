@@ -6,8 +6,8 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#include <intrusive.h>
-#include <iterator.h>
+#include <tarp/intrusive.h>
+#include <tarp/iterator.h>
 
 // cdll = circular doubly linked list
 

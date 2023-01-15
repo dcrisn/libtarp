@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include <mocom.h>
+#include <tarp/mocom.h>
 #include <tarp/stack.h>
 
 

@@ -1,8 +1,6 @@
-include ../../make/mods.mk
+LDFLAGS += -lm
 
-$(info LIBTARP_UTILS_OBJS is $(LIBTARP_UTILS_OBJS))
+include $(PROJECT_ROOT)/make/mods.mk
 
-$(LIBTARP_UTILS.SO): $()
-	$(CC) $(CFLAGS) $(CPPFLAGS) -shared $(LIBTARP_UTILS_OBJS) -o $(STAGING_DIR)/usr/lib/$(LIBTARP_UTILS_SO)
 
 
