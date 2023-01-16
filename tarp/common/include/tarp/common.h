@@ -37,6 +37,8 @@ static inline uint64_t max(uint64_t a, uint64_t b){
 #define dump_msg__(stream, msg, ...) fprintf(stream, " ~~[%s(), %s:%d] <<" msg ">>\n", __func__, __FILE__, __LINE__,  ##__VA_ARGS__ )
 #define SAY(fmt, ...)      dump_msg__(stdout, fmt, ##__VA_ARGS__)
 #define COMPLAIN(fmt, ...) dump_msg__(stderr, fmt, ##__VA_ARGS__)
+#define FAIL(fmt, ...)     dump_msg__(stderr, fmt, ##__VA_ARGS__); exit(EXIT_FAILURE)
+#define FAIL_ERRNO(fmt, ...) fprintf(stderr, fmt " : %s\n", ##__VA_ARGS__, strerror(errno)); exit(EXIT_FAILURE)
 
 /*
  * Get length of array (note: NOT array decayed to pointer!)
