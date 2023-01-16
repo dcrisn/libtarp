@@ -41,6 +41,8 @@ CPPFLAGS        += $(INCLUDE_FLAGS)
 
 CFLAGS          += -fPIC
 LDFLAGS         += -L$(STAGING_LIBS)
+LD_LIBRARY_PATH :=$(STAGING_LIBS):$(LD_LIBRARY_PATH)
+
 
 #
 # get a list of data structure sub-projects paths;
@@ -76,6 +78,8 @@ VALGRIND := $(filter y,$(VALGRIND))
 export PROJECT_ROOT
 export STAGING_DIR
 export STAGING_HEADERS
+export STAGING_LIBS
+export LD_LIBRARY_PATH
 export TARP_TOPDIR
 export TARP_COHORT_PATH
 export TARP_MODS_PATH
