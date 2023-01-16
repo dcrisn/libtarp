@@ -62,45 +62,36 @@ struct name { \
             entry = temp, temp = ((entry) ? (entry)->field.prev : NULL) \
             )
 
-#if 0
-#define STACK_UPEND(stack, field, curr, next, dummy) \
-    do { \
-        curr = STACK_TOP(stack); \
-        next = NULL; \
-        dummy = NULL; \
-\
-        while (curr) { \
-            next = (curr)->field.prev; \
-            (curr)->field.prev = dummy; \
-            dummy = curr; \
-            curr = next; \
-        } \
-        (stack)->top = dummy; \
-\
-    } while (0)
-
-#endif
-
-
-#define STACK_UPEND(stack, type, field) \
-    do { \
-        struct type *curr, *next, *dummy = NULL; \
-        curr = STACK_TOP(stack); \
-        next = NULL; \
-        dummy = NULL; \
-\
-        while (curr) { \
-            next = (curr)->field.prev; \
-            (curr)->field.prev = dummy; \
-            dummy = curr; \
-            curr = next; \
-        } \
-        (stack)->top = dummy; \
-\
+/*
+ * Given a stack of items n1, n2, n3, n4, .. , nN with the stack
+ * top at nN, reverse the stack orientation such that nN becomes
+ * the bottom of a stack growing from nN, .. , through to
+ * n4, n3, n2, n1, with the new stack top at n1.
+ */
+#define STACK_UPEND(stack, type, field)                      \
+    do {                                                     \
+        struct type *curr, *next, *dummy = NULL;             \
+        curr  = STACK_TOP(stack);                            \
+                                                             \
+        while (curr) {                                       \
+            next = (curr)->field.prev;                       \
+            (curr)->field.prev = dummy;                      \
+            dummy = curr;                                    \
+            curr = next;                                     \
+        }                                                    \
+                                                             \
+        (stack)->top = dummy;                                \
+                                                             \
     } while (0)
 
 
-
-
-
+/*
+ * todo
+ * Stack_peek()
+ * Stack_concat ie stack_append  (b to a, make b empty)
+ *
+ *
+ * + add 'n' argument to stack_peek, stack_pop, stack_push etc such that you either
+ * pop the NTH item from the top downward, or you pop off n items altogether etc
+ */
 #endif

@@ -34,12 +34,15 @@ enum status can_push(void){
     struct lease lease4 = {.id = 4};
     struct lease lease5 = {.id = 5};
     
+    printf("stack empty? %i, count=%i\n", STACK_EMPTY(&mystack), STACK_COUNT(&mystack));;
     STACK_PUSH(&mystack, &lease5, stack);
     STACK_PUSH(&mystack, &lease4, stack);
     STACK_PUSH(&mystack, &lease3, stack);
     STACK_PUSH(&mystack, &lease2, stack);
     STACK_PUSH(&mystack, &lease1, stack);
     
+    printf("stack empty? %i, count=%i\n", STACK_EMPTY(&mystack), STACK_COUNT(&mystack));;
+
     struct lease *curr = NULL;
     stack_dump(&mystack); 
 
@@ -50,6 +53,8 @@ enum status can_push(void){
     STACK_UPEND(&mystack, lease, stack);
 
     stack_dump(&mystack); 
+
+    printf("stack empty? %i, count=%i\n", STACK_EMPTY(&mystack), STACK_COUNT(&mystack));;
 
     return SUCCESS;
 }
