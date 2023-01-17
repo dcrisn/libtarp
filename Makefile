@@ -39,7 +39,7 @@ INCLUDE_FLAGS   := $(addprefix -I,$(INCLUDE_FLAGS))
 
 CPPFLAGS        += $(INCLUDE_FLAGS)
 
-CFLAGS          += -fPIC
+CFLAGS          += -g -fPIC -Wall -Wextra -Wpedantic -Werror
 LDFLAGS         += -L$(STAGING_LIBS)
 LD_LIBRARY_PATH :=$(STAGING_LIBS):$(LD_LIBRARY_PATH)
 

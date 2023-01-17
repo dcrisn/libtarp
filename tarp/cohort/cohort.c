@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <setjmp.h>
 
+#include <tarp/common.h>
+
 #include "cohort.h"
 
 
@@ -202,6 +204,7 @@ static struct test *Cohort_get_nth(struct cohort *testlist , size_t n){
  * Handle sigsegv, sigbus etc signals.
  */
 static void sighandler(int signum){
+    UNUSED(signum);
     // if safe_to_jump isn't true, it means the environment hasn't been initialized
     // (which would cause the handler to fail as well), so simply exit;
     if (!safe_to_jump){

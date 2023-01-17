@@ -139,7 +139,7 @@ bool time_expired(struct timespec *a, clockid_t clock){
 int mssleep(uint64_t ms, bool uninterruptible){
     int clock = CLOCK_MONOTONIC;
 
-    struct timespec deadline = {};
+    struct timespec deadline;
     memset(&deadline, 0, sizeof(struct timespec));
 
     ms_to_timespec(msts(clock) + ms, &deadline);
@@ -157,8 +157,9 @@ int mssleep(uint64_t ms, bool uninterruptible){
             fprintf(stderr, "clock_nanosleep() error in %s() : '%s'\n", __func__, strerror(errno));
             return -1;
         }
-        return 0;
     }
+
+    return 0;
 }
 
 /*
@@ -170,7 +171,7 @@ int mssleep(uint64_t ms, bool uninterruptible){
  * be used.
  */
 int timespec_tostring(const struct timespec *time, const char *specname, char buff[], size_t buffsz){
-    if (!time || !buff || buffsz < 0) return -1;
+    if (!time || !buff || !buffsz)  return -1;
     return snprintf(buff, buffsz, "struct timespec %s = {.tv_sec = %li, .tv_nsec=%li}", \
             specname ? specname : "", time->tv_sec, time->tv_nsec);
 }

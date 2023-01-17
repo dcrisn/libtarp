@@ -2,11 +2,16 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <tarp/common.h>
+
 #include "cohort.h"
 
 enum status can_compare_timespecs(void);
 
 int main(int argc, char **argv){
+    UNUSED(argc);
+    UNUSED(argv);
+
     struct cohort *tests = Cohort_init();
     assert(tests != NULL);
    

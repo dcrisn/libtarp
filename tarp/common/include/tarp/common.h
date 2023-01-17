@@ -61,11 +61,7 @@ static inline uint64_t max(uint64_t a, uint64_t b){
  *  Casting to void will always work; using the unused attribute works
  *  with gcc and clang.
  */
-#if defined(__GNUC__) || defined(__GNUG__) || defined(__clang__)
-#   define UNUSED(x) x __attribute__((unused))
-#else
-#   define UNUSED(x) do { (void)(x); } while (0)
-#endif
+#define UNUSED(x) do { (void)(x); } while (0)
 
 /*
  * Print message to stderr and if FATAL_ASSUMPTIONS is defined,

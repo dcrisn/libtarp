@@ -59,7 +59,7 @@ void mobit_array_clear_bit(uint32_t bitarray[], size_t array_size, unsigned int 
 
 // set HOW_MANY bits in num OFFSET bits from the right;
 // rightmost bit is at offset 0, second bit at offset 1 etc
-size_t mobit_set_bits(size_t num, int offset, int how_many);
+size_t mobit_set_bits(size_t num, unsigned int offset, unsigned int how_many);
 
 // clear HOW_MANY bits in num OFFSET bits from the right;
 // rightmost bit is at offset 0, second bit at offset 1 etc

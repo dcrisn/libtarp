@@ -95,10 +95,10 @@ void mobit_array_clear_bit(uint32_t bitarray[], size_t array_size, unsigned int 
  * The rightmost bit is at OFFSET 0, the 
  * 32-nd bit in a 32-bit int is at offset 32
  */
-size_t mobit_set_bits(size_t num, int offset, int how_many){
+size_t mobit_set_bits(size_t num, unsigned int offset, unsigned int how_many){
     // this builds a mask where HOW_MANY bits are turned
     // on, starting from the right
-    size_t mask = ~(~0 << how_many);
+    size_t mask = ~(~0U << how_many);
 
     // further moving the mask's bits to the left by OFFSET
     // and ORing it with num will do what the function says it does
@@ -157,7 +157,7 @@ size_t mobit_clear_bits(size_t num, int offset, int how_many){
 size_t mobit_get_bits(size_t num, int offset, int how_many){
     // this builds a mask where HOW_MANY bits are turned
     // on, starting from the right
-    size_t mask = ~(~0 << how_many);
+    size_t mask = ~(~0U << how_many);
 
     // this shift the whole NUM to the right OFFSET number 
     // of bits; for example if you shift right by 5, then
