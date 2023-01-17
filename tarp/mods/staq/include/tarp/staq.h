@@ -87,7 +87,7 @@ struct name {                                  \
  */
 #define STAQ_UPEND(staq, type, field)                        \
     do {                                                     \
-        struct type *curr, *next, *dummy = NULL;   \
+        struct type *curr=NULL, *next=NULL, *dummy=NULL;   \
         curr = STAQ_TOP(staq);                     \
                                                              \
         while (curr) {                                       \
@@ -145,8 +145,30 @@ struct name {                                  \
 // add head rather than tail
 #define STAQ_ENQUEUE_HEAD
 /* o(1) not o(n) unlike stacks -- just use tail and head pointers */
-#define STAQ_JOINQ()
 
+#define STAQ_JOINQ(a, b, type, field) \
+    do { \
+        if (STAQ_EMPTY(a)) { \
+            (a)->head = (b)->head; \
+            (a)->tail = (b)->tail; \
+        } else { \
+            (a)->tail->field.prev = (b)->head; \
+        } \
+        (a)->count += (b)->count;    \
+        (b)->head = (b)->tail = NULL; \
+        (b)->count = 0; \
+    } while (0)
+
+#define STAQ_DESTROY(staq, type, field) \
+    do { \
+        struct type *curr=NULL, *next=NULL; \
+        STAQ_FOREACH_SAFE(staq, curr, field, next){ \
+            free(curr); \
+        } \
+        (staq)->count = 0; \
+        (staq)->head = NULL; \
+        (staq)->tail = NULL; \
+    } while (0)
 
 /*
  * todo

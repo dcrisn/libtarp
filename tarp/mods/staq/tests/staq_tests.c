@@ -44,7 +44,7 @@ enum status keeps_count(void){
 
     uint32_t stress_value = 530400;
     
-    struct testnode *node, *temp = NULL; 
+    struct testnode *node = NULL; 
     for (uint32_t i = 0; i < stress_value; ++i){
         node = calloc(1, sizeof(struct testnode));
         assert(node);
@@ -67,15 +67,114 @@ enum status keeps_count(void){
     if (!STAQ_EMPTY(&s) || STAQ_COUNT(&s) != 0 || STAQ_EMPTY(&q) || STAQ_COUNT(&q) != stress_value){
         return FAILURE;
     }
-        
-    STAQ_FOREACH_SAFE(&q, node, list, temp){
-        STAQ_DEQUEUE(&q, node, list);  
-        free(node);
-    }
+    
+    STAQ_DESTROY(&q, testnode, list);
     
     if (!STAQ_EMPTY(&q) || STAQ_COUNT(&q) != 0) return FAILURE;
 
     return SUCCESS;
 }
 
+enum status can_join_stacks(void){
+    struct teststack s1 = STAQ_INITIALIZER;
+    struct teststack s2 = STAQ_INITIALIZER;
+    
+    unsigned int items = 10;
+    for (unsigned int i = 0; i < items; i++){
+        struct testnode *node = calloc(1, sizeof(struct testnode));
+        assert(node);
+        node->id = i;
+        STAQ_PUSH(&s1, node, list);
+    }
+    
+    if (STAQ_COUNT(&s1) != items) return FAILURE;
 
+    for (unsigned int i = items; i < items*2; i++){
+        struct testnode *node = calloc(1, sizeof(struct testnode));
+        assert(node);
+        node->id = i;
+        STAQ_PUSH(&s2, node, list);
+    }
+    STAQ_UPEND(&s2, testnode, list);
+
+    if (STAQ_COUNT(&s2) != items) return FAILURE;
+    
+    STAQ_JOINS(&s1, &s2, testnode, list);
+
+    //stack_dump(&s1);
+    //stack_dump(&s2);
+    if (STAQ_COUNT(&s1) != items*2) return FAILURE;
+    if (!STAQ_EMPTY(&s2) || STAQ_COUNT(&s2) != 0) return FAILURE;
+
+    /* 
+     * We've overlayed a stack with items 10,11,12...19 on top of a stack
+     * with items 0,1,2...9. We should now be seeing items 19,18,17, ..., 1, 0,
+     * top top bottom.
+     */
+    struct testnode *node = NULL;
+    int item = items*2;
+    STAQ_FOREACH(&s1, node, list){
+        --item; 
+        if (node->id != item){
+            return FAILURE;
+        }
+    }
+
+    STAQ_DESTROY(&s1, testnode, list);
+    STAQ_DESTROY(&s2, testnode, list);
+
+    return SUCCESS;
+}
+
+enum status can_join_queues(void){
+    struct testq q1 = STAQ_INITIALIZER;
+    struct testq q2 = STAQ_INITIALIZER;
+    
+    unsigned int items = 10;
+    for (unsigned int i = 0; i < items; i++){
+        struct testnode *node = calloc(1, sizeof(struct testnode));
+        assert(node);
+        node->id = i;
+        STAQ_ENQUEUE(&q1, node, list);
+    }
+    
+    if (STAQ_COUNT(&q1) != items) return FAILURE;
+
+    for (unsigned int i = items; i < items*2; i++){
+        struct testnode *node = calloc(1, sizeof(struct testnode));
+        assert(node);
+        node->id = i;
+        STAQ_ENQUEUE(&q2, node, list);
+    }
+
+    if (STAQ_COUNT(&q2) != items) return FAILURE;
+    
+    STAQ_JOINQ(&q1, &q2, testnode, list);
+    
+    if (STAQ_COUNT(&q1) != items*2) return FAILURE;
+    if (!STAQ_EMPTY(&q2) || STAQ_COUNT(&q2) != 0) return FAILURE;
+
+    /* 
+     * We've overlayed a stack with items 10,11,12...19 on top of a stack
+     * with items 0,1,2...9. We should now be seeing items 19,18,17, ..., 1, 0,
+     * top top bottom.
+     */
+    struct testnode *node = NULL;
+    int item = 0;
+    STAQ_FOREACH(&q1, node, list){
+        if (node->id != item){
+            return FAILURE;
+        }
+        ++item; 
+    }
+
+    STAQ_DESTROY(&q1, testnode, list);
+    STAQ_DESTROY(&q2, testnode, list);
+
+    return SUCCESS;
+}
+
+
+//enum status can_join_stacks(void){
+
+//}
