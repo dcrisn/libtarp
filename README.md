@@ -15,8 +15,8 @@ make install
 ```
 cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=/home/vcsaturninus/common/playground/staging/
 cd build
-make
-make install
+ninja
+ninja install
 ```
 
 ## todos
