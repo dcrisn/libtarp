@@ -81,7 +81,6 @@ int socks_setup(uint32_t mask,  const char *path, const char *service);
 
 int socks_sharedes(int sender, int descript, struct sockaddr *receiver_addr, socklen_t receiver_len);
 int socks_getdes(int receiver);
-
-int pollfd(int fd, int timeout);
+int pollfd(int fd, int events, int timeout);
 
 #endif

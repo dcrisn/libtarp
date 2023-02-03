@@ -514,8 +514,10 @@ int socks_getdes(int receiver){
  *      only ONE descriptor), the .revents mask associated with that descriptor
  *      is returned instead.
  */
-int pollfd(int fd, int timeout){
-	short evmask     = POLLIN | POLLOUT;
+int pollfd(int fd, int events, int timeout){
+    if (fd < 0) return fd;
+
+	short evmask = events ? events : POLLIN | POLLOUT;
 	const int num_fd = 1;
 	int ret = 0;
 
@@ -531,3 +533,4 @@ int pollfd(int fd, int timeout){
 
 	return ret;
 }
+

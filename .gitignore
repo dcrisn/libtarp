@@ -4,3 +4,4 @@ staging/
 **valgrind*
 **/out/*
 **/tags
+build/*

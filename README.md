@@ -1,6 +1,23 @@
 # libtarp
 Miscellaneous functions, macros, and data structures
 
+## Building
+
+**make**:
+```
+cmake -B build -DCMAKE_INSTALL_PREFIX=/home/vcsaturninus/common/playground/staging/
+cd build
+make
+make install
+```
+
+**ninja**:
+```
+cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=/home/vcsaturninus/common/playground/staging/
+cd build
+make
+make install
+```
 
 ## todos
 
