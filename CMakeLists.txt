@@ -65,18 +65,27 @@ set(namespace "tarp")
 set(common_headers "common/include")
 file(GLOB common_sources "common/src/*.c")
 
+set(staq_headers "mods/staq/include")
+file(GLOB staq_sources "mods/staq/src/*.c")
+
 # cohort test runner
 set(cohort_dir "cohort")
 file(GLOB cohort_sources "cohort/*.c")
 
 add_library(tarp SHARED 
     ${common_sources}
+    ${staq_sources}
     )
 
 target_include_directories(tarp PUBLIC
     ${common_headers}
+    ${staq_headers}
     )
 
+###########
+# tests   #
+###########
+# tests for common headers and sources
 add_executable(common_tests
     ${cohort_sources}
     common/tests/tests.c
@@ -91,6 +100,34 @@ target_include_directories(common_tests PUBLIC
 # since we passed all the sanitization compiler flags.
 # note libasan MUST come FIRST
 target_link_libraries(common_tests asan ubsan tarp)
+
+# staq tests
+add_executable(staq_tests
+    ${cohort_sources}
+    ${staq_sources}
+    mods/staq/tests/tests.c
+    mods/staq/tests/staq_tests.c
+    )
+target_include_directories(staq_tests PUBLIC 
+    ${cohort_dir}
+    ${common_headers}
+    ${staq_headers}
+    )
+
+# asan and ubsan are needed for the executable to be runnable
+# since we passed all the sanitization compiler flags.
+# note libasan MUST come FIRST
+target_link_libraries(staq_tests m asan ubsan tarp)
+
+add_custom_target(test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMENT "Running libtarp tests ..."
+  COMMAND common_tests
+  COMMAND staq_tests
+)
+
+
+
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 # users should set it
@@ -111,3 +148,4 @@ install(TARGETS tarp LIBRARY DESTINATION usr/lib)
 install(DIRECTORY ${common_headers} DESTINATION usr)
 
 
+#add_dependencies(test1 test2_run)
