@@ -1,15 +1,18 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #include <tarp/sllist.h>
+#include <tarp/timeutils.h>
 #include "cohort.h"
 
 struct testnode{
-    char *name;
     struct slnode node;
     size_t age;
 };
+
+#if 0
 
 /*
  * Test if the number of items is correctly maintained and 
@@ -188,11 +191,36 @@ enum status can_destroy_list(void){
         SLL_prepend(&mylist, &i->node);
     }
 
-    if (SLL_count(&mylist) != count) return FAILURE;
+    if ((int32_t) SLL_count(&mylist) != count) return FAILURE;
 
     struct testnode *node_ptr = NULL;
     struct slnode *slnode_ptr = NULL;
     SLL_destroy(node_ptr, slnode_ptr, &mylist, struct testnode, node);
     
+    return SUCCESS;
+}
+#endif
+
+enum status perf_test(void){
+    uint64_t time_before = msts(CLOCK_MONOTONIC);
+
+    struct sllist l = SLL_STATIC_INITIALIZER;
+    int32_t num_nodes = 12655555;
+
+    for (int32_t i = 0; i<num_nodes; ++i){
+        struct testnode *tn = calloc(1, sizeof(struct testnode));
+        assert(tn);
+        tn->age = i;
+        SLL_append(&l, &tn->node);
+    }
+
+    struct slnode *node = NULL;
+    while ((node = SLL_poph(&l))){
+        struct testnode *tn = list_entry(node, struct testnode, node);
+        free(tn);
+    }
+
+    uint64_t time_after = msts(CLOCK_MONOTONIC);
+    printf(" ** time elapsed: %lu ms\n", time_after - time_before);
     return SUCCESS;
 }

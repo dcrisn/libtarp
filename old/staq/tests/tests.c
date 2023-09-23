@@ -5,6 +5,9 @@
 
 #include "cohort.h"
 
+extern enum status keeps_count(void);
+extern enum status can_join_stacks(void);
+extern enum status can_join_queues(void);
 extern enum status perf_test(void);
 
 int main(int argc, char **argv){
