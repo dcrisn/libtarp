@@ -9,8 +9,8 @@
 #include <netdb.h>       /* getaddrinfo() */
 #include <poll.h>        /* poll API */
 
-#include <tarp/common.h>
 #include <tarp/socks.h>
+#include <tarp/error.h>
 
 /* 
  * Let this be non-ancillary data (int32_t) accompanying ancillary data
@@ -246,7 +246,7 @@ static int socks_inet_setup(uint32_t mask, const char *path, const char *service
     hints.ai_flags    = addrinfo_mask;
 
     if ((ret = getaddrinfo(path, service, &hints, &list))){
-        COMPLAIN("getaddrinfo() failure (%d): '%s'", ret, gai_strerror(ret));
+        warn("getaddrinfo() failure (%d): '%s'", ret, gai_strerror(ret));
         return -1;
     }
 
@@ -265,7 +265,7 @@ static int socks_inet_setup(uint32_t mask, const char *path, const char *service
 
     freeaddrinfo(list);
     if (!result){
-        COMPLAIN("Failed to find valid address and set up socket with getaddrinfo()");
+        warn("Failed to find valid address and set up socket with getaddrinfo()");
         return -1;
     }
 
@@ -327,7 +327,7 @@ static int socks_unix_setup(uint32_t mask, const char *srvpath, const char *clpa
     /* client, manually: first optionally bind() and then connect() */
     if (mask & SOCKS_CLIENT && !(mask & SOCKS_UNIX_UNNAMED) ){
         if (!clpath){
-            COMPLAIN("Asked for named unix client socket but no path was specified to bind to");
+            warn("Asked for named unix client socket but no path was specified to bind to");
             errno = EFAULT; 
             goto fail;
         }
@@ -441,7 +441,7 @@ int socks_sharedes(int sender, int descript, struct sockaddr *receiver_addr, soc
     memcpy(CMSG_DATA(control), &descript, sizeof(descript));
 
     if ( (ret = sendmsg(sender, &msg, 0)) == -1){
-        COMPLAIN("sendmsg failed (%li): '%s'", ret, strerror(errno));
+        warn("sendmsg failed (%li): '%s'", ret, strerror(errno));
         return -1;
     }
     return 0;
@@ -472,7 +472,7 @@ int socks_getdes(int receiver){
     msg.msg_controllen = sizeof(aligned_msg.buff);
     
     if ((ret = recvmsg(receiver, &msg, 0)) == -1){
-        COMPLAIN("recvmsg() failed (%li): '%s'", ret, strerror(errno));
+        warn("recvmsg() failed (%li): '%s'", ret, strerror(errno));
         return -1;
     }
 
@@ -480,20 +480,20 @@ int socks_getdes(int receiver){
      * only need 1 here as we send just 1 descriptor */
     struct cmsghdr *control = CMSG_FIRSTHDR(&msg);   /* validate */
     if (!control || control->cmsg_len != CMSG_LEN(sizeof(descript))){
-        COMPLAIN("Invalid cmsghdr length (%zu)", CMSG_LEN(sizeof(descript)));
+        warn("Invalid cmsghdr length (%zu)", CMSG_LEN(sizeof(descript)));
         return -1;
     }
     if (control->cmsg_level != SOL_SOCKET){
-        COMPLAIN("Unexpected cmsg_level -- not SOL_SOCKET)");
+        warn("Unexpected cmsg_level -- not SOL_SOCKET)");
         return -1;
     }
     if (control->cmsg_type != SCM_RIGHTS){
-        COMPLAIN("cmsg_type != SCM_RIGHTS");
+        warn("cmsg_type != SCM_RIGHTS");
         return -1;
     }
 
     memcpy(&descript, CMSG_DATA(control), sizeof(int));
-    SAY("Received FD %d", descript);
+    info("Received FD %d", descript);
 
     return descript;
 }

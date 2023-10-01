@@ -1,10 +1,9 @@
-#include "cohort.h"
-
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
 
+#include <tarp/cohort.h>
 #include <tarp/staq.h>
 #include <tarp/timeutils.h>
 
@@ -14,7 +13,7 @@ struct testnode {
 };
 
 
-enum status perf_test(void){
+enum testStatus perf_test(void){
     uint64_t time_before = msts(CLOCK_MONOTONIC);
 
     int32_t num_nodes = 12655555;
@@ -30,7 +29,7 @@ enum status perf_test(void){
         staq_push(&s, &node->staq);
     }
 
-    if ((int32_t)staq_count(&s) != num_nodes) return FAILURE;
+    if ((int32_t)staq_count(&s) != num_nodes) return TEST_FAIL;
 
     struct testnode *node = NULL;
     struct staq_node *sn = NULL;
@@ -38,13 +37,13 @@ enum status perf_test(void){
         node = STAQ_CONTAINER(sn, testnode);
         free(node);
     }
-    
-    if (staq_count(&s) != 0) return FAILURE;
-    
+
+    if (staq_count(&s) != 0) return TEST_FAIL;
+
     uint64_t time_after = msts(CLOCK_MONOTONIC);
 
     printf(" ** Time elapsed: %lu ms\n", time_after - time_before);
-    return SUCCESS;
+    return TEST_PASS;
 }
 
 

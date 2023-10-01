@@ -4,9 +4,9 @@
 
 #include <tarp/common.h>
 
-#include "cohort.h"
+#include <tarp/cohort.h>
 
-enum status can_compare_timespecs(void);
+enum testStatus can_compare_timespecs(void);
 
 int main(int argc, char **argv){
     UNUSED(argc);
@@ -17,7 +17,7 @@ int main(int argc, char **argv){
    
     Cohort_add(tests, can_compare_timespecs, "can_compare_timespecs");
 
-    enum status res = Cohort_decimate(tests);
+    enum testStatus res = Cohort_decimate(tests);
     Cohort_destroy(tests);
     return res; 
 }

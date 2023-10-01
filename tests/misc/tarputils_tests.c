@@ -6,9 +6,9 @@
 #include <assert.h>
 
 #include <tarp/timeutils.h>
-#include "cohort.h"
+#include <tarp/cohort.h>
 
-enum status can_compare_timespecs(void){
+enum testStatus can_compare_timespecs(void){
     struct timespec before;
     struct timespec after;
     struct timespec diff;
@@ -25,7 +25,6 @@ enum status can_compare_timespecs(void){
     timespec_tostring(&before, "before", before_str, 1024);
     timespec_tostring(&after, "after", after_str, 1024);
     fprintf(stderr, "comparing %s to %s\n", after_str, before_str);
-    if (timespec_cmp(&after, &before) != 1) return FAILURE;
-    return SUCCESS;
+    if (timespec_cmp(&after, &before) != 1) return TEST_FAIL;
+    return TEST_PASS;
 }
-

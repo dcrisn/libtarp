@@ -11,7 +11,7 @@
 #include <time.h>      /* clock_gettime, clock_nanosleep */
 
 #include <tarp/demonic.h>
-#include <tarp/common.h>
+#include <tarp/error.h>
 
 /*
  * Turn the calling process into a daemon.

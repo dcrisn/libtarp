@@ -3,46 +3,7 @@
 #include <stdarg.h>
 
 #include <tarp/common.h>
-
-/*
- * This function is what realloc should be, it behaves like
- * calloc, free or realloc depending on passed parameters.
- *
- * Practically, realloc behaves in the same way everywhere
- * but it is not officially mandated to do so by THE STANDARD:
- * http://www.openstd.org/jtc1/sc22/wg14/www/docs/n1256.pdf#page=326
- *
- * falloc_counter must be a global variable. It's incremented by memory allocation
- * calls and decremented by calls to free().
- * To ensure 0 memory leaks, the calls must be perfectly ballanced i.e. mem_alloc_counter
- * must be 0 at program exit.
- *
- * calloc is used rather than malloc so that the memory is always zeroed out in
- * order to avoid gibberish.
- */
-int falloc_counter = 0; /* used by falloc() */
-void *falloc(void *ptr, size_t size){
-    void *res = NULL;
-
-    // act as free - decrement counter
-    if(ptr && !size){
-          falloc_counter--;
-          free(ptr);
-          res = NULL;
-    }
-    // act as calloc
-    else if (!ptr && size){
-        falloc_counter++;
-        res = calloc(size, sizeof(char));
-        assert(res);
-    }
-    // if ptr !NULL and size is specified, then it's a realloc call
-    else if(ptr && size){
-        res = realloc(ptr, size);
-        assert(res);
-    }
-    return res;
-}
+#include <tarp/error.h>
 
 #define DBGLOG_BUFFLEN 1024
 void _dbglog_(int line, const char *file, const char *func, char *fmt, ...){
@@ -83,4 +44,19 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...){
     errno = saved_errno;
 }
 
+void *salloc(size_t size, void *ptr){
+    void *mem = NULL;
 
+    if(ptr){
+        if (!size){
+            free(ptr);
+            return NULL;
+        }
+        mem = realloc(ptr, size);
+    }else{
+        mem = calloc(1, size);
+    }
+
+    THROW(BAD_ALLOC, !mem);
+    return mem;
+}

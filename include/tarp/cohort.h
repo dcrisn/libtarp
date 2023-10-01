@@ -37,7 +37,7 @@
    * Add pointers to test functions to be called to the test list using `Cohort_add()`.
    * Execute all the tests in the list with `Cohort_decimate()`.
    * All the function tests that are to be registered to be called
-     should return 0 (enum status SUCCESS) on success and 1 (enum status FAILURE)
+     should return 0 (enum testStatus SUCCESS) on success and 1 (enum testStatus FAILURE)
      on failure.
 
    License
@@ -72,15 +72,18 @@
    *****************************************************************************/
 
 /* 
- * Each test function should return an enum status */
-enum status{SUCCESS, FAILURE};
+ * Each test function should return an enum testStatus */
+enum testStatus {
+    TEST_PASS=0,
+    TEST_FAIL=1
+};
 
 /* 
  * Each test function must have this prototype:
  *  - take no arguments
- *  - return an enum status
+ *  - return an enum testStatus
  */
-typedef enum status (*testf)();
+typedef enum testStatus (*testfunc)();
 
 /* 
  * Encapsulation for a test object. 
@@ -88,7 +91,7 @@ typedef enum status (*testf)();
  * when inserted into the testlist.
  */
 struct test{
-    testf testf_ptr;      // test to be executed
+    testfunc testf_ptr;      // test to be executed
     char *test_name;      // the name of the test
     struct test *next;    // next test in the testlist
 };
@@ -113,7 +116,7 @@ struct cohort *Cohort_init(void);
 /*
  * Append test to the testlist to be called by the test runner.
  */
-void Cohort_add(struct cohort* testlist, enum status (*testf)(), char test_name[]);
+void Cohort_add(struct cohort* testlist, testfunc f, char test_name[]);
 
 /*
  * Return count of tests in the test list 
@@ -122,9 +125,9 @@ size_t Cohort_count(struct cohort *testlist);
 
 /* 
  * Run all tests in the testlist (cohort) and report the results.
- * Return an enum status -- either SUCCESS or FAILURE.
+ * Return an enum testStatus -- either SUCCESS or FAILURE.
  */
-enum status Cohort_decimate(struct cohort *testlist);
+enum testStatus Cohort_decimate(struct cohort *testlist);
 
 /*
  * Free the memory associated with each test in the testlist,

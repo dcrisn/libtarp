@@ -6,9 +6,7 @@
 #include <setjmp.h>
 
 #include <tarp/common.h>
-
-#include "cohort.h"
-
+#include <tarp/cohort.h>
 
 // declarations
 static void register_sighandler(void);
@@ -149,7 +147,7 @@ void Cohort_destroy(struct cohort *testlist){
 }
 
 /* Append test to test list */
-void Cohort_add(struct cohort *testlist, enum status (*testf)(void), char test_name[]){
+void Cohort_add(struct cohort *testlist, testfunc testf, char test_name[]){
 
     assert(testlist);
     assert(testf);
@@ -257,7 +255,7 @@ void register_sighandler(void){
  * is printed at the end as well detailing which and the number
  * of tests that passed/failed.
  *
- * Return SUCCESS if all tests passed, else FAILURE. The caller should
+ * Return TEST_PASS if all tests passed, else TEST_FAIL. The caller should
  * propagate this status code to exit() such that if the test runner
  * failed, the process itself should also exit with an error code.
  *
@@ -269,7 +267,7 @@ void register_sighandler(void){
  * async-signal safe/reentrant. Calling them after making a non-local
  * jump with siglongjmp() is exactly the same: they are _not_ safe.
  * However, we're relying here on this line:
- *          enum status code = current->testf_ptr();
+ *          enum testStatus code = current->testf_ptr();
  * being the only possible cause of a fatal signal that would trigger the
  * handler. Adjacent stdio calls made by the test runner before and after
  * should never generate a fatal signal. I.e. they should never be
@@ -289,7 +287,7 @@ void register_sighandler(void){
  * Do note that a test that gets run could very well corrupt memory by writing out
  * of bounds and _still_ not generate a SIGSEGV signal!
  */
-enum status Cohort_decimate(struct cohort *testlist){
+enum testStatus Cohort_decimate(struct cohort *testlist){
     if (!testlist->head){
         printf("[ ] Test list empty : nothing to do.\n");
     }
@@ -339,9 +337,9 @@ enum status Cohort_decimate(struct cohort *testlist){
         // have (failed) test report prepared in case test fails with fatal signal
         save_test_report(passed, true, num_run, current);
 
-        enum status code = current->testf_ptr();
+        enum testStatus code = current->testf_ptr();
 
-        if (code == SUCCESS){
+        if (code == TEST_PASS){
             passed = true;
             total_passed++;
         }
@@ -355,8 +353,8 @@ enum status Cohort_decimate(struct cohort *testlist){
 
     // at least one test failed
     if (total_passed != testcount){
-        return FAILURE;
+        return TEST_FAIL;
     }
-    return SUCCESS;
+    return TEST_PASS;
 }
 

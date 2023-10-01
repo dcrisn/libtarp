@@ -1,7 +1,8 @@
 **/*.d
 **/*.o
-staging/
 **valgrind*
 **/out/*
-**/tags
+**/tags*
 build/*
+staging*
+cross.cmake

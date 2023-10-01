@@ -1,11 +1,11 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+
 #include <tarp/common.h>
+#include <tarp/cohort.h>
 
-#include "cohort.h"
-
-extern enum status perf_test(void);
+extern enum testStatus perf_test(void);
 
 int main(int argc, char **argv){
     UNUSED(argv);
@@ -24,7 +24,7 @@ int main(int argc, char **argv){
     //Cohort_add(tests, can_join_queues, "can_join_queues");
     Cohort_add(tests, perf_test, "perf_test");
     
-    enum status res = Cohort_decimate(tests);
+    enum testStatus res = Cohort_decimate(tests);
     Cohort_destroy(tests);
     return res;
 }
