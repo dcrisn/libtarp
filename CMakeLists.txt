@@ -14,6 +14,7 @@ set(LIBTARP_PATCH_NUMBER 1)
 
 option(DEBUG "Build debug binaries" OFF)
 option(USE_SANITIZERS "Use program sanitizers" OFF)
+option(RUN_TESTS "Generate test targets" OFF)
 
 add_compile_options(
     -Wall
@@ -47,25 +48,30 @@ endif()
 
 if (USE_SANITIZERS)
     foreach(flag
-        -fsanitize=null
-        -fsanitize=address
-        -fsanitize=leak
-        -fsanitize=bounds-strict
-        -fsanitize=thread
-        -fsanitize=undefined
-        -fsanitize=return
-        -fsanitize=alignment
-        )
+            -fsanitize=address;
+            -fsanitize=leak;
+            -fsanitize=undefined; # includes null, alignment, bounds-strict etc
+            -fsanitize=pointer-compare;
+            -fsanitize=pointer-subtract;
+            #-fsanitize=thread
+            )
+        message("sanitizer flag is ${flag}")
 
-        CHECK_CXX_COMPILER_FLAG(flag has_flag)
+        # TODO: find way to check if san libs exist / compiler supports the flags
+        SET(has_flag 1)
+
         if (has_flag)
-            add_compile_options(flag)
+            add_compile_options(${flag})
+            add_link_options(${flag})
         else()
             message(NOTICE "Failed to add sanitizer flag '${flag}' (unacceptable)")
         endif()
 
     endforeach()
+    message("compile flags is ${COMPILE_OPTIONS}")
 endif()
+
+message("compile flags is ${COMPILE_OPTIONS}")
 
 # set language standard
 set(CMAKE_C_STANDARD 11)
@@ -146,4 +152,6 @@ INSTALL(TARGETS tarp md5sum
 
 
 # tests
-add_subdirectory(tests)
+if (RUN_TESTS)
+    add_subdirectory(tests)
+endif()
