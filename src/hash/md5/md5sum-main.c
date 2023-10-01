@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <errno.h>
 
 #include <tarp/hash/md5sum.h>
 
@@ -21,12 +22,14 @@ int main(int argc, char **argv){
     uint8_t output[16];
     bool string_mode = false;
     int arg = -1;
+    int rc = 0;
 
     /* no cli args */
     if (argc == 1){
-        MD5_fdigest(STDIN_FILENO, output);
-        MD5_print(output);
-        exit(EXIT_SUCCESS);
+        if (MD5_fdigest(STDIN_FILENO, output) == 0){
+            MD5_print(output);
+        }
+        exit(rc == 0 ? EXIT_SUCCESS : EXIT_FAILURE);
     }
 
     /* else parse cli */
@@ -42,10 +45,10 @@ int main(int argc, char **argv){
     }
 
     for (int i = optind; i < argc; ++i){
-        if (string_mode) MD5_sdigest(argv[i], output);
-        else MD5_file_digest(argv[i], output);
+        if (string_mode)   rc = MD5_sdigest(argv[i], output);
+        else               rc = MD5_file_digest(argv[i], output);
 
-        MD5_print(output);
+        if (rc == 0) MD5_print(output);
 
         /* print a new line only between checksum prints */
         if (argc > i+1) printf("\n");

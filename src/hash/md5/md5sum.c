@@ -11,6 +11,7 @@
 
 #include <tarp/math.h>
 #include <tarp/common.h>
+#include <tarp/log.h>
 #include <tarp/bits.h>
 #include <tarp/hash/md5sum.h>
 
@@ -346,6 +347,7 @@ int MD5_fdigest(int fd, uint8_t digest[16]){
 
     if (bytes_read < 0){
         MD5_destroy(ctx, NULL, NULL);
+        error("Read error: '%s'", strerror(errno));
         return errno;
     }
 
@@ -360,7 +362,7 @@ int MD5_file_digest(const char *const filename, uint8_t digest[16]){
 
     int fd = open(filename, O_RDONLY);
     if (fd < 0){
-        fprintf(stderr, "Failed to open '%s': '%s'", filename, strerror(errno));
+        error("Failed to open '%s': '%s'", filename, strerror(errno));
         return errno;
     }
 

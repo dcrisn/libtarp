@@ -112,12 +112,12 @@ target_include_directories(tarp PUBLIC
     ${public_headers}
     )
 
-add_executable(md5sum
+add_executable(md5hash
     src/hash/md5/md5sum-main.c
     src/hash/md5/md5sum.c
     )
 
-target_include_directories(md5sum PUBLIC
+target_include_directories(md5hash PUBLIC
     ${public_headers}
     )
 
@@ -128,7 +128,7 @@ target_include_directories(md5sum PUBLIC
 target_link_libraries(tarp
     m)
 
-target_link_libraries(md5sum
+target_link_libraries(md5hash
     tarp)
 
 ########################################
@@ -137,14 +137,14 @@ target_link_libraries(md5sum
 #
 INSTALL(DIRECTORY ${public_headers} DESTINATION usr)
 
-set_target_properties(tarp md5sum
+set_target_properties(tarp md5hash
     PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-INSTALL(TARGETS tarp md5sum
+INSTALL(TARGETS tarp md5hash
     LIBRARY DESTINATION usr/lib
     ARCHIVE DESTINATION usr/lib
     RUNTIME DESTINATION usr/bin
