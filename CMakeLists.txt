@@ -27,7 +27,6 @@ add_compile_options(
     -fstrict-aliasing
     -Wstrict-aliasing
     -fdiagnostics-color=always
-    -I${HOME}/.local/usr/include
     )
 
 add_definitions(
@@ -90,10 +89,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # make Makefiles spit out verbose output by default
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(public_headers "include")
-file(GLOB_RECURSE library_c_sources "src/*.c")
-file(GLOB_RECURSE library_cxx_sources "src/*.cxx")
-
 #######################
 # Target definitions #
 ######################
@@ -103,13 +98,22 @@ add_library(tarp SHARED
     ${library_cxx_sources}
     )
 
+file(GLOB_RECURSE library_c_sources "src/*.c")
+file(GLOB_RECURSE library_cxx_sources "src/*.cxx")
+
+SET(libtarp_public_headers include/)
+SET(libtarp_private_headers ${libtarp_public_headers})
+
 set_target_properties(tarp PROPERTIES
     VERSION ${LIBTARP_MAJOR_VERSION}.${LIBTARP_MINOR_VERSION}.${LIBTARP_PATCH_NUMBER}
     SOVERSION ${LIBTARP_MAJOR_VERSION}
+    #INTERFACE_INCLUDE_DIRECTORIES ${libtarp_public_headers}
 )
 
-target_include_directories(tarp PUBLIC
-    ${public_headers}
+# no distinction between interface and internal headers at the moment
+target_include_directories(tarp
+    INTERFACE ${libtarp_public_headers}
+    PUBLIC ${libtarp_private_headers}
     )
 
 add_executable(md5hash
