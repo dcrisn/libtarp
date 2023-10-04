@@ -55,11 +55,18 @@ void log_message(int priority, const char *fmt, ...);
 #define warn(...)   log_message(LOG_WARNING, color(BLUE,     "[WARN] ") __VA_ARGS__)
 #define info(...)   log_message(LOG_INFO,    color(GREEN,    "[INFO] ") __VA_ARGS__)
 
-#define debug(fmt, ...) \
+#define debug__(fmt, ...) \
     log_message(LOG_DEBUG, \
-        color(YELLOW,   "[DEBUG] ") "%s:%d,%s() | " \
-        fmt, ##__VA_ARGS__, __FILE__, __LINE__, __func__ )
+        color(YELLOW,   "[DEBUG] ") "%s(),%s:%d | " \
+        fmt "%s", __func__, __FILE__, __LINE__, __VA_ARGS__)
 #endif
+
+/* To silence warning about variadic macro expecting two params;
+ * Notice the empty string passed as the second argument will be fed to the "%s"
+ * format specifier placed after 'fmt' in the debug__ macro above; no matter
+ * what 'fmt' is, a string format specifier is added at the end of it and this
+ * empty string is fed to it */
+#define debug(...) debug__( __VA_ARGS__, "")
 
 
 #ifdef __cplusplus
