@@ -4,6 +4,15 @@
 #include <tarp/bits.h>
 #include <tarp/math.h>
 
+bool is_valid_bitstring(const char *s){
+    assert(s);
+    while (*s){
+        if (*s != '1' && *s != '0') return false;
+        ++s;
+    }
+    return true;
+}
+
 const char *bitstr(uint64_t val, size_t width){
     size_t msb_pos = posmsb(val);
     size_t strsz = MAX(msb_pos, width) + 1;
@@ -13,7 +22,7 @@ const char *bitstr(uint64_t val, size_t width){
     assert(buff);
     if (!buff) /* todo, throw error */
         return NULL;
-     
+
     if (width > msb_pos){
         int padding = width - msb_pos;
         for (int i = 0; i < padding; ++i){
@@ -76,7 +85,7 @@ void dump_hex(
     )
 {
     const uint8_t *p = start;
-    for (unsigned int i = 0; i<len; ++i){
+    for (uint32_t i = 0; i<len; ++i){
         if (i%width==0){
             if (print_offsets){
                 fprintf(stderr, "0x%08X | ", i==0 ? 0 : i);
