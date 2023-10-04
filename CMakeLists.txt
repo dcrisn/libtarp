@@ -21,8 +21,10 @@ add_compile_options(
     -Wextra
     -Wuninitialized
     -Wshadow
-    -pedantic
+    -Wpedantic
+    -Werror
     -Wnull-dereference
+    -fwrapv
     -fstack-protector-all
     -fstrict-aliasing
     -Wstrict-aliasing
@@ -37,7 +39,7 @@ add_definitions(
     )
 
 if (DEBUG)
-    message("This is a debug *DEBUG* build")
+    message("This is a *DEBUG* build")
     add_compile_options(-ggdb3)
     add_definitions(-DDEBUG_BUILD)
 else()
@@ -46,6 +48,7 @@ else()
 endif()
 
 if (USE_SANITIZERS)
+    message("Trying to build with sanitizer support")
     foreach(flag
             -fsanitize=address;
             -fsanitize=leak;
@@ -67,10 +70,11 @@ if (USE_SANITIZERS)
         endif()
 
     endforeach()
-    message("compile flags is ${COMPILE_OPTIONS}")
 endif()
 
-message("compile flags is ${COMPILE_OPTIONS}")
+if (RUN_TESTS)
+    message("Build will include tests")
+endif()
 
 # set language standard
 set(CMAKE_C_STANDARD 11)
@@ -93,16 +97,16 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 # Target definitions #
 ######################
 #
+file(GLOB_RECURSE library_c_sources "src/*.c")
+file(GLOB_RECURSE library_cxx_sources "src/*.cxx")
+
+SET(libtarp_public_headers include)
+SET(libtarp_private_headers ${libtarp_public_headers})
+
 add_library(tarp SHARED
     ${library_c_sources}
     ${library_cxx_sources}
     )
-
-file(GLOB_RECURSE library_c_sources "src/*.c")
-file(GLOB_RECURSE library_cxx_sources "src/*.cxx")
-
-SET(libtarp_public_headers include/)
-SET(libtarp_private_headers ${libtarp_public_headers})
 
 set_target_properties(tarp PROPERTIES
     VERSION ${LIBTARP_MAJOR_VERSION}.${LIBTARP_MINOR_VERSION}.${LIBTARP_PATCH_NUMBER}
@@ -139,7 +143,7 @@ target_link_libraries(md5hash
 ## Build artifact installation rules  #
 #######################################
 #
-INSTALL(DIRECTORY ${public_headers} DESTINATION usr)
+INSTALL(DIRECTORY ${libtarp_public_headers} DESTINATION usr)
 
 set_target_properties(tarp md5hash
     PROPERTIES
