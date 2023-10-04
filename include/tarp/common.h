@@ -21,6 +21,8 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  */
 #define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
+#define membersz(type, member) sizeof(((type *)0)->member)
+
 /*
  * Stringify token x to allow concatenation with string literals */
 #define tostring__(x) #x
@@ -48,7 +50,8 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  */
 void *salloc(size_t size, void *ptr);
 
+#define nl(n) do { for (int i = n; i > 0; --i) puts(""); } while(0);
 
-
-
+#define match(a, b) (strcmp(a, b) == 0 )
+#define bool2str(val) ((val) ? "True":"False")
 #endif
