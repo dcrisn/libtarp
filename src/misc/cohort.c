@@ -12,22 +12,22 @@
 static void register_sighandler(void);
 
 
-/* -------------------------------- 
+/* --------------------------------
    global variables (file-scoped)
    ===============================*/
 
-// flag set by signal handler; tested and cleared by test runner (Cohort_decimate()) 
+// flag set by signal handler; tested and cleared by test runner (Cohort_decimate())
 // to know if it's a fresh start or resumption after signal interrupt
-static volatile sig_atomic_t sig_delivered = 0;    
+static volatile sig_atomic_t sig_delivered = 0;
 
-// num of tests run so far; if fresh start, 0, else used to 
+// num of tests run so far; if fresh start, 0, else used to
 // figure out where to resume in the testlist after signal was caught (sigsegv etc);
 // i.e. start at test n+1 in the testlist if num_run is n.
 static size_t num_run = 0;
 size_t testcount = 0;
 
 // Flag to mark that the sig_env variable has been initialized, ie its safe to do a long jump
-static bool safe_to_jump = false;  
+static bool safe_to_jump = false;
 
 // environment state for the signal handler
 static sigjmp_buf sig_env;
@@ -44,47 +44,47 @@ static struct{
 
 ////////////////////////////////////////////////////////////////////////////
 
-/* -------------------------------- 
+/* --------------------------------
    function definitions
    ===============================*/
 
-/* 
+/*
  * Print out the global test_report struct.
  *
- * This function should be called after each test in order to print out 
+ * This function should be called after each test in order to print out
  * its respective report. Therefore it should be called by the test runner
- * (Cohort_decimate()) either as it iterates through the test list, or after 
+ * (Cohort_decimate()) either as it iterates through the test list, or after
  * recovery from signal interrupt.
 */
 static void print_test_report(void){
     if (test_report.passed == true){
-        printf("\t  test %-4zu of %-4zu passed.  | %-30s | \n", 
-                test_report.test_number, 
-                testcount, 
+        printf("\t  test %-4zu of %-4zu passed.  | %-30s | \n",
+                test_report.test_number,
+                testcount,
                 test_report.test_name);
     }else{
         if (test_report.got_fatal_signal){
-            printf("\t! test %-4zu of %-4zu !FAILED! | %-30s |\t\t[* caught deadly signal *]\n", 
-                    test_report.test_number, 
-                    testcount, 
+            printf("\t! test %-4zu of %-4zu !FAILED! | %-30s |\t\t[* caught deadly signal *]\n",
+                    test_report.test_number,
+                    testcount,
                     test_report.test_name);
         }
         else{
-            printf("\t! test %-4zu of %-4zu !FAILED! | %-30s |\n", 
-                    test_report.test_number, 
-                    testcount, 
+            printf("\t! test %-4zu of %-4zu !FAILED! | %-30s |\n",
+                    test_report.test_number,
+                    testcount,
                     test_report.test_name);
         }
     }
 }
 
-/* 
+/*
  * Populate the global test_report struct.
  *
  * This function should be called after each test to save its respective report
  * details. This is ahead of calling print_test_report().
  *
- * It should therefore be called by the test runner either as it iterates over the 
+ * It should therefore be called by the test runner either as it iterates over the
  * test list or after recovery from signal interrupt.
 */
 static void save_test_report(bool passed, bool got_fatal_signal, size_t test_number, struct test *test_ptr){
@@ -119,7 +119,7 @@ struct cohort *Cohort_init(void){
     new->count = 0;
     new->head = NULL;
     new->tail = NULL;
-    
+
     // register signal handler
     register_sighandler();
 
@@ -130,12 +130,12 @@ struct cohort *Cohort_init(void){
 }
 
 /*
- * Release all heap memory associated with the test list 
+ * Release all heap memory associated with the test list
  * (i.e. the test list itself and each test struct in it).
  */
 void Cohort_destroy(struct cohort *testlist){
-    struct test *temp = NULL;    
-    struct test *current = NULL;    
+    struct test *temp = NULL;
+    struct test *current = NULL;
     current = testlist->head;
 
     while(current){
@@ -198,7 +198,7 @@ static struct test *Cohort_get_nth(struct cohort *testlist , size_t n){
     return current;
 }
 
-/* 
+/*
  * Handle sigsegv, sigbus etc signals.
  */
 static void sighandler(int signum){
@@ -226,15 +226,15 @@ static void sighandler(int signum){
  */
 void register_sighandler(void){
     struct sigaction sigact;
-    sigact.sa_handler = sighandler; 
+    sigact.sa_handler = sighandler;
     sigemptyset(&sigact.sa_mask); // do not block any signals
     sigact.sa_flags=0;
-     
+
     /* The .sa_mask can be used to add signals to the mask to be blocked during execution
-     * of the signal handler; I'm not adding anything, so it can be left empty; 
+     * of the signal handler; I'm not adding anything, so it can be left empty;
      * by default, the signal(s) that the signal handler is regstered to handle is added by
      * default. All the signals in sa_mask are added to the process's signal mask
-     * automatically before the signal handler executes and removed automatically once 
+     * automatically before the signal handler executes and removed automatically once
      * the signal handler finishes executing. This is so that the signal handler is not
      * interrupted when in the middle of handling a received signal.
      */
@@ -248,7 +248,14 @@ void register_sighandler(void){
     }
 }
 
-/* 
+/*
+ * Wrapper around sigsetjmp to avoid automatic-storage variables in the main test
+ * runner function being 'clobbered' when a sigjump actually happens. */
+int set_sigjmp_anchor_point(){
+    return sigsetjmp(sig_env, 1);
+}
+
+/*
  * Iterate over the test list and run each test in turn.
  *
  * For each test, a test report is printed; an overall report
@@ -274,8 +281,8 @@ void register_sighandler(void){
  * interrupted by the signal handler and be left in an inconsistent state.
  *
  * So if indeed the program only ever crashes on the aforementioned line (that
- * is, if an actual test is the only possible cause of a SIGSEGV or SIGBUS), 
- * then there is nothing to worry about. 
+ * is, if an actual test is the only possible cause of a SIGSEGV or SIGBUS),
+ * then there is nothing to worry about.
  * However, on the other hand, if that assumption is not true there's either:
  * 1) a bug in the code here (because reasonably no calls to stdio should ever
  * have reason to generate a fatal signal - _in this code here_)
@@ -302,19 +309,20 @@ enum testStatus Cohort_decimate(struct cohort *testlist){
     /* (re)initialize sig state variable.
      * siglongjmp makes long jump to here.
      */
-    if (sigsetjmp(sig_env, 1) == 0){ 
+    if (set_sigjmp_anchor_point() == 0){
         // only execute the body here on FIRST init (when sigsetjmp() returns 0)
         safe_to_jump = true;
 
-        /* If starting clean from the beginning (global sig_delivered is false) rather than
-         * resuming after signal receipt, then start at the head-end of the test list.
+        /* If starting clean from the beginning (global sig_delivered is false)
+         * - as opposed to resuming after signal receipt, then start at the
+         * head-end of the test list.
          */
-        if (!sig_delivered){ 
+        if (!sig_delivered){
             test_to_run = testlist->head;
             assert(test_to_run);
         }
     }
-    
+
     /* Else, this is a resumption after signal interrupt caused by the test at
      * num_run; resume with num_run+1
      */
@@ -325,12 +333,12 @@ enum testStatus Cohort_decimate(struct cohort *testlist){
         print_test_report();
         test_to_run = Cohort_get_nth(testlist, num_run+1);
     }
-   
+
     for (struct test *current = test_to_run; current; current = current->next){
-        // we increment num_run BEFORE running the test, but only increment 
+        // we increment num_run BEFORE running the test, but only increment
         // total_passed AFTER. That way, if the test segfaults, we know the last test
-        // wasn't successful. If the signal handler runs, it automatically assumes 
-        // there's been a crash and a test failed with a memory violation or somesuch 
+        // wasn't successful. If the signal handler runs, it automatically assumes
+        // there's been a crash and a test failed with a memory violation or somesuch
         // fault and it prints a negative test report.
         bool passed = false;
         ++num_run;
@@ -343,7 +351,7 @@ enum testStatus Cohort_decimate(struct cohort *testlist){
             passed = true;
             total_passed++;
         }
-    
+
         // actually did not crash with signal interrupt: amend test report
         save_test_report(passed, false, num_run, current);
         print_test_report();
