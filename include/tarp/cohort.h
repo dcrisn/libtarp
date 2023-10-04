@@ -135,4 +135,42 @@ enum testStatus Cohort_decimate(struct cohort *testlist);
  */
 void Cohort_destroy(struct cohort *testlist);
 
+//
+/************************************************************
+ * Macro helpers that may be used if the cohort test runner |
+ * is not.                                                  |
+ * See tests/bitarray/tests.c for an example of how these   |
+ * are used.                                                |
+ ***********************************************************/
+
+/*
+ * Environment variables:
+ * 1) TEST_DEBUG:   enable the cond_test_debug_print prints in the test files.
+ * 2) STOP_ON_FAIL: stop as soon as one test fails. Do not continue past that.
+ */
+
+#define prepare_test_variables() \
+    int num_run = 0; \
+    int num_passed = 0; \
+    int passed = 0;
+
+/* test runner */
+#define run(f, expected, ...) \
+    ++num_run;  \
+    passed = (f(__VA_ARGS__) == expected); \
+    if (passed) ++num_passed; \
+    printf("[ ] test %4i %9s | %s()\n", \
+            num_run, \
+            (passed) ? "Passed" : "FAILED !!", \
+            tkn2str(f) \
+            ); \
+    if (getenv("STOP_ON_FAIL") && !passed) exit(1);
+
+#define report_test_summary() \
+    printf("\n Passed: %i / %i\n", num_passed, num_run); \
+    if (num_passed != num_run) exit(1)
+
+#define cond_test_debug_print(status, ...) \
+    if (getenv("TEST_DEBUG")) info(__VA_ARGS__); \
+
 #endif

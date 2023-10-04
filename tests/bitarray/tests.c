@@ -11,35 +11,6 @@
 #include <tarp/log.h>
 #include <tarp/bits.h>
 
-/*
- * Environment variables:
- * 1) TEST_DEBUG
- * 2) STOP_ON_FAIL
- */
-#define prepare_test_variables() \
-    int num_run = 0; \
-    int num_passed = 0; \
-    int passed = 0;
-
-/* test runner */
-#define run(f, expected, ...) \
-    ++num_run;  \
-    passed = (f(__VA_ARGS__) == expected); \
-    if (passed) ++num_passed; \
-    printf("[ ] test %4i %9s | %s()\n", \
-            num_run, \
-            (passed) ? "Passed" : "FAILED !!", \
-            tkn2str(f) \
-            ); \
-    if (getenv("STOP_ON_FAIL") && !passed) exit(1);
-
-#define report_test_summary() \
-    printf("\n Passed: %i / %i\n", num_passed, num_run); \
-    if (num_passed != num_run) exit(1)
-
-#define cond_test_debug_print(status, ...) \
-    if (getenv("TEST_DEBUG")) info(__VA_ARGS__); \
-
 
 typedef struct bitarray *ba;
 
