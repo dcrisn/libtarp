@@ -215,7 +215,6 @@ static enum testStatus test_bitarray_frombuffer(
 
     ba a = NULL;
     if (create_separate_bitarray){
-        debug("allones=%i, width=%zu", all_ones, width);
         a = Bitr_new(width, all_ones);
         ba b = Bitr_frombuff(a, buff, num_bytes);
 
@@ -257,7 +256,6 @@ static enum testStatus test_bitarray_fromu32(bool create_separate_bitarray,
 
     ba a = NULL;
     if (create_separate_bitarray){
-        debug("allones=%i, width=%zu", all_ones, width);
         a = Bitr_new(width, all_ones);
         ba b = Bitr_fromu32(a, initializer);
 
@@ -627,6 +625,7 @@ int main(int argc, char **argv){
     run(test_bitarray_join, TEST_PASS, "1111", "0000", "11110000");
     run(test_bitarray_join, TEST_FAIL, "1111", "0000", "11111000");
     run(test_bitarray_join, TEST_PASS, "1111111", "0", "11111110");
+    run(test_bitarray_join, TEST_PASS, "11111111", "0000000011111111", "111111110000000011111111");
     run(test_bitarray_join, TEST_PASS, "000001111", "0000001", "0000011110000001");
 
     printf("\n%s\n", "===== Validating bitarray repeat ========= ");
@@ -635,6 +634,7 @@ int main(int argc, char **argv){
     run(test_bitarray_repeat, TEST_PASS, 3, "101", "101101101");
     run(test_bitarray_repeat, TEST_PASS, 5, "01", "0101010101");
     run(test_bitarray_repeat, TEST_PASS, 3, "111111111", "111111111111111111111111111");
+    run(test_bitarray_repeat, TEST_PASS, 4, "11111111", "11111111111111111111111111111111");
 
     printf("\n%s\n", "===== Validating bitarray slicing ========= ");
     run(test_bitarray_slice, TEST_PASS, "11110000", 1, 5, "0000");

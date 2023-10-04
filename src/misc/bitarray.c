@@ -20,11 +20,11 @@
  *
  * --> totsz
  *  If not NULL, the total size that needs to be dynamically allocated for the
- *  struct bitarray is stored in it.
+ *  struct bitarray will be stored in it.
  *
  * --> bitarray_sz
  * If not NULL, the size required for the bitarray buffer itself, in bytes,
- * is stored in it.
+ * will be stored in it.
  */
 void calculate_required_size__(uint32_t nbits, size_t *totsz, size_t *bitarray_sz){
     size_t total_size, buffer_size;
@@ -56,9 +56,9 @@ static inline void fill_bitarray__(struct bitarray *bitr, uint8_t byte){
     memset(bitr->bytes, byte, bitr->size);
 }
 
-struct bitarray *Bitr_new(size_t nbits, bool all_ones){
+struct bitarray *Bitr_new(size_t nbits, bool one){
     struct bitarray *new = allocate_bitarray(nbits);
-    fill_bitarray__(new, all_ones ? FULL_BYTE : NULL_BYTE);
+    fill_bitarray__(new, one ? FULL_BYTE : NULL_BYTE);
     return new;
 }
 
@@ -80,7 +80,6 @@ struct bitarray *Bitr_frombuff(
 {
     assert(buffer);
     if (bitr){
-        //assert(bits2bytes(bitr->width, false) >= buffsz);
         if (bits2bytes(bitr->width, false) < buffsz) return NULL;
     } else{
         bitr = allocate_bitarray(bytes2bits(buffsz));
@@ -122,9 +121,11 @@ struct bitarray *Bitr_clone(const struct bitarray *bitr){
  */
 #define inrange(width, pos)  (pos > 0 && pos <= width)
 
-/* return error if pos is out of bounds */
+/* return error if pos is out of bounds;
+ * NOTE the error code is negated to make it possible to differentiate between
+ * an error and a valid (bit) value */
 #define check_position_within_range(width, pos) \
-    do { if (!inrange(width, pos)) return ERROR_OUTOFBOUNDS; } while (0)
+    do { if (!inrange(width, pos)) return -(ERROR_OUTOFBOUNDS); } while (0)
 
 /* Given a 1-based bit position in the bit array, assign:
  * byte_index_var = 0-based byte index inside the byte array buffer
@@ -135,17 +136,15 @@ struct bitarray *Bitr_clone(const struct bitarray *bitr){
     size_t byte_index_var = zero_based_bit_pos__ / BITS_IN_BYTE; \
     size_t bit_index_var = (zero_based_bit_pos__ & (BITS_IN_BYTE - 1)) + 1;
 
-/* set bit at specified position to bitval, which *must* be either 1 or 0. */
+/*
+ * set bit at specified position to bitval, which *must* be either 1 or 0. */
 static int Bitr_setval(struct bitarray *bitr, size_t pos, int bitval){
     assert(bitr);
     assert(bitval == 1 || bitval == 0);
     check_position_within_range(Bitr_width(bitr), pos);
 
     set_indices(pos, byte_idx, bit_pos);
-    //debug("==>Bitr_setval asked to set bit to %c at pos=%zu (byte_idx=%zu,"
-    //   "bit_idx=%zu", bitval==1 ? '1': '0', pos, byte_idx, bit_pos);
     bitr->bytes[byte_idx] = set_bitval(bitr->bytes[byte_idx], bit_pos, bitval);
-    //debug("==>Bitr_setval: set bit at pos %zu to %c", pos, Bitr_get(bitr, pos) == 1 ? '1' : '0');
 
     return 0;
 }
@@ -174,22 +173,17 @@ int Bitr_toggle(struct bitarray *bitr, size_t pos){
     return 0;
 }
 
-// todo there is no way to differentiate between valid value and error code
 int Bitr_get(const struct bitarray *bitr, size_t pos){
     assert(bitr);
     check_position_within_range(Bitr_width(bitr), pos);
 
-    //debug("calling set_indices with pos=%zu", pos);
     set_indices(pos, byte_idx, bit_pos);
-    //debug("byte_idx set to %zu and bit_pos set to %zu", byte_idx, bit_pos);
     return get_bit(bitr->bytes[byte_idx], bit_pos);
-
-    return 0;
 }
 
 #define check_position_and_nbits_within_range(pos, nbits) \
     check_position_within_range(pos, nbits); \
-    if (nbits > pos) return ERROR_OUTOFBOUNDS;
+    if (nbits > pos) return -(ERROR_OUTOFBOUNDS);
 
 #define do_for_bits(bitfunc, bitr, pos, nbits)\
     check_position_and_nbits_within_range(pos, nbits); \
@@ -257,17 +251,6 @@ int Bitr_bxor(struct bitarray *a, const struct bitarray *b){
     loop_transform_bytes(a, b, ^);
 }
 
-/* Create and return a new bit array that is a [start, end) slice of <bitr>.
- * 0 for the value of start or end means the lower/bound is unspecified. Therefore
- * (0,0) represents a slice the size of bitr. The slice begins at the low-order
- * end of the bitarray and runs toward the high-order end.
- *
- * NOTE indexing is is 1-based.
- *
- * - The following are expected:
- *   start < end
- *   0 <= start,end <= width+1
- */
 struct bitarray *Bitr_slice(const struct bitarray *bitr, size_t start, size_t end){
     assert(bitr);
 
@@ -300,7 +283,6 @@ struct bitarray *Bitr_repeat(
     size_t w = Bitr_width(bitr);
     if (w >= BITS_IN_BYTE && ismult2(w)){ /* fastpath, just copy byte ranges */
         for (unsigned int i = 0; i < n; i++){
-            printf("memcpy from new->bytes+%d, %zu bytes\n", i, bitr->width);
             memcpy(new->bytes+(bitr->size*i), bitr->bytes, bitr->size);
         }
     } else { /* slowpath -- do it bit by bit */
@@ -335,9 +317,7 @@ struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b){
 
 char *Bitr_tostring(struct bitarray *bitr, int split_every, const char *sep)
 {
-    //printf("invoked with split_ever=%d, sep='%s'\n", split_every, sep);
     assert(bitr);
-    //debug("called with bitr->size=%zu bitr->width=%zu", bitr->size, bitr->width);
     sep = sep ? sep : "";
     size_t seplen = strlen(sep);
     size_t groups = 0, groupsz = split_every;
@@ -353,26 +333,20 @@ char *Bitr_tostring(struct bitarray *bitr, int split_every, const char *sep)
         size_t separators = (bitr->width / groupsz) -
             (bitr->width % groupsz ? 0 : 1);
 
-        //printf("separataors=%zu\n", separators);
         groups = separators+1;
-        //printf("groups=%zu, separators=%zu\n", groups, separators);
         totsz += strlen(sep) * separators;
     }
 
     char *s = salloc(totsz, NULL);
-    //printf("totsz is %zu, bitr->width is %zu, groups=%zu, groupsz=%zu\n",
-    //        totsz, bitr->width, groups, groupsz);
-    char *ptr = s + (totsz-2); /* before NULL */
-    //debug("s=%p ptr=%p", (void *)s, (void *)ptr);
+    char *ptr = s + (totsz-2); /* position before NULL */
 
     for (size_t i = 1; i <= bitr->width; ++i){
-        //debug("setting ptr to arr[%zu]=%zu", i, Bitr_get(bitr, i));
         *ptr-- = (Bitr_get(bitr, i) == ON_BIT) ? '1' : '0';
         if (groups > 1 && (i % groupsz) == 0){
             if (--groups){ /* don't put separator after last group */
                 assert(seplen > 0);
                 ptr -= seplen;
-                /* we decremented the pointer by seplen +1! */
+                /* NOTE the pointer has been decremented by seplen +1! */
                 memcpy(ptr+1, sep, seplen);
             }
         }
@@ -404,7 +378,7 @@ struct bitarray *Bitr_reverse(struct bitarray *bitr){
     return bitr;
 }
 
-int Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate){
+void Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate){
     assert(bitr);
     assert(n <= bitr->width);
 
@@ -413,7 +387,6 @@ int Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate){
 
     /* move the bits n positions to the lelft, then clear then n least
      * significant bits */
-    //debug("reached here, bitr->width=%zu, n=%zu, slice_width=%zu", bitr->width, n, slice->width);
     for (size_t i = bitr->width; i > n; i--){
         Bitr_setval(bitr, i, Bitr_get(bitr, i-n));
     }
@@ -428,10 +401,9 @@ int Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate){
     }
 
     Bitr_destroy(&slice);
-    return 0;
 }
 
-int Bitr_rshift(struct bitarray *bitr, size_t n, bool rotate){
+void Bitr_rshift(struct bitarray *bitr, size_t n, bool rotate){
     assert(bitr);
     assert(n <= bitr->width);
 
@@ -455,7 +427,6 @@ int Bitr_rshift(struct bitarray *bitr, size_t n, bool rotate){
     }
 
     Bitr_destroy(&slice);
-    return 0;
 }
 
 void Bitr_lpush(struct bitarray *bitr, bool on){

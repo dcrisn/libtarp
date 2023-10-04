@@ -8,42 +8,84 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
-/***************************************************************************
- * Bit array data structure.                                               |
- *                                                                         |
- * The bits as well as the bytes are thought of as being numbered from 1,  |
- * from right (lower address in the bit array) to left (higher address in  |
- * the bit array), with increasing significance. IOW the storage is        |
- * little endian.                                                          |
- *                                                                         |
- *  uint8_t p[3] = {0xff, 0xff, 0xff};                                     |
- *                                                                         |
- *         byte 3   byte 2   byte 1                                        |
- *          |        |        |                                            |
- *   p+2    11111111 11111111 11111111  p+0                                |
- *         |                 |       |                                     |
- *       bit 24            bit 8    bit 1                                  |
- *                                                                         |
- * Mutator functions do change the bit array argument. If the user would   |
- * like a copy to be returned instead and leave the original unchanged,    |
- * then they should call clone() on the original and call the mutator on   |
- * the copy.                                                               |
- *------------------------------------------------------------------------/
+/*****************************************************************************
+ * Bit array data structure.                                                 |
+ *                                                                           |
+ * The bits as well as the bytes are thought of as being numbered from 1,    |
+ * from right (lower address in the bit array) to left (higher address in    |
+ * the bit array), with increasing significance. IOW the storage is          |
+ * little endian.                                                            |
+ *                                                                           |
+ *  uint8_t p[3] = {0xff, 0xff, 0xff};                                       |
+ *                                                                           |
+ *         byte 3   byte 2   byte 1                                          |
+ *          |        |        |                                              |
+ *   p+2    11111111 11111111 11111111  p+0                                  |
+ *         |                 |       |                                       |
+ *       bit 24            bit 8    bit 1                                    |
+ *                                                                           |
+ * ------------------------------------------------------------------------  |
+ * Functions marked as @mutator do change the bit array argument.            |
+ * If the user would like a copy to be returned instead and leave the        |
+ * original unchanged, then they should call clone() on the original and     |
+ * call the mutator on the copy.                                             |
+ *                                                                           |
+ * Functions that return a dynamically allocated bit array expect the user   |
+ * to call Bitr_destroy() when the bitarray is not longer needed.            |
+ * ------------------------------------------------------------------------  |
+ *                                                                           |
+ * Runtime complexity characteristics                                        |
+ * ------------------------------------                                      |
+ *                                                                           |
+ *  - '.'  means 'same as previous'.                                         |
+ *                                                                           |
+ * Bitr_new                     O(n) // n = width of array being created     |
+ * Bitr_destroy                 O(1) // .                                    |
+ * Bitr_width                   O(1) // .                                    |
+ * Bitr_frombuff                O(n) // n = width of input being copied from |
+ * Bitr_fromu{8,16,32,64}       O(n) // .                                    |
+ * Bitr_clone                   O(n) // .                                    |
+ * Bitr_{set,clear,toggle,get}  O(1) //                                      |
+ * Bitr_{setn,clearn,togglen}   O(n) // n = the number of bits to operate on |
+ * Bitr_{any,all,none}          O(n) // n = width of the bit array           |
+ * Bitr_{band,bor,bxor}         O(n) // .                                    |
+ * Bitr_{l,r}shift              O(n) // .                                    |
+ * Bitr_{l,r}{push,pop}         O(n) // .                                    |
+ * Bitr_reverse                 O(n) // .                                    |
+ * Bitr_tostring                O(n) // .                                    |
+ * Bitr_fromstring              O(n) // n = the length of the bitstring      |
+ * Bitr_slice                   O(n) // n = width of the slice               |
+ * Bitr_repeat                  O(n) // n = width or number of repetitions   |
+ * Bitr_join                    O(n) // n = width of the bit array(s)        |
+ * Bitr_equal                   O(n) // .                                    |
+ *                                                                           |
+ *---------------------------------------------------------------------------/
  */
 struct bitarray{
-    size_t  size;  /* in bytes */
+    size_t  size;  /* in bytes; for convenience, to minimize conversion calls */
     size_t width;  /* in bits; might not be a byte multiple */
     uint8_t bytes[];
 };
 
 /*
  * Allocate new bit array big enough to hold nbits > 0.
- * If all_ones=True, all bits in the new array will be
+ * If one=True, all bits in the new array will be
  * initialized to 1, otherwise 0. */
-struct bitarray *Bitr_new(size_t nbits, bool all_ones);
+struct bitarray *Bitr_new(size_t nbits, bool one);
+
+/*
+ * Deallocate bitr and set the pointer to NULL */
+void Bitr_destroy(struct bitarray **bitr);
+
+/*
+ * Get the total number of bits the bit array can hold */
+size_t Bitr_width(const struct bitarray *bitr);
+
+
 
 /*
  * Initialize bitarray from buffer.
+ * @mutator
  *
  * If bitr is NULL, this function allocates a bit array big enough
  * to hold buffsz bytes.
@@ -66,6 +108,8 @@ struct bitarray *Bitr_frombuff(
 
 /*
  * Initialize bit array with the contents of <bitstring>.
+ * @mutator
+ *
  * Each character in bitstring must be either a '0' or a '1', with the leftmost
  * character representing the most significant bit. NULL is returned for an
  * invalid bitstring or if the width of bitr (if not NULL) is insufficient.
@@ -76,6 +120,8 @@ struct bitarray *Bitr_fromstring(struct bitarray *bitr, const char *bitstring);
 
 /*
  * Initialize bit array from the value of the specified integral type.
+ * @mutator
+ *
  * If bitr is NULL, it's allocated. If bitr is not NULL, it must be at least as
  * wide as the integral type.
  * See Bitr_frombuff FMI.
@@ -85,34 +131,30 @@ struct bitarray *Bitr_fromu16(struct bitarray *bitr, uint16_t val);
 struct bitarray *Bitr_fromu32(struct bitarray *bitr, uint32_t val);
 struct bitarray *Bitr_fromu64(struct bitarray *bitr, uint64_t val);
 
+#if 0 /* TODO */
+uint8_t Bitr_to8(const struct bitarray *bitr);
+uint16_t Bitr_to16(const struct bitarray *bitr);
+uint32_t Bitr_to32(const struct bitarray *bitr);
+uint64_t Bitr_to64(const struct bitarray *bitr);
+#endif
+
 /*
  * Return a (deep) copy of the bit array */
 struct bitarray *Bitr_clone(const struct bitarray *bitr);
 
 /*
- * Return a new bit array that is initialized by repeating bitr n > 0 times.
- * If leading zeroes are to be ignored
- */
+ * Return a new bit array that is initialized by repeating bitr n > 0 times. */
 struct bitarray *Bitr_repeat(
         const struct bitarray *bitr,
         size_t n
         );
 
 /*
- * Append b to a. If a has bits 1..n, b's bits will come after n.
+ * Append a to b. If b has bits 1..n, a's bits will come after n.
  * B and A themselves remains unchanged and a new bit array is returned. */
 struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b);
 
 /*
- * Deallocate bitr and set the pointer to NULL */
-void Bitr_destroy(struct bitarray **bitr);
-
-/*
- * Get the total number of bits the bit array can hold */
-size_t Bitr_width(const struct bitarray *bitr);
-
-/*
- *
  * Shift the bits in the array left or right.
  *
  * --> n [<= width]
@@ -121,13 +163,9 @@ size_t Bitr_width(const struct bitarray *bitr);
  * --> rotate
  * If true, the shift is rotational such that bits that fall off one end
  * re-emerge at the other.
- *
- * <-- return
- * 0 = Success
- * 1 = invalid pos value (> width)
  */
-int Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate);
-int Bitr_rshift(struct bitarray *bitr, size_t n, bool rotate);
+void Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate);
+void Bitr_rshift(struct bitarray *bitr, size_t n, bool rotate);
 
 /*
  * Push/pop a bit at the left (most significant)/right (least significant) end.
@@ -151,11 +189,12 @@ struct bitarray *Bitr_reverse(struct bitarray *bitr);
 
 /*
  * Set, get, clear, or toggle the bit at bitr[pos-1].
+ * @mutator (set,get,toggle)
  *
  * Bitr_get returns 1 if the bit is turned on, else 0 if it is turned off.
  *
  * <-- return
- *     0 on success, 1 on failure (out of bounds: !(0 < pos <= width).
+ *     0 on success, -(ERROR_OUTOFBOUNDS) when (!(0 < pos <= width).
  */
 int Bitr_set(struct bitarray *bitr, size_t pos);
 int Bitr_get(const struct bitarray *bitr, size_t pos);
@@ -165,21 +204,27 @@ int Bitr_toggle(struct bitarray *bitr, size_t pos);
 
 /*
  * Set, get, clear, or toggle nbits from bitr[pos-1] (inclusive), to the right.
- *
- * Bitr_getn returns returns a
+ * @mutator
  *
  * <-- return
  * 0 = Success
- * 1 = pos > width (out of bounds)
- * 2 = nbits > pos (out of bounds)
+ * -(ERROR_OUTOFBOUNDS) = nbits > pos or  !(0 < pos <= width of the bit array)
  */
 int Bitr_setn(struct bitarray *bitr, uint32_t pos, size_t nbits);
 int Bitr_clearn(struct bitarray *bitr, uint32_t pos, size_t nbits);
 int Bitr_togglen(struct bitarray *bitr, uint32_t pos, size_t nbits);
 
-/* Create and return a new bit array that is a [start, end) slice of <bitr>.
- * 0 for the value of start or end means the lower/bound is unspecified. Therefore
- * (0,0) represents a slice the size of bitr.
+/*
+ * Create and return a new bit array that is a [start, end) slice of <bitr>.
+ * 0 for the value of either start end means the lower/bound is unspecified.
+ * Therefore (0,0) represents a slice the size of bitr. The slice begins at
+ * the low-order end of the bitarray and runs toward the high-order end.
+ *
+ * NOTE indexing is 1-based.
+ *
+ * - The following are expected:
+ *   start < end
+ *   0 <= start,end <= width+1
  */
 struct bitarray *Bitr_slice(const struct bitarray *bitr, size_t start, size_t end);
 
@@ -192,10 +237,11 @@ bool Bitr_none(const struct bitarray *bitr);
 /*
  * Perform a <x> b or <x> is the specified binary operation, and store the result
  * in a. a and b *must* be of the same size.
+ * @mutator
  *
  * <-- return
  * 0 = Success
- * 1 = a and b are not of the same size.
+ * ERROR_INVALIDVALUE = a and b are not of the same size.
  */
 int Bitr_bor(struct bitarray *a, const struct bitarray *b);
 int Bitr_band(struct bitarray *a, const struct bitarray *b);
@@ -210,8 +256,8 @@ bool Bitr_equal(const struct bitarray *a, const struct bitarray *b);
  * Return a dynamically allocated string that represents the bitarray as a
  * sequence of bits from most (left) to least (right) significant.
  * If split_every is > 0, then the bits are split in groups of the specified
- * size, separated by sep, which must *not* be NULL (may only be NULL if
- * split_every is 0).
+ * size (working from low-order end), separated by sep, which must *not* be
+ * NULL (may only be NULL if split_every is 0).
  *
  * The user must free() the string when no longer needed.
  */
