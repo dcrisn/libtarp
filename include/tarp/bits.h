@@ -10,6 +10,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <tarp/pedantic.h>
 
 
 #define BITS_IN_BYTE 8U
@@ -24,6 +25,8 @@ extern "C" {
 
 #define NULL_BYTE 0x00U
 #define FULL_BYTE 0xFFU
+
+#define bit2char(bit) ( (bit==ON_BIT) ? '1' : ((bit==OFF_BIT) ? '0' : '?') )
 
 /*
  * left rotational bit shift;
@@ -117,16 +120,16 @@ static inline size_t bits2bytes(size_t nbits, bool round){
     ((num >> (pos-1)) & ON_BIT)
 
 #define set_bit(num, pos) \
-    (num | (ON_BIT << (pos-1)))
+    (num | (((typeof(num))ON_BIT) << (pos-1)))
 
 #define set_bitval(num, pos, bitval) \
-    ( (num & ~(ON_BIT << (pos-1))) | (bitval << (pos-1)) )
+    ( (num & ~( ((typeof(num))ON_BIT) << (pos-1))) | (((typeof(num))bitval) << (pos-1)) )
 
 #define clear_bit(num, pos) \
-    (num & ~(ON_BIT << (pos-1)))
+    (num & ~(((typeof(num))ON_BIT) << (pos-1)))
 
 #define toggle_bit(num, pos) \
-    (num ^ (ON_BIT << (pos-1)))
+    (num ^ (((typeof(num))ON_BIT) << (pos-1)))
 
 /*
  * Get, set, clear, or toggle a number of adjacent bits.
@@ -352,6 +355,32 @@ void dump_hex(
           *(--p_) = ( (num >> bytes2bits(pos_)) & FULL_BYTE );       \
     } while (0)
 
+/*
+ * Read sizeof(typeof(num)) bytes from buff and load them into num.
+ * Buf is assumed to be storing its bytes in little-endian or big-endian order
+ * respectively. */
+#define load_uint_be(buff, type, num) \
+    do { \
+        num = 0; \
+        for (size_t i = 0; i < sizeof(num); ++i){ \
+            num |= ( ((type)buff[i]) << (bytes2bits((sizeof(num)-1-i))) ); \
+        } \
+    } while(0)
+
+#define load_uint_le(buff, type, num) \
+    do { \
+        num = 0; \
+        for (size_t i = 0; i < sizeof(num); ++i){ \
+            num |= ( ((type)buff[i]) << (bytes2bits(i)) ); \
+        } \
+    } while(0)
+
+#define load_u16be(buff, num) load_uint_be(buff, uint16_t, num)
+#define load_u32be(buff, num) load_uint_be(buff, uint32_t, num)
+#define load_u64be(buff, num) load_uint_be(buff, uint64_t, num)
+#define load_u16le(buff, num) load_uint_le(buff, uint16_t, num)
+#define load_u32le(buff, num) load_uint_le(buff, uint32_t, num)
+#define load_u64le(buff, num) load_uint_le(buff, uint64_t, num)
 
 
 #ifdef __cplusplus

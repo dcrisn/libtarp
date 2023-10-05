@@ -487,6 +487,46 @@ enum testStatus test_bitarray_set_tester(const char *initializer,
 }
 
 /*
+ * For op: 8=tou8, 16=tou16, 32=tou32, 64=tou64 */
+enum testStatus test_bitarray_touint(const char *initializer,
+        unsigned int op, uint64_t expected)
+{
+    enum testStatus status = TEST_PASS;
+    ba a = Bitr_fromstring(NULL, initializer);
+    assert(a);
+
+    uint64_t res = 0;
+
+    switch(op){
+    case 8:
+        res = Bitr_tou8(a);
+        break;
+    case 16:
+        res = Bitr_tou16(a);
+        break;
+    case 32:
+        res = Bitr_tou32(a);
+        break;
+    case 64:
+        res = Bitr_tou64(a);
+        break;
+    default:
+        assert(false);
+    }
+
+    if (res != expected){
+        status = TEST_FAIL;
+        cond_test_debug_print(status, "expected: '0x%016X' | result: '0x%016X'", expected, res);
+    }
+
+    Bitr_destroy(&a);
+
+    return status;
+}
+
+
+
+/*
  * For op: 1=any(), 2=all() 3=none() */
 enum testStatus test_bitarray_bulk_methods_tester(const char *initializer,
         unsigned int op, size_t pos, size_t how_many, const char *expected)
@@ -710,6 +750,12 @@ int main(int argc, char **argv){
     run(test_bitarray_bulk_methods_tester, TEST_PASS, "00000000", 3, 8, 8, "11111111");
     run(test_bitarray_bulk_methods_tester, TEST_PASS, "10101010111", 3, 11, 8, "01010101111");
     run(test_bitarray_bulk_methods_tester, TEST_PASS, "11111111111111111", 2, 17, 16, "00000000000000001");
+
+    printf("\n%s\n", "===== Validating bitarray conversion to unsigned type ========= ");
+    run(test_bitarray_touint, TEST_PASS, "1111110101010101010111100110011111000110011010111111111", 8, 255);
+    run(test_bitarray_touint, TEST_PASS, "1111110101010101010111100110011111000110011010111111111", 16, 13823);
+    run(test_bitarray_touint, TEST_PASS, "1111110101010101010111100110011111000110011010111111111", 32, 870528511);
+    run(test_bitarray_touint, TEST_PASS, "1111110101010101010111100110011111000110011010111111111", 64, 35653516532069887);
 
 report_test_summary();
 }

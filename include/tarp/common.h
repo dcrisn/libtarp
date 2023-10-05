@@ -11,11 +11,6 @@
 
 void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 
-// ======================
-// Macros
-// ======================
-
-
 /*
  * Get length of array (note: NOT array decayed to pointer!) 
  */
@@ -51,7 +46,7 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 void *salloc(size_t size, void *ptr);
 
 #define nl(n) do { for (int i = n; i > 0; --i) puts(""); } while(0);
-
 #define match(a, b) (strcmp(a, b) == 0 )
 #define bool2str(val) ((val) ? "True":"False")
+
 #endif

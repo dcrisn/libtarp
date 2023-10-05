@@ -43,9 +43,10 @@ extern "C" {
  * Bitr_destroy                 O(1) // .                                    |
  * Bitr_width                   O(1) // .                                    |
  * Bitr_frombuff                O(n) // n = width of input being copied from |
- * Bitr_fromu{8,16,32,64}       O(n) // .                                    |
  * Bitr_clone                   O(n) // .                                    |
  * Bitr_{set,clear,toggle,get}  O(1) //                                      |
+ * Bitr_fromu{8,16,32,64}       O(1) // n = (fixed) number of input bytes    |
+ * Bitr_tou{8,16,32,64}         O(1) // n = (fixed) number of output bytes   |
  * Bitr_{setn,clearn,togglen}   O(n) // n = the number of bits to operate on |
  * Bitr_{any,all,none}          O(n) // n = width of the bit array           |
  * Bitr_{band,bor,bxor}         O(n) // .                                    |
@@ -131,12 +132,14 @@ struct bitarray *Bitr_fromu16(struct bitarray *bitr, uint16_t val);
 struct bitarray *Bitr_fromu32(struct bitarray *bitr, uint32_t val);
 struct bitarray *Bitr_fromu64(struct bitarray *bitr, uint64_t val);
 
-#if 0 /* TODO */
-uint8_t Bitr_to8(const struct bitarray *bitr);
-uint16_t Bitr_to16(const struct bitarray *bitr);
-uint32_t Bitr_to32(const struct bitarray *bitr);
-uint64_t Bitr_to64(const struct bitarray *bitr);
-#endif
+/*
+ * Load the 8/16/32/64 lower-order bits from bitr into the specified type.;
+ * The request is always safe: only as many bytes as will fit in TYPE *and*
+ * are in the bit array will be read and loaded */
+uint8_t Bitr_tou8(const struct bitarray *bitr);
+uint16_t Bitr_tou16(const struct bitarray *bitr);
+uint32_t Bitr_tou32(const struct bitarray *bitr);
+uint64_t Bitr_tou64(const struct bitarray *bitr);
 
 /*
  * Return a (deep) copy of the bit array */
