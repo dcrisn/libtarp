@@ -8,8 +8,9 @@ static const char *exception_codes[] = {
 
 static const char *error_codes[] = {
     [ERROR_CODE_FIRST__] = "Success",
-    [ERROR_NOSPACE] = "Insufficient buffer size",
-    [ERROR_OUTOFBOUNDS] = "Value outside acceptable bounds"
+    [ERROR_NOSPACE]      = "Insufficient buffer size",
+    [ERROR_OUTOFBOUNDS]  = "Value outside acceptable bounds",
+    [ERROR_INVALIDVALUE] = "Unacceptable value provided"
 };
 
 const char *tarp_strexcept(unsigned int code){
