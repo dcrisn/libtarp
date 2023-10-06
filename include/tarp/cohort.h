@@ -161,10 +161,11 @@ void Cohort_destroy(struct cohort *testlist);
     ++num_run;  \
     passed = (f(__VA_ARGS__) == expected); \
     if (passed) ++num_passed; \
-    printf("[ ] test %4i %9s | %s()\n", \
+    printf("[ ] test %4i %9s | %s()%s\n", \
             num_run, \
             (passed) ? "Passed" : "FAILED !!", \
-            tkn2str(f) \
+            tkn2str(f), \
+            (passed) ? "" : " ~ called at line " tkn2str(__LINE__)\
             ); \
     if (getenv("STOP_ON_FAIL") && !passed) exit(1);
 
