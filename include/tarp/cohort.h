@@ -145,7 +145,9 @@ void Cohort_destroy(struct cohort *testlist);
 
 /*
  * Environment variables:
- * 1) TEST_DEBUG:   enable the cond_test_debug_print prints in the test files.
+ * 1) TEST_DEBUG=[ALL|FAILED]:  enable the cond_test_debug_print prints in the
+ *    test files; enable all of them (=ALL), or only ones guarded by TEST_FAIL
+ *    conditions (=FAILED).
  * 2) STOP_ON_FAIL: stop as soon as one test fails. Do not continue past that.
  */
 
@@ -171,6 +173,14 @@ void Cohort_destroy(struct cohort *testlist);
     if (num_passed != num_run) exit(1)
 
 #define cond_test_debug_print(status, ...) \
-    if (getenv("TEST_DEBUG")) info(__VA_ARGS__); \
+    do { \
+        const char *cond__ = getenv("TEST_DEBUG"); \
+        if (cond__ && match(cond__, "ALL")){ \
+            info(__VA_ARGS__); \
+        } else if (cond__ && match(cond__, "FAILED") && status==TEST_FAIL){ \
+            info(__VA_ARGS__); \
+        } \
+    } while (0)
 
-#endif
+
+#endif /* MOCOHORT_H */

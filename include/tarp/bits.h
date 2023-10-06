@@ -279,8 +279,14 @@ const char *bitstr(uint64_t val, size_t width);
 
 /*
  * Return true if s contains only '1's and '0's.
- * s must not be NULL. */
-bool is_valid_bitstring(const char *s);
+ *
+ * - If sep != NULL, then it specifies a separator substring to be ignored when
+ *   considering the sequence of 1s and 0s.
+ * - s must not be NULL.
+ * - if len != NULL, the number of 0s and 1s in the string, after discounting
+ *   any occurences of separator SEP, is stored in it.
+ */
+bool is_valid_bitstring(const char *s, const char *sep, size_t *len);
 
 /*
  * For each byte in src, write it to dst formatted as follows:

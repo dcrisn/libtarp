@@ -52,14 +52,15 @@ static enum testStatus test_bitarray2string(
  * and passed to the Bitr_fromstring() function instead of passing it NULL. */
 static enum testStatus test_bitarray_fromstring(
         bool create_separate_bitarray, size_t width, bool all_ones,
-        const char *const initializer, const char *expected)
+        const char *const initializer, const char *separator,
+        const char *expected)
 {
     enum testStatus status = TEST_PASS;
 
     ba a = NULL;
     if (create_separate_bitarray){
         a = Bitr_new(width, all_ones);
-        ba b = Bitr_fromstring(a, initializer);
+        ba b = Bitr_fromstring(a, initializer, separator);
 
         if (!b) {
             Bitr_destroy(&a);
@@ -69,7 +70,7 @@ static enum testStatus test_bitarray_fromstring(
 
         a = b; /* b was simply the same as a if not NULL */
     } else {
-        a = Bitr_fromstring(NULL, initializer);
+        a = Bitr_fromstring(NULL, initializer, separator);
         if (!a){
             cond_test_debug_print(TEST_FAIL, "Bitr_fromstring() returned NULL");
             status = TEST_FAIL;
@@ -92,7 +93,7 @@ static enum testStatus test_bitarray_fromstring(
 static enum testStatus test_bitarray_clone(const char *initializer){
     enum testStatus status = TEST_PASS;
     const char *expected = initializer;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     if (!a){
         status = TEST_FAIL;
     } else {
@@ -114,7 +115,7 @@ static enum testStatus test_bitarray_repeat(size_t times,
 {
     enum testStatus status = TEST_PASS;
 
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     if (!a){
         status = TEST_FAIL;
     }
@@ -144,7 +145,7 @@ static enum testStatus test_bitarray_reverse(size_t times,
 {
     enum testStatus status = TEST_PASS;
 
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     char *s = "";
     if (a){
         for (unsigned int i = 0; i < times; ++i){
@@ -171,8 +172,8 @@ static enum testStatus test_bitarray_join(
         const char *expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer_a);
-    ba b = Bitr_fromstring(NULL, initializer_b);
+    ba a = Bitr_fromstring(NULL, initializer_a, NULL);
+    ba b = Bitr_fromstring(NULL, initializer_b, NULL);
     if (!a || !b){
         status = TEST_FAIL;
     } else {
@@ -291,7 +292,7 @@ enum testStatus test_bitarray_slice(const char *initializer,
         size_t start, size_t end, const char *expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     if (!a){
         status = TEST_FAIL;
         cond_test_debug_print(status, "fromstring() returned NULL");
@@ -318,7 +319,7 @@ enum testStatus test_bitarray_shift(const char *initializer,
         bool left, bool rotate, size_t n, const char *expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     if (!a){
         status = TEST_FAIL;
         cond_test_debug_print(status, "fromstring() returned NULL");
@@ -347,7 +348,7 @@ enum testStatus test_bitarray_push(const char *initializer,
         bool left, unsigned int times, bool on_bit, const char *expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     if (!a){
         status = TEST_FAIL;
         cond_test_debug_print(status, "fromstring() returned NULL");
@@ -377,7 +378,7 @@ enum testStatus test_bitarray_pop(const char *initializer,
         bool left, unsigned int times, const char *expected, int expected_bit)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     if (!a){
         status = TEST_FAIL;
         cond_test_debug_print(status, "fromstring() returned NULL");
@@ -414,8 +415,8 @@ enum testStatus test_bitarray_bops(const char *initializer_a, const char *initia
         unsigned int bop, const char *expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer_a);
-    ba b = Bitr_fromstring(NULL, initializer_b);
+    ba a = Bitr_fromstring(NULL, initializer_a, NULL);
+    ba b = Bitr_fromstring(NULL, initializer_b, NULL);
 
     if (!a || !b){
         status = TEST_FAIL;
@@ -457,7 +458,7 @@ enum testStatus test_bitarray_set_tester(const char *initializer,
         unsigned int op, bool expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     assert(a);
 
     bool res = false;
@@ -492,7 +493,7 @@ enum testStatus test_bitarray_touint(const char *initializer,
         unsigned int op, uint64_t expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     assert(a);
 
     uint64_t res = 0;
@@ -532,7 +533,7 @@ enum testStatus test_bitarray_bulk_methods_tester(const char *initializer,
         unsigned int op, size_t pos, size_t how_many, const char *expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer);
+    ba a = Bitr_fromstring(NULL, initializer, NULL);
     assert(a);
 
     switch(op){
@@ -567,8 +568,8 @@ enum testStatus test_bitarray_equality(const char *initializer_a, const char *in
         bool expected)
 {
     enum testStatus status = TEST_PASS;
-    ba a = Bitr_fromstring(NULL, initializer_a);
-    ba b = Bitr_fromstring(NULL, initializer_b);
+    ba a = Bitr_fromstring(NULL, initializer_a, NULL);
+    ba b = Bitr_fromstring(NULL, initializer_b, NULL);
 
     if (!a || !b){
         status = TEST_FAIL;
@@ -623,17 +624,31 @@ int main(int argc, char **argv){
     run(test_bitarray2string, TEST_PASS, 34, true, 11, "/", "1/11111111111/11111111111/11111111111");
 
     printf("\n%s\n", "===== Validating bitarray initialization from string ========= ");
-    run(test_bitarray_fromstring, TEST_PASS, false, 0, false,"111100001", "111100001");
-    run(test_bitarray_fromstring, TEST_PASS, false, 0, false, "0", "0");
-    run(test_bitarray_fromstring, TEST_PASS, false, 0, false, "01111111111111110", "01111111111111110");
-    run(test_bitarray_fromstring, TEST_PASS, true, 4, false, "1111", "1111");
-    run(test_bitarray_fromstring, TEST_PASS, true, 8, true, "0001", "11110001");
-    run(test_bitarray_fromstring, TEST_FAIL, true, 4, true, "11111", NULL);
-    run(test_bitarray_fromstring, TEST_PASS, true, 9, true, "00000001", "100000001");
-    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, "00000001.", "");
-    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, "00000001*", "");
-    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, "00000001 ", "");
-    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, " 00000001", "");
+    run(test_bitarray_fromstring, TEST_PASS, false, 0, false,"111100001", NULL, "111100001");
+    run(test_bitarray_fromstring, TEST_PASS, false, 0, false, "0", NULL, "0");
+    run(test_bitarray_fromstring, TEST_PASS, false, 0, false, "01111111111111110", NULL, "01111111111111110");
+    run(test_bitarray_fromstring, TEST_PASS, true, 4, false, "1111", NULL, "1111");
+    run(test_bitarray_fromstring, TEST_PASS, true, 8, true, "0001", NULL, "11110001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 4, true, "11111", NULL, NULL);
+    run(test_bitarray_fromstring, TEST_PASS, true, 9, true, "00000001", NULL, "100000001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, "00000001.", NULL, "");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, "00000001*", NULL, "");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, "00000001 ", NULL, "");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 9, true, " 00000001", NULL, "");
+    run(test_bitarray_fromstring, TEST_PASS, true, 9, true, "00000001*", "*", "100000001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 7, true, "00000001", "*", "100000001"); /* too few bits */
+    run(test_bitarray_fromstring, TEST_PASS, true, 8, true, "00000001*", "*", "00000001");
+    run(test_bitarray_fromstring, TEST_PASS, true, 10, true, "100000001*", "*", "1100000001");
+    run(test_bitarray_fromstring, TEST_PASS, true, 10, true, "1*0*0*0*0*00*01*", "*", "1100000001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 10, true, "1*0*0*0*0*00*01*", "", "1100000001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 10, true, "1*0*0*0*0*00*01*", "**", "1100000001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 10, true, "1*0*0*0*0*00*01*", "-", "1100000001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 10, true, "1*0*0*0*0*00*01*", NULL, "1100000001");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 10, true, "\t111.000.\t111.", "\t", "111000111");
+    run(test_bitarray_fromstring, TEST_PASS, true, 9, true, "\t111000\t111", "\t", "111000111");
+    run(test_bitarray_fromstring, TEST_FAIL, true, 1, true, ":", ":", "");
+    run(test_bitarray_fromstring, TEST_PASS, true, 1, true, ":1", ":", "1");
+    run(test_bitarray_fromstring, TEST_PASS, true, 2, true, ":1:0:::::", ":", "10");
 
     printf("\n%s\n", "===== Validating bitarray initialization from buffer ========= ");
     run(test_bitarray_frombuffer, TEST_PASS, false, 0, false, 0xff, 1, "11111111");
@@ -688,6 +703,7 @@ int main(int argc, char **argv){
     run(test_bitarray_slice, TEST_PASS, "111111110", 1, 2, "0");
 
     printf("\n%s\n", "===== Validating bitarray shifting ========= ");
+    run(test_bitarray_shift, TEST_PASS, "100000001", true, false, 0, "100000001")
     run(test_bitarray_shift, TEST_PASS, "100000001", true, false, 3, "000001000")
     run(test_bitarray_shift, TEST_PASS, "1", true, false, 1, "0")
     run(test_bitarray_shift, TEST_PASS, "0000", true, false, 4, "0000")

@@ -12,11 +12,16 @@
 void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 
 /*
- * Get length of array (note: NOT array decayed to pointer!) 
+ * Get length of array (note: NOT array decayed to pointer!)
  */
 #define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
 #define membersz(type, member) sizeof(((type *)0)->member)
+
+/*
+ * The maximum value of the specified *unsigned* type. This is when all bits
+ * are 1. NOTE - 2's complement is assumed */
+#define typeumax(type) (~((type)0))
 
 /*
  * Stringify token x to allow concatenation with string literals */
@@ -47,6 +52,7 @@ void *salloc(size_t size, void *ptr);
 
 #define nl(n) do { for (int i = n; i > 0; --i) puts(""); } while(0);
 #define match(a, b) (strcmp(a, b) == 0 )
+#define matchn(a, b, n) (strncmp(a, b, n) == 0 )
 #define bool2str(val) ((val) ? "True":"False")
 
 #endif

@@ -4,12 +4,27 @@
 #include <tarp/bits.h>
 #include <tarp/math.h>
 
-bool is_valid_bitstring(const char *s){
+bool is_valid_bitstring(const char *s, const char *sep, size_t *len){
     assert(s);
+
+    if (sep && match(sep, "")) sep = NULL; /* empty sep would cause infinite loop */
+    size_t seplen = (sep != NULL) ? strlen(sep) : 0;
+    size_t len_no_sep = strlen(s);
+
     while (*s){
-        if (*s != '1' && *s != '0') return false;
-        ++s;
+        if (*s == '1' || *s == '0'){
+            ++s; continue;
+        }
+
+        if (sep != NULL && matchn(s, sep, seplen)){
+            s += seplen;
+            len_no_sep -= seplen;
+        } else {
+            return false;
+        }
     }
+
+    if (len) *len = len_no_sep;
     return true;
 }
 

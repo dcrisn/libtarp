@@ -26,7 +26,7 @@
  * If not NULL, the size required for the bitarray buffer itself, in bytes,
  * will be stored in it.
  */
-void calculate_required_size__(uint32_t nbits, size_t *totsz, size_t *bitarray_sz){
+static void calculate_required_size__(uint32_t nbits, size_t *totsz, size_t *bitarray_sz){
     size_t total_size, buffer_size;
 
     /* if nbits is not a multiple of 8, an extra byte is needed */
@@ -40,24 +40,28 @@ void calculate_required_size__(uint32_t nbits, size_t *totsz, size_t *bitarray_s
     if (bitarray_sz) *bitarray_sz = buffer_size;
 }
 
-static inline struct bitarray *allocate_bitarray(size_t nbits){
+struct bitarray *allocate_bitarray(
+        void *(*allocator)(size_t nbits, void *priv),
+        size_t nbits,
+        void *priv)
+{
     assert(nbits > 0);
 
     size_t totsz, buffsz;
     calculate_required_size__(nbits, &totsz, &buffsz);
-    struct bitarray *new = (struct bitarray *)salloc(totsz, NULL);
+    struct bitarray *new = (struct bitarray *)allocator(totsz, priv);
     new->width = nbits;
     new->size = buffsz;
     return new;
 }
 
-static inline void fill_bitarray__(struct bitarray *bitr, uint8_t byte){
+static void fill_bitarray__(struct bitarray *bitr, uint8_t byte){
     assert(bitr);
     memset(bitr->bytes, byte, bitr->size);
 }
 
 struct bitarray *Bitr_new(size_t nbits, bool one){
-    struct bitarray *new = allocate_bitarray(nbits);
+    struct bitarray *new = allocate_bitarray(salloc, nbits, NULL);
     fill_bitarray__(new, one ? FULL_BYTE : NULL_BYTE);
     return new;
 }
@@ -82,7 +86,7 @@ struct bitarray *Bitr_frombuff(
     if (bitr){
         if (bits2bytes(bitr->width, false) < buffsz) return NULL;
     } else{
-        bitr = allocate_bitarray(bytes2bits(buffsz));
+        bitr = allocate_bitarray(salloc, bytes2bits(buffsz), NULL);
     }
 
     memcpy(bitr->bytes, buffer, buffsz);
@@ -155,7 +159,7 @@ generate_bitarray2unum_function(uint64_t, u64)
 
 /*
  * set bit at specified position to bitval, which *must* be either 1 or 0. */
-static int Bitr_setval(struct bitarray *bitr, size_t pos, int bitval){
+int Bitr_setval(struct bitarray *bitr, size_t pos, int bitval){
     assert(bitr);
     assert(bitval == 1 || bitval == 0);
     check_position_within_range(Bitr_width(bitr), pos);
@@ -295,7 +299,7 @@ struct bitarray *Bitr_repeat(
         )
 {
     assert(bitr);
-    struct bitarray *new = allocate_bitarray(Bitr_width(bitr) * n);
+    struct bitarray *new = allocate_bitarray(salloc, Bitr_width(bitr) * n, NULL);
 
     size_t w = Bitr_width(bitr);
     if (w >= BITS_IN_BYTE && ismult2(w)){ /* fastpath, just copy byte ranges */
@@ -313,7 +317,7 @@ struct bitarray *Bitr_repeat(
 }
 
 struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b){
-    struct bitarray *new = allocate_bitarray(Bitr_width(a) + Bitr_width(b));
+    struct bitarray *new = allocate_bitarray(salloc, Bitr_width(a) + Bitr_width(b), NULL);
     size_t wa = Bitr_width(a);
     size_t wb = Bitr_width(b);
 
@@ -332,7 +336,7 @@ struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b){
     return new;
 }
 
-char *Bitr_tostring(struct bitarray *bitr, int split_every, const char *sep)
+char *Bitr_tostring(struct bitarray *bitr, size_t split_every, const char *sep)
 {
     assert(bitr);
     sep = sep ? sep : "";
@@ -468,20 +472,26 @@ int Bitr_rpop(struct bitarray *bitr){
     return bit;
 }
 
-struct bitarray *Bitr_fromstring(struct bitarray *bitr, const char *bitstring){
+struct bitarray *Bitr_fromstring(struct bitarray *bitr,
+        const char *bitstring, const char *sep)
+{
     assert(bitstring);
-
-    if (!is_valid_bitstring(bitstring)) return NULL;
     size_t len = strlen(bitstring);
+    size_t true_len = 0;
+    if (!is_valid_bitstring(bitstring, sep, &true_len)) return NULL;
 
     if (bitr){
-        if (bitr->width < len) return NULL;
+        if (bitr->width < true_len) return NULL;
     }else{
-        bitr = allocate_bitarray(len);
+        bitr = allocate_bitarray(salloc, true_len, NULL);
     }
 
-    for (size_t i = 1; i <= len; ++i){
-        Bitr_setval(bitr, i, (bitstring[len-i] == '1') ? 1 : 0);
+    /* bsi = bitstring index; bai = bitarray index */
+    for (size_t bsi = len, bai = 1; bsi > 0 && bai <= true_len; --bsi){
+        size_t bsidx=bsi-1, bschar=bitstring[bsidx];
+        if (bschar == '1' || bschar == '0'){
+            Bitr_setval(bitr, bai++, (bschar == '1') ? 1 : 0);
+        }
     }
 
     return bitr;

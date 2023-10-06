@@ -112,12 +112,17 @@ struct bitarray *Bitr_frombuff(
  * @mutator
  *
  * Each character in bitstring must be either a '0' or a '1', with the leftmost
- * character representing the most significant bit. NULL is returned for an
- * invalid bitstring or if the width of bitr (if not NULL) is insufficient.
+ * character representing the most significant bit. A *non-empty* substring used
+ * as a separator to be ignored can be specified via 'sep'. Otherwise 'sep'
+ * should be NULL.
+ *
+ * NULL is returned for an invalid bitstring or if the width of bitr
+ * (if not NULL) is insufficient.
  *
  * See Bitr_frombuff FMI.
  */
-struct bitarray *Bitr_fromstring(struct bitarray *bitr, const char *bitstring);
+struct bitarray *Bitr_fromstring(struct bitarray *bitr,
+        const char *bitstring, const char *sep);
 
 /*
  * Initialize bit array from the value of the specified integral type.
@@ -196,10 +201,12 @@ struct bitarray *Bitr_reverse(struct bitarray *bitr);
  *
  * Bitr_get returns 1 if the bit is turned on, else 0 if it is turned off.
  *
+ * Bitr_setval takes an explicit bitval value, which must be either 1 or 0.
  * <-- return
  *     0 on success, -(ERROR_OUTOFBOUNDS) when (!(0 < pos <= width).
  */
 int Bitr_set(struct bitarray *bitr, size_t pos);
+int Bitr_setval(struct bitarray *bitr, size_t pos, int bitval);
 int Bitr_get(const struct bitarray *bitr, size_t pos);
 int Bitr_clear(struct bitarray *bitr, size_t pos);
 int Bitr_toggle(struct bitarray *bitr, size_t pos);
@@ -264,7 +271,7 @@ bool Bitr_equal(const struct bitarray *a, const struct bitarray *b);
  *
  * The user must free() the string when no longer needed.
  */
-char *Bitr_tostring(struct bitarray *bitr, int split_every, const char *sep);
+char *Bitr_tostring(struct bitarray *bitr, size_t split_every, const char *sep);
 
 #ifdef __cplusplus
 }
