@@ -213,12 +213,17 @@ int Bitr_toggle(struct bitarray *bitr, size_t pos);
 
 
 /*
- * Set, get, clear, or toggle nbits from bitr[pos-1] (inclusive), to the right.
+ * Set, get, clear, or toggle nbits from pos (inclusive), to the right.
  * @mutator
+ *
+ * NOTE
+ * - pos is 1-based, not 0 based (see top of file FMI).
+ * - if pos is 0, then the default is used (most significant bit position)
+ * - if nbits is 0, then the default is used (nbits, i.e. start of the bitarray)
  *
  * <-- return
  * 0 = Success
- * -(ERROR_OUTOFBOUNDS) = nbits > pos or  !(0 < pos <= width of the bit array)
+ * -(ERROR_OUTOFBOUNDS) = nbits > pos or  !(0 <= pos <= width of the bit array)
  */
 int Bitr_setn(struct bitarray *bitr, uint32_t pos, size_t nbits);
 int Bitr_clearn(struct bitarray *bitr, uint32_t pos, size_t nbits);

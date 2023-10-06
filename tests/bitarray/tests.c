@@ -774,6 +774,9 @@ int main(int argc, char **argv){
     run(test_bitarray_bulk_methods_tester, TEST_PASS, "00000000", 3, 8, 8, "11111111");
     run(test_bitarray_bulk_methods_tester, TEST_PASS, "10101010111", 3, 11, 8, "01010101111");
     run(test_bitarray_bulk_methods_tester, TEST_PASS, "11111111111111111", 2, 17, 16, "00000000000000001");
+    run(test_bitarray_bulk_methods_tester, TEST_PASS, "11111111111111111", 2, 0, 16, "00000000000000001");
+    run(test_bitarray_bulk_methods_tester, TEST_PASS, "11111111111111111", 3, 0, 0, "00000000000000000");
+    run(test_bitarray_bulk_methods_tester, TEST_PASS, "11111111111111111", 3, 3, 0, "11111111111111000");
 
     printf("\n%s\n", "===== Validating bitarray conversion to unsigned type ========= ");
     run(test_bitarray_touint, TEST_PASS, "1111110101010101010111100110011111000110011010111111111", 8, 255);

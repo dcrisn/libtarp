@@ -207,6 +207,9 @@ int Bitr_get(const struct bitarray *bitr, size_t pos){
     if (nbits > pos) return -(ERROR_OUTOFBOUNDS);
 
 #define do_for_bits(bitfunc, bitr, pos, nbits)\
+    assert(bitr); \
+    pos = (pos > 0) ? pos : Bitr_width(bitr); \
+    nbits = (nbits > 0) ? nbits : pos; /* start of bitarray */; \
     check_position_and_nbits_within_range(pos, nbits); \
     int rc = 0; \
     for (size_t i = pos; i > pos-nbits; --i){ \
@@ -406,6 +409,7 @@ struct bitarray *Bitr_reverse(struct bitarray *bitr){
 void Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate){
     assert(bitr);
     assert(n <= bitr->width);
+    if (n == 0) return; /* nothing to do */
 
     /* to temporarily store bits that get shifted off one end */
     struct bitarray *slice = rotate ? Bitr_slice(bitr, (bitr->width+1)-n, 0) : NULL;
@@ -431,6 +435,7 @@ void Bitr_lshift(struct bitarray *bitr, size_t n, bool rotate){
 void Bitr_rshift(struct bitarray *bitr, size_t n, bool rotate){
     assert(bitr);
     assert(n <= bitr->width);
+    if (n == 0) return; /* nothing to do */
 
     /* to temporarily store bits that get shifted off one end */
     struct bitarray *slice = rotate ? Bitr_slice(bitr, 1, n+1) : NULL;
