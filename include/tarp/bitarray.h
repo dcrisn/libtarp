@@ -49,7 +49,7 @@ extern "C" {
  * Bitr_tou{8,16,32,64}         O(1) // n = (fixed) number of output bytes   |
  * Bitr_{setn,clearn,togglen}   O(n) // n = the number of bits to operate on |
  * Bitr_{any,all,none}          O(n) // n = width of the bit array           |
- * Bitr_{band,bor,bxor}         O(n) // .                                    |
+ * Bitr_{band,bor,bxor,bnot}    O(n) // .                                    |
  * Bitr_{l,r}shift              O(n) // .                                    |
  * Bitr_{l,r}{push,pop}         O(n) // .                                    |
  * Bitr_reverse                 O(n) // .                                    |
@@ -256,6 +256,7 @@ bool Bitr_none(const struct bitarray *bitr);
 int Bitr_bor(struct bitarray *a, const struct bitarray *b);
 int Bitr_band(struct bitarray *a, const struct bitarray *b);
 int Bitr_bxor(struct bitarray *a, const struct bitarray *b);
+int Bitr_bnot(struct bitarray *a);
 
 /*
  * True if a == b, else false. A and b must be of the same width.

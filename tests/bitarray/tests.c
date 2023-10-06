@@ -410,7 +410,7 @@ enum testStatus test_bitarray_pop(const char *initializer,
 }
 
 /*
- * For bop: 1=binary or, 2=binary and, 3=binary xor */
+ * For bop: 1=binary or, 2=binary and, 3=binary xor, 4=bnot */
 enum testStatus test_bitarray_bops(const char *initializer_a, const char *initializer_b,
         unsigned int bop, const char *expected)
 {
@@ -433,6 +433,9 @@ enum testStatus test_bitarray_bops(const char *initializer_a, const char *initia
         break;
     case 3:
         Bitr_bxor(a, b);
+        break;
+    case 4:
+        Bitr_bnot(a);
         break;
     default:
         assert(false);
@@ -730,6 +733,11 @@ int main(int argc, char **argv){
     run(test_bitarray_bops, TEST_PASS, "11110000", "11111111", 2, "11110000");
     run(test_bitarray_bops, TEST_PASS, "11110000", "11111111", 1, "11111111");
     run(test_bitarray_bops, TEST_PASS, "11110000", "11111111", 3, "00001111");
+    run(test_bitarray_bops, TEST_PASS, "11110000", "0", 4, "00001111");
+    run(test_bitarray_bops, TEST_PASS, "000000000", "0", 4, "111111111");
+    run(test_bitarray_bops, TEST_PASS, "0", "0", 4, "1");
+    run(test_bitarray_bops, TEST_PASS, "1", "0", 4, "0");
+
 
     printf("\n%s\n", "===== Validating bitarray equality ========= ");
     run(test_bitarray_equality, TEST_PASS, "11111", "1111", false);

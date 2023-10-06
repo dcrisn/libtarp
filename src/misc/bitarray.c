@@ -256,20 +256,24 @@ bool Bitr_none(const struct bitarray *bitr){
     assert(a && b); \
     if (a->width != b->width) return ERROR_INVALIDVALUE; \
     for (size_t i = 0; i < a->size; ++i){ \
-        a->bytes[i] bop##= b->bytes[i];   \
+        a->bytes[i] bop b->bytes[i];   \
     } \
     return 0;
 
 int Bitr_bor(struct bitarray *a, const struct bitarray *b){
-    loop_transform_bytes(a, b, |);
+    loop_transform_bytes(a, b, |=);
 }
 
 int Bitr_band(struct bitarray *a, const struct bitarray *b){
-    loop_transform_bytes(a, b, &);
+    loop_transform_bytes(a, b, &=);
 }
 
 int Bitr_bxor(struct bitarray *a, const struct bitarray *b){
-    loop_transform_bytes(a, b, ^);
+    loop_transform_bytes(a, b, ^=);
+}
+
+int Bitr_bnot(struct bitarray *a){
+    loop_transform_bytes(a, a, = ~);
 }
 
 struct bitarray *Bitr_slice(const struct bitarray *bitr, size_t start, size_t end){
