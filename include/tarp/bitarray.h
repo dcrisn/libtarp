@@ -158,7 +158,8 @@ struct bitarray *Bitr_repeat(
         );
 
 /*
- * Append a to b. If b has bits 1..n, a's bits will come after n.
+ * Append a to b. If b has bits 1..n, a's bits will come after n. That is, a's
+ * least significant bit is more significant than b's most significant bit.
  * B and A themselves remains unchanged and a new bit array is returned. */
 struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b);
 
