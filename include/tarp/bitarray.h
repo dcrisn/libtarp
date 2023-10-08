@@ -166,7 +166,7 @@ struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b);
 /*
  * Shift the bits in the array left or right.
  *
- * --> n [<= width]
+ * --> n [0 <= n <= width]
  * The number of bit positions to shift by.
  *
  * --> rotate
@@ -232,7 +232,8 @@ int Bitr_togglen(struct bitarray *bitr, uint32_t pos, size_t nbits);
 
 /*
  * Create and return a new bit array that is a [start, end) slice of <bitr>.
- * 0 for the value of either start end means the lower/bound is unspecified.
+ * 0 for the value of either start or end means the lower/upper bound is
+ * unspecified.
  * Therefore (0,0) represents a slice the size of bitr. The slice begins at
  * the low-order end of the bitarray and runs toward the high-order end.
  *
