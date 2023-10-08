@@ -306,6 +306,10 @@ struct bitarray *Bitr_repeat(
         )
 {
     assert(bitr);
+
+    /* user should consider overflow here when calling the function; it's
+     * expected usage is reasonable and only artificial testing would
+     * cause a size_t wraparound */
     struct bitarray *new = allocate_bitarray(salloc, Bitr_width(bitr) * n, NULL);
 
     size_t w = Bitr_width(bitr);
@@ -383,17 +387,42 @@ char *Bitr_tostring(struct bitarray *bitr, size_t split_every, const char *sep)
     return s;
 }
 
+/*
+ * Compare byte by byte instead of bit by bit, for speed. */
 bool Bitr_equal(const struct bitarray *a, const struct bitarray *b){
     assert(a && b);
-    if (a->width != b->width) return false;
+    if (a->width != b->width){
+        return false;
+    }
 
     assert(a->size == b->size);
+    size_t i = 0;
+    size_t remainder_bits = a->width % 8;
 
-    for (size_t i = 0; i < a->width; ++i){
+    for (; i < (bits2bytes(a->width, false)); ++i){
         if (a->bytes[i] != b->bytes[i]) return false;
     }
 
-    return true;
+    /* last byte may be different if the width is not a byte multiple as in that
+     * case there could be uninitialized bits or bits initialized differently.
+     * Consider the following scenario:
+     *   - a = initialized to width 7, all 1s
+     *   - b = initialized to width 7, all 0s
+     *   - b = toggle all its bits (the 7 of them).
+     *   - compare a and b. They will *not* be equal because bit 8 is different.
+     */
+    uint8_t a_byte = a->bytes[i];
+    uint8_t b_byte = b->bytes[i];
+    if (remainder_bits > 0){
+        for (size_t j = 1; j <= remainder_bits; ++j){
+            if (get_bit(a_byte, j) != get_bit(b_byte, j)){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    return (a_byte == b_byte);
 }
 
 struct bitarray *Bitr_reverse(struct bitarray *bitr){

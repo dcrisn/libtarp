@@ -627,6 +627,7 @@ int main(int argc, char **argv){
     run(test_bitarray2string, TEST_PASS, 34, true, 11, "/", "1/11111111111/11111111111/11111111111");
 
     printf("\n%s\n", "===== Validating bitarray initialization from string ========= ");
+    run(test_bitarray_fromstring, TEST_FAIL, false, 0, false,"", NULL, "");
     run(test_bitarray_fromstring, TEST_PASS, false, 0, false,"111100001", NULL, "111100001");
     run(test_bitarray_fromstring, TEST_PASS, false, 0, false, "0", NULL, "0");
     run(test_bitarray_fromstring, TEST_PASS, false, 0, false, "01111111111111110", NULL, "01111111111111110");
@@ -745,6 +746,8 @@ int main(int argc, char **argv){
     run(test_bitarray_equality, TEST_PASS, "00000000", "000000001", false);
     run(test_bitarray_equality, TEST_PASS, "00000001", "000000001", false);
     run(test_bitarray_equality, TEST_PASS, "1", "1", true);
+    run(test_bitarray_equality, TEST_PASS, "1111111110", "1111111110", true);
+    run(test_bitarray_equality, TEST_PASS, "11001100110011001", "11001100110011001", true);
     run(test_bitarray_equality, TEST_PASS, "0", "1", false);
     run(test_bitarray_equality, TEST_PASS, "01", "1", false);
 
