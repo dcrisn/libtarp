@@ -27,6 +27,7 @@ extern "C" {
 #define FULL_BYTE 0xFFU
 
 #define bit2char(bit) ( (bit==ON_BIT) ? '1' : ((bit==OFF_BIT) ? '0' : '?') )
+#define isbit(num) (num == ON_BIT || num == OFF_BIT)
 
 /*
  * left rotational bit shift;

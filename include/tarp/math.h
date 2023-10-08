@@ -51,6 +51,8 @@ static inline uint32_t find_congruent_value(uint32_t v, uint32_t b, uint32_t m)
     return v + (m - ((v%m) - (b%m)));
 }
 
+#define positive(n) (n >= 0)
+#define negative(n) (n < 0)
 
 #ifdef __cplusplus
 } /* extern "C" */

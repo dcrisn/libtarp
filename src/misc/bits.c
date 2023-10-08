@@ -6,10 +6,11 @@
 
 bool is_valid_bitstring(const char *s, const char *sep, size_t *len){
     assert(s);
+    size_t len_no_sep = strlen(s);
+    if (len_no_sep == 0) return false;
 
     if (sep && match(sep, "")) sep = NULL; /* empty sep would cause infinite loop */
     size_t seplen = (sep != NULL) ? strlen(sep) : 0;
-    size_t len_no_sep = strlen(s);
 
     while (*s){
         if (*s == '1' || *s == '0'){
