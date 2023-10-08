@@ -97,8 +97,7 @@ static inline size_t find_padding(int len){
  * Dynamically allocate a buffer and populate it with:
  * 1) the padding to follow the preceding message
  * 2) 8 btes (a uint64) encoding the total length of preceding message
- * *in bits*.
- */
+ * *in bits*. */
 static void *get_trailer(Md5Ctx *ctx, uint64_t *outlen){
     int len = ctx->cursor; /* we have to pad from here */
 
@@ -320,6 +319,8 @@ static void MD5_digest_part(Md5Ctx *ctx, uint8_t *message, uint64_t msglen){
  * @param msglen:   the length of 'message' (the chunk, not the accumulated size)
  * @param isfinal: if 'message' is the entire message or the *last* chunk of a
  *                 a larger message, isfinal should be True; otherwise False.
+ *                 When isfinal=true, message may be NULL (if there's nothing
+ *                 left).
  */
 void MD5_digest(Md5Ctx *ctx, uint8_t *message, size_t msglen, bool isfinal)
 {

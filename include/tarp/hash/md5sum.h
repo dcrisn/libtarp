@@ -52,7 +52,8 @@ void MD5_print(uint8_t hashbuff[16]);
 void MD5_digest(Md5Ctx *ctx, uint8_t *message, size_t msglen, bool isfinal);
 
 /*
- * Digest the specified string and store the hash output in the given buffer.
+ * Digest the specified NUL-terminated string and store the hash output in the
+ * given buffer.
  *
  * NOTES:
  *  - The buffer must be at least 16-bytes wide.
@@ -66,7 +67,7 @@ int MD5_sdigest(const char *const s, uint8_t digest[16]);
  * Read from the specified file descriptor until EOF and digest the message read.
  *
  * MD5_file_digest allows passing a path-string as the parameter instead of the
- * file descriptor, so the open() call is done for the user.
+ * file descriptor, so the open() and close() calls are done for the user.
  *
  * See MD5_sdigest fmi.
  */
