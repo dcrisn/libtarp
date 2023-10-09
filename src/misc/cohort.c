@@ -58,7 +58,7 @@ static struct{
 */
 static void print_test_report(void){
     if (test_report.passed == true){
-        printf("\t  test %-4zu of %-4zu passed.  | %-30s | \n",
+        printf("\t  test %-4zu of %-4zu passed.  | %-50s | \n",
                 test_report.test_number,
                 testcount,
                 test_report.test_name);
