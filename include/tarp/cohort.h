@@ -39,6 +39,7 @@
    * All the function tests that are to be registered to be called
      should return 0 (enum testStatus SUCCESS) on success and 1 (enum testStatus FAILURE)
      on failure.
+   * call Cohort_destroy() on the handle returned by Cohort_init().
 
    License
    ----------------------
