@@ -1,41 +1,41 @@
 #include <tarp/error.h>
 #include <tarp/log.h>
 
-static const char *exception_codes[] = {
-    [EXCEPTION_BAD_ALLOC] = "Memory allocation failure",
-    [EXCEPTION_RUNTIME_ERROR] = "Fatal runtime error"
-};
-
 static const char *error_codes[] = {
-    [ERROR_CODE_FIRST__] = "Success",
-    [ERROR_NOSPACE]      = "Insufficient buffer size",
-    [ERROR_OUTOFBOUNDS]  = "Value outside acceptable bounds",
-    [ERROR_INVALIDVALUE] = "Unacceptable value provided"
+    [ERRORCODE_SUCCESS]      = "Success",
+    [ERROR_BADALLOC]         = "Memory allocation failure",
+    [ERROR_RUNTIMEERROR]     = "Fatal runtime error",
+    [ERROR_NOSPACE]          = "Insufficient buffer size",
+    [ERROR_OUTOFBOUNDS]      = "Value outside acceptable bounds",
+    [ERROR_BADPOINTER]       = "NULL or otherwise invalid pointer provided",
+    [ERROR_INVALIDVALUE]     = "Unacceptable value provided",
+    [ERROR_EMPTY]            = "Cannot read from or access empty resource"
 };
-
-const char *tarp_strexcept(unsigned int code){
-    assert(code < EXCEPTION_LAST__);
-    return exception_codes[code];
-}
 
 const char *tarp_strerror(unsigned int code){
-    assert(code < ERROR_CODE_LAST__);
+    assert(code < ERRORCODE_LAST__);
     return error_codes[code];
 }
 
 void throw__(
-        enum Exception code,
+        enum ErrorCode code,
         const char *file,
         const char *func,
-        int line)
+        int line,
+        const char *condition,
+        const char *extra)
 {
-    const char *errmsg = tarp_strexcept(code);
+    const char *errmsg = tarp_strerror(code);
 #ifdef DEBUG_BUILD
-    fprintf(stderr, "%s [%s:%d -> %s()]\n",
-            errmsg, file, line, func);
+    fprintf(stderr, "%s [%s:%d -> %s(), condition: '%s'] %s %s\n",
+            errmsg, file, line, func, condition,
+            extra ? "~" : "", extra ? extra : "");
 #else
-    UNUSED(file); UNUSED(func); UNUSED(line);
-    fprintf(stderr, "%s\n", errmsg);
+    UNUSED(file); UNUSED(line);
+    fprintf(stderr, "%s [%s()] %s %s\n",
+            errmsg, func,
+            extra ? " ~ " : "",
+            extra ? extra : "");
 #endif
     exit(EXIT_FAILURE);
 }

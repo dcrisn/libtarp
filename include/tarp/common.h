@@ -55,4 +55,10 @@ void *salloc(size_t size, void *ptr);
 #define matchn(a, b, n) (strncmp(a, b, n) == 0 )
 #define bool2str(val) ((val) ? "True":"False")
 
+/*
+ * Given a start pointer 'base' to type TYPE, get a pointer OFFSET positions
+ * from it . */
+#define get_pointer_at_position(base, type, offset) (((type *)base)+offset)
+
+
 #endif
