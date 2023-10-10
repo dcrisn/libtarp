@@ -10,21 +10,6 @@
 #include <tarp/vector.h>
 #include <tarp/cohort.h>
 
-#define define_vector(SHORTNAME, TYPE)           \
-        define_vector_new(SHORTNAME, TYPE)       \
-        define_vector_pushb(SHORTNAME, TYPE)     \
-        define_vector_popb(SHORTNAME, TYPE)      \
-        define_vector_get(SHORTNAME, TYPE)       \
-        define_vector_getptr(SHORTNAME, TYPE)    \
-        define_vector_set(SHORTNAME, TYPE)       \
-        define_vector_front(SHORTNAME, TYPE)     \
-        define_vector_back(SHORTNAME, TYPE)      \
-        define_vector_begin(SHORTNAME, TYPE)     \
-        define_vector_end(SHORTNAME, TYPE)       \
-        define_vector_insert(SHORTNAME, TYPE)    \
-        define_vector_remove(SHORTNAME, TYPE)    \
-        define_vector_resize(SHORTNAME, TYPE)    \
-
 struct stuff {
     uint64_t a;
     uint8_t b;
