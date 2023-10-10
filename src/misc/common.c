@@ -57,6 +57,6 @@ void *salloc(size_t size, void *ptr){
         mem = calloc(1, size);
     }
 
-    THROW(EXCEPTION_BAD_ALLOC, !mem);
+    THROW(ERROR_BADALLOC, !mem);
     return mem;
 }
