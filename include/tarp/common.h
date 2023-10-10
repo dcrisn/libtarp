@@ -1,5 +1,5 @@
-#ifndef __MO_COMMON__
-#define __MO_COMMON__
+#ifndef __TARP_COMMON__
+#define __TARP_COMMON__
 
 #include <stdio.h>
 #include <stdlib.h>
