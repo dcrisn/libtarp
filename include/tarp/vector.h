@@ -70,7 +70,7 @@ extern "C" {
  * Vect_clear                   O(1)                                       |
  * Vect_isempty                 O(1)                                       |
  * Vect_count                   O(1)                                       |
- * Vect_max_capacity            O(1)                                       |
+ * Vect_maxcap                  O(1)                                       |
  * Vect_pushb                   O(1) // amortized                          |
  * Vect_popb                    O(1) // amortized                          |
  * Vect_get                     O(1)                                       |
