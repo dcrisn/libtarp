@@ -100,9 +100,9 @@ static inline struct staq_node *Staq_prepare_node(
  * The .container pointer of the staq node inside contb is correctly
  * set before linking into the list.
  */
-#define Staq_put_after_type(staq, conta, contb, field) \
-        Staq_put_after(staq, \
-                &((conta)->field), \
+#define Staq_put_after_type(staq, conta, contb, field)       \
+        Staq_put_after(staq,                                 \
+                &((conta)->field),                           \
                 Staq_prepare_node(&((contb)->field), contb))
 
 

@@ -18,7 +18,7 @@ extern "C" {
  *                                                                         |
  * ~ Notes ~                                                               |
  *                                                                         |
- * The staq has a 2-pointer head structure that can be initialized         |
+ * The staq is headed by a `struct staq` structure that can be initialized |
  * either statically on the stack or dynamically on the heap. The staq     |
  * is a linked list of 'struct staq_node' nodes. These are meant to be     |
  * intrusively embedded inside the user's own dynamically-allocated        |
@@ -291,12 +291,12 @@ size_t Staq_count(const struct staq *sq);
  * change that really makes sense is "putafter". If a new item is added after
  * 'i', the next value of 'i' is the same one it would've had if the insertion\
  * had not occurred. */
-#define foreach(staq, i, container_type) \
-    for (\
-        struct staq_node *sqn_tmp = (staq)->front, \
-          *sqn_tmp_next = ((sqn_tmp) ? sqn_tmp->next : NULL); \
-        ((i = ((sqn_tmp) ? container(sqn_tmp, container_type): NULL)) != NULL); \
-        sqn_tmp = sqn_tmp_next, sqn_tmp_next = (sqn_tmp ? sqn_tmp->next : NULL) \
+#define foreach(staq, i, container_type)                                     \
+    for (                                                                    \
+        struct staq_node *sqn_tmp = (staq)->front,                           \
+          *sqn_tmp_next = ((sqn_tmp) ? sqn_tmp->next : NULL);                \
+        (i = ((sqn_tmp) ? container(sqn_tmp, container_type): NULL));        \
+        sqn_tmp=sqn_tmp_next, sqn_tmp_next=(sqn_tmp ? sqn_tmp->next : NULL)  \
             )
 
 

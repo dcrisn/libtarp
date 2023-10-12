@@ -17,7 +17,7 @@ struct testnode {
 enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){
     struct staq *sq = Staq_new();
 
-    /* push size elements to the stack one by one, from then pop them
+    /* push size elements to the stack one by one, then pop them
     * off and see if the count remains consistent throughout */
     for (size_t i = 1; i <= staqsz; ++i){
         struct testnode *node = salloc(sizeof(struct testnode), NULL);
@@ -61,7 +61,7 @@ enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){
 }
 
 /*
- * Test whether the values we get put on the queue and get back from it
+ * Test whether the values we put on the queue and get back from it
  * are consistent with FIFO semantics through a number of enqueue-dequeue
  * operations. Also check the count stays correct throughout. */
 enum testStatus test_count_enqueue_dequeue(void){
@@ -78,7 +78,7 @@ enum testStatus test_count_enqueue_dequeue(void){
 }
 
 /*
- * Test whether the values we get put on the stack and get back from it
+ * Test whether the values get put on the stack and get back from it
  * are consistent with LIFO semantics through a number of push-pop
  * operations. Also check the count stays correct throughout. */
 enum testStatus test_count_push_pop(void){
@@ -97,7 +97,7 @@ enum testStatus test_count_push_pop(void){
 enum testStatus test_stack_upend__(size_t size){
     struct staq sq = STAQ_INITIALIZER;
 
-    // push elements with value 1...size
+    // push elements with values 1...size
     for (size_t i = 1; i <= size; ++i){
         struct testnode *node = salloc(sizeof(struct testnode), NULL);
         node->num = i;
@@ -177,7 +177,7 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
      *    0..size-1. That is, the elements take all the values modulo size.
      *  - rotate the staq 'num_rotations' number of times.
      *  - pop the elements off the stack and verify the elements in the staq
-     *    have been rotated by num_rotations */
+     *    have been rotated by num_rotations positions */
     for (size_t num_rotations = 0; num_rotations <= rotations; ++num_rotations){
 
         struct staq sq = STAQ_INITIALIZER;
@@ -209,9 +209,9 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
              * members) 0...modulus-1, where modulus=size (see assignment
              * above).
              * With no rotation, the items should be in the stack, bottom to top
-             * (or left to right), 0, 1, 2, ...size-1. So then proceeding from
-             * right to left (top to bottom), they are normally modulus-1,
-             * modulus-2, modulus-3, ..., modulus-(modulus-1), modulus-modulus.
+             * 0, 1, 2, ...size-1. So then proceeding from top to bottom
+             * they are normally modulus-1, modulus-2, modulus-3, ...,
+             * modulus-(modulus-1), modulus-modulus.
              * Our variable i increases from 0 to modulus-1, so the above can
              * be rewritten to use i: modulus-1-(i=0), modulus-1-(i=1), ...,
              * modulus-1-(i=(modulus-1)).
@@ -221,8 +221,8 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
              * modulus-1-i is now the one that would normally be at
              * modulus-1-2-i. The problem is if we continue on, i will
              * eventually grow to be =modulus-1, and then we have
-             * modulus-1-2-(modulus-1), which is a negative number and our
-             * size_t will underflow and wrap around. So instead we note that
+             * modulus-1-2-(modulus-1) i.e. -2, which is a negative number and
+             * our size_t will underflow and wrap around. So instead we note that
              * a right rotation by 2 positions is the same as a left rotation
              * by (modulus-2) positions.
              * That is say, modulus-1-2-i == modulus-1+(modulus-2)-i (mod
@@ -236,8 +236,8 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
              * positions to the right. Conversely, for a left rotation by n
              * positions, we simply get the value of the element that is
              * (cur_position + n) mod MODULUS positions to the right.
+             * Cur_position is of course given by 'modulus-1-i'.
              */
-
             size_t expected;
             if (dir == 1){ /* right rotate */
                 expected = ((modulus-1-i) + (modulus-numrot))%modulus;
@@ -290,8 +290,8 @@ enum testStatus test_peek(void){
         node = Staq_back(&sq, struct testnode);
         //debug("BACK: %u (i=%zu)", node->num, i);
         size_t rotations=i;
-        /* we never pop, so normally the value of the back would always be
-         * len-1. So we just need to find the value that will end up at the
+        /* we never pop, so normally the value of at the back would always be
+         * = len-1. So we just need to find the value that would end up at the
          * back when rotated to the left (toward the front) by i rotations */
         size_t expected_back = ((len-1)+rotations) % len;
         if (node->num !=  expected_back){
