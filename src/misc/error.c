@@ -1,3 +1,4 @@
+#include <tarp/common.h>
 #include <tarp/error.h>
 #include <tarp/log.h>
 
@@ -31,7 +32,7 @@ void throw__(
             errmsg, file, line, func, condition,
             extra ? "~" : "", extra ? extra : "");
 #else
-    UNUSED(file); UNUSED(line);
+    UNUSED(file); UNUSED(line); UNUSED(condition);
     fprintf(stderr, "%s [%s()] %s %s\n",
             errmsg, func,
             extra ? " ~ " : "",

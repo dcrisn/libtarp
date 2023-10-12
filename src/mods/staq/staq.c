@@ -7,6 +7,10 @@
 
 #include <tarp/error.h>
 
+void Staq_init(struct staq *sq){
+    *sq = STAQ_INITIALIZER;
+}
+
 struct staq *Staq_new(void){
     struct staq *sq = (struct staq *)salloc(sizeof(struct staq), NULL);
     *sq = STAQ_INITIALIZER;
@@ -188,7 +192,7 @@ void Staq_upend(struct staq *sq){
     if (count < 2) return;
 
     struct staq_node *a, *b, *c;
-    a = c = sq->front;
+    a = b = c = sq->front;
     while (a && a->next){
         b = a->next;
         a->next = b->next;

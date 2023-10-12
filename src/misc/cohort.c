@@ -64,13 +64,13 @@ static void print_test_report(void){
                 test_report.test_name);
     }else{
         if (test_report.got_fatal_signal){
-            printf("\t! test %-4zu of %-4zu !FAILED! | %-30s |\t\t[* caught deadly signal *]\n",
+            printf("\t! test %-4zu of %-4zu !FAILED! | %-50s |\t\t[* caught deadly signal *]\n",
                     test_report.test_number,
                     testcount,
                     test_report.test_name);
         }
         else{
-            printf("\t! test %-4zu of %-4zu !FAILED! | %-30s |\n",
+            printf("\t! test %-4zu of %-4zu !FAILED! | %-50s |\n",
                     test_report.test_number,
                     testcount,
                     test_report.test_name);

@@ -146,8 +146,9 @@ struct staq_node {
 
 #include "staq_impl.h"
 
-/* Initializer for static staqs */
+/* Macro/function initializer for static staqs; they do the same thing */
 #define STAQ_INITIALIZER (struct staq){ .count=0, .front=NULL, .back=NULL }
+void Staq_init(struct staq *sq);
 
 /*
  * Get a dynamically allocated and initialized staq.

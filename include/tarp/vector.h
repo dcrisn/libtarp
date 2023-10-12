@@ -84,9 +84,7 @@ extern "C" {
  * Vect_insert                  O(n)                                       |
  * Vect_remove                  O(n)                                       |
  *                                                                         |
- *~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|
- **************************************************************************
- */
+ *************************************************************************/
 
 #define define_vector(SHORTNAME, TYPE)           \
         define_vector_new(SHORTNAME, TYPE)       \
@@ -102,6 +100,7 @@ extern "C" {
         define_vector_insert(SHORTNAME, TYPE)    \
         define_vector_remove(SHORTNAME, TYPE)    \
         define_vector_resize(SHORTNAME, TYPE)    \
+
 
 /*
  * Return number of items currently in the vector.
