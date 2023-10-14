@@ -175,6 +175,14 @@ enum testStatus test_staq_upend(void){
     return TEST_PASS;
 }
 
+// NOTE: the test assumes a stack data structure that when rotated in dir==1,
+// it rotates toward the top and when asked to rotate in dir==-1, it rotates
+// toward the bottom. Such that the sequence of items you get by pop()-ing
+// all elements off the stack is changed as expected.
+//
+// NOTE in the comments bellow the stack is imagined as growing out the right
+// side but the direction is not actually important. Just that when dir==1,
+// rotation is toward the top and when dir==-1, rotation is toward the bottom.
 enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
     /* Run 'rotations' number of tests. For each test:
      *  - construct a staq of size SIZE with elements that take values
@@ -243,9 +251,9 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
              * Cur_position is of course given by 'modulus-1-i'.
              */
             size_t expected;
-            if (dir == 1){ /* right rotate */
+            if (dir == 1){ /* rotate to toward the top of the stack */
                 expected = ((modulus-1-i) + (modulus-numrot))%modulus;
-            } else if (dir == -1){ /* left rotate */
+            } else if (dir == -1){ /* rotate to the the bottom of the stack */
                 expected = ((modulus-1-i) + numrot)%modulus;
             } else (assert(false));
 
@@ -333,7 +341,7 @@ enum testStatus test_insert_after(void){
         Staq_rotate(&sq, 1, 2);
     }
 #if 0
-    foreach(&sq, node, struct testnode){
+    Staq_foreach(&sq, node, struct testnode){
         info("item with val %zu", node->num);
     }
 #endif

@@ -112,7 +112,12 @@ bool Staq_remove(struct staq *sq, bool free_container){
 }
 
 void Staq_clear(struct staq *sq, bool free_containers){
-    while (Staq_remove(sq, free_containers));
+    assert(sq);
+
+    if (free_containers){
+        while (Staq_remove(sq, free_containers));
+    }
+    *sq = STAQ_INITIALIZER; // reset
 }
 
 void Staq_destroy(struct staq **sq, bool free_containers){

@@ -37,7 +37,34 @@ void Staq_put_after(struct staq *sq,
         struct staq_node *x, struct staq_node *node);
 
 
-/* Get a pointer to the containing structure of node */
+/* Get a pointer to the containing structure of node;
+ *
+ * NOTE this relies on the enclosed structure having a ".container"
+ * void pointer field that is set to point back to the enclosing
+ * structure. Care must be taken to correctly set this pointer when
+ * linking an item into the linked data structure.
+ *
+ * NOTE
+ * this .container pointer is strictly speaking unnecessary overhead.
+ * And pointers aren't cheap (although RAM is hardly something machines
+ * nowadays lack for). Anyway, if the overhead *must* be avoided,
+ * then the container_of-like macro can be used to derive the pointer
+ * to the enclosing struct given a pointer to any enclosed member.
+ * The container_of macro is very common in kernel source code.
+ * See for example:
+ *  - Linux:
+ *  https://github.com/torvalds/linux/blob/master/include/linux/list.h#L600
+ *
+ *  - FreeBSD:
+ *  https://github.com/freebsd/freebsd-src/blob/62c332ce9c9cf015eabb0a4aa0c83d4e96652820/sys/sys/queue.h#L316
+ *
+ * There is some debate as whether this sort of macro is pedantically
+ * standard C. However, as long as the kernels of the various OS use it,
+ * it's unlikely to be problematic. Nevertheless, a compile-time define
+ * is used to toggle between the 2 approaches:
+ * 1) extra pointer overhead, no containerof artifice
+ * 2) containterof, not overhead.
+ */
 #define container(node, container_type)  ((container_type *)node->container)
 
 /*

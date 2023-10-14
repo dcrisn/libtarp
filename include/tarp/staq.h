@@ -39,7 +39,7 @@ extern "C" {
  * to make the API easier to use.                                          |
  *                                                                         |
  * Specifically, the user should use the following macros:                 |
- *  For stacks: Staq_{dup,top,bottom,push,pop}                             |
+ *  For stacks: Staq_{top,bottom,push,pop}                                 |
  *  For queues: Staq_{front,back,enq,dq}                                   |
  * ... instead of the functions called by the macros. All the other        |
  * functions and macros in this header file are generic can be called      |
@@ -88,12 +88,11 @@ extern "C" {
  * interface operations.                                                   |
  *                                                                         |
  * Staq_new                            O(1)                                |
- * Staq_destroy                        O(1)                                |
- * Staq_clear                          O(1)                                |
+ * Staq_destroy                        O(n)                                |
+ * Staq_clear                          O(n)                                |
  * Staq_empty                          O(1)                                |
  * Staq_count                          O(1)                                |
  * Staq_{front/bottom,top/back}        O(1)                                |
- * Staq_dup                            O(1)                                |
  * Staq_push                           O(1)                                |
  * Staq_pop                            O(1)                                |
  * Staq_enq                            O(1)                                |
@@ -292,7 +291,7 @@ size_t Staq_count(const struct staq *sq);
  * change that really makes sense is "putafter". If a new item is added after
  * 'i', the next value of 'i' is the same one it would've had if the insertion\
  * had not occurred. */
-#define foreach(staq, i, container_type)                                     \
+#define Staq_foreach(staq, i, container_type)                                     \
     for (                                                                    \
         struct staq_node *sqn_tmp = (staq)->front,                           \
           *sqn_tmp_next = ((sqn_tmp) ? sqn_tmp->next : NULL);                \
