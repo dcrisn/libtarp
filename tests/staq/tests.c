@@ -11,6 +11,7 @@ extern enum testStatus test_staq_upend(void);
 extern enum testStatus test_staq_rotate(void);
 extern enum testStatus test_peek(void);
 extern enum testStatus test_insert_after(void);
+extern enum testStatus test_staq_join(void);
 
 int main(int argc, char **argv){
     UNUSED(argv);
@@ -30,6 +31,7 @@ int main(int argc, char **argv){
     Cohort_add(tests, test_staq_rotate, "can staqs be rotated");
     Cohort_add(tests, test_peek, "can peek front and back");
     Cohort_add(tests, test_insert_after, "can insert after node");
+    Cohort_add(tests, test_staq_join, "can join staqs");
 
     //Cohort_add(tests, perf_test, "perf_test");
 

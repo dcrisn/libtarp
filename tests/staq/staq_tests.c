@@ -369,3 +369,46 @@ enum testStatus test_insert_after(void){
     }
     return TEST_PASS;
 }
+
+enum testStatus test_staq_join(void){
+    struct staq a = STAQ_INITIALIZER, b = STAQ_INITIALIZER;
+    struct testnode *node;
+
+    size_t len = 7482;
+    for (size_t i = 0; i< len; ++i){
+        node = salloc(sizeof(struct testnode), NULL);
+        node->num = i;
+        Staq_enq(&a, node, sqnode);
+
+        node = salloc(sizeof(struct testnode), NULL);
+        node->num = i;
+        Staq_enq(&b, node, sqnode);
+    }
+
+    // verify that joining b to a doubles the count and gives a staq
+    // with the correct concatenation 0...n,0...n
+    Staq_join(&a, &b);
+#if 0
+    Staq_foreach(&a, node, struct testnode){
+        info("val %zu", node->num);
+    }
+#endif
+
+    if(Staq_count(&a) != len*2 || Staq_count(&b) !=0){
+        debug("expected len(a)=%zu len(b)=%zu ; got len(a)=%zu len(b)=%zu",
+                len*2, Staq_count(&a), 0, Staq_count(&b));
+        return TEST_FAIL;
+    }
+
+    for (size_t i = 0; i<len*2; ++i){
+        node = Staq_dq(&a, struct testnode);
+        assert(node);
+        if (node->num != i%len){
+            debug("expected %zu got %zu", i%len, node->num);
+            return TEST_FAIL;
+        }
+        free(node);
+    }
+    return TEST_PASS;
+}
+
