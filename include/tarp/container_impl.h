@@ -170,7 +170,7 @@
  * assign pointer x to a local variable, to check that its type is
  * compatible with member m.
  *
- * [1] Currently compiled out; statement expressions are a GNU extension
+ * [1] PN: Currently compiled out; statement expressions are a GNU extension
  * and in the current compilation mode non-standard compiler-vendor
  * extensions are turned off.
  */
@@ -183,7 +183,7 @@
 #else  /* ! __GNUC__ */
 #define	container_of(x, s, m)						\
 	__DEQUALIFY(s *, (const volatile char *)(x) - offsetof(s, m))
-#endif /* ifdef __GNU_C */
+#endif /* ifdef __GNUC__ */
 
 
 
