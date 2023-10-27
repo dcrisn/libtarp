@@ -1,7 +1,6 @@
 #ifndef TARP_STAQ_IMPL_H
 #define TARP_STAQ_IMPL_H
 
-#include <stdlib.h>
 #include <tarp/common.h>
 #include <tarp/container.h>
 

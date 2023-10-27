@@ -1,7 +1,6 @@
 #ifndef TARP_STAQ_H
 #define TARP_STAQ_H
 
-#include <tarp/common.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
