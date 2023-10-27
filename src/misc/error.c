@@ -10,7 +10,8 @@ static const char *error_codes[] = {
     [ERROR_OUTOFBOUNDS]      = "Value outside acceptable bounds",
     [ERROR_BADPOINTER]       = "NULL or otherwise invalid pointer provided",
     [ERROR_INVALIDVALUE]     = "Unacceptable value provided",
-    [ERROR_EMPTY]            = "Cannot read from or access empty resource"
+    [ERROR_EMPTY]            = "Cannot read from or access empty resource",
+    [ERROR_MISCONFIGURED]    = "Invalid or missing configuration"
 };
 
 const char *tarp_strerror(unsigned int code){

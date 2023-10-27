@@ -34,6 +34,7 @@ enum ErrorCode{
     ERROR_BADPOINTER,
     ERROR_INVALIDVALUE, /* generic, encompasses ERROR_OUTOFBOUNDS etc */
     ERROR_EMPTY,
+    ERROR_MISCONFIGURED,
     ERRORCODE_LAST__
 };
 
