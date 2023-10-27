@@ -2,14 +2,34 @@
 #define TARP_STAQ_IMPL_H
 
 #include <stdlib.h>
+#include <tarp/common.h>
+#include <tarp/container.h>
+
+struct staqnode {
+    struct staqnode *next;
+};
 
 struct staq {
     size_t count;
-    struct staq_node *front; /* front of queue, top of (upward-growing) stack */
-    struct staq_node *back;  /* back of queue, bottom of stack */
+    struct staqnode *front; /* front of queue, top of (upward-growing) stack */
+    struct staqnode *back;  /* back of queue, bottom of stack */
+    staqnode_destructor dtor;
 };
 
 typedef struct staq staq;
+typedef struct staqnode staqnode;
+
+
+static inline struct staq staq_initializer(staqnode_destructor dtor){
+    return (struct staq){
+        .count=0,
+        .front=NULL,
+        .back=NULL,
+        .dtor = dtor
+    };
+}
+
+#define STAQ_INITIALIZER__(dtor) staq_initializer(dtor)
 
 /*
  * Users should use the macro wrappers around these functions;
@@ -26,88 +46,48 @@ typedef struct staq staq;
  * with the macros'. Since the macros rather than the functions should
  * be directly used by the user, they should get the more friendly
  * names. */
-struct staq_node *Staq_peekfront(const struct staq *sq);
-struct staq_node *Staq_peekback(const struct staq *sq);
-void Staq_pushback(struct staq *sq, struct staq_node *node);
-void Staq_pushfront(struct staq *sq, struct staq_node *node);
-struct staq_node *Staq_popfront(struct staq *sq);
+struct staqnode *Staq_peekfront(const struct staq *sq);
+struct staqnode *Staq_peekback(const struct staq *sq);
+void Staq_pushback(struct staq *sq, struct staqnode *node);
+void Staq_pushfront(struct staq *sq, struct staqnode *node);
+struct staqnode *Staq_popfront(struct staq *sq);
 void Staq_dup_back(struct staq *sq);
 void Staq_dup_front(struct staq *sq);
-void Staq_put_after(struct staq *sq,
-        struct staq_node *x, struct staq_node *node);
-
-
-/* Get a pointer to the containing structure of node;
- *
- * NOTE this relies on the enclosed structure having a ".container"
- * void pointer field that is set to point back to the enclosing
- * structure. Care must be taken to correctly set this pointer when
- * linking an item into the linked data structure.
- *
- * NOTE
- * this .container pointer is strictly speaking unnecessary overhead.
- * And pointers aren't cheap (although RAM is hardly something machines
- * nowadays lack for). Anyway, if the overhead *must* be avoided,
- * then the container_of-like macro can be used to derive the pointer
- * to the enclosing struct given a pointer to any enclosed member.
- * The container_of macro is very common in kernel source code.
- * See for example:
- *  - Linux:
- *  https://github.com/torvalds/linux/blob/master/include/linux/list.h#L600
- *
- *  - FreeBSD:
- *  https://github.com/freebsd/freebsd-src/blob/62c332ce9c9cf015eabb0a4aa0c83d4e96652820/sys/sys/queue.h#L316
- *
- * There is some debate as whether this sort of macro is pedantically
- * standard C. However, as long as the kernels of the various OS use it,
- * it's unlikely to be problematic. Nevertheless, a compile-time define
- * is used to toggle between the 2 approaches:
- * 1) extra pointer overhead, no containerof artifice
- * 2) containterof, not overhead.
- */
-#define container(node, container_type)  ((container_type *)node->container)
+void Staq_put_after(struct staq *sq, struct staqnode *x, struct staqnode *node);
 
 /*
  * Wrappers around the peekfront and peekback functions;
  * Evaluates to a pointer not to the staq node, but to its containing
  * structure. This is NULL if the staq is empty (that is, if the
  * embedded staq node would itlself be NULL) */
-#define Staq_peekfront_type(staq, container_type) \
-    ((Staq_empty(staq)) ? NULL : container(Staq_peekfront(staq), container_type))
+#define Staq_peekfront_type(staq, container_type, field) \
+    ((Staq_empty(staq)) ? NULL : container(Staq_peekfront(staq), container_type, field))
 
-#define Staq_peekback_type(staq, container_type) \
-    (Staq_empty(staq) ? NULL : container(Staq_peekback(staq), container_type))
-
-/*
- * Set the .container field of the node to point to <container>.
- * The argument <container> must be a pointer to a structure that has
- * <node> embedded inside it. */
-static inline struct staq_node *Staq_prepare_node(
-        struct staq_node *node, void *container)
-{
-    assert(node);
-    node->container = container;
-    return node;
-}
+#define Staq_peekback_type(staq, container_type, field) \
+    (Staq_empty(staq) ? NULL : container(Staq_peekback(staq), container_type, field))
 
 /*
  * Wrappers around pushback, pushfront
  * These let the user pass a pointer to the container as an argument
- * instead of a pointer to the staq node embedded inside it. They also
- * ensure the staq node has its .container field pointing back to
- * the containing structure.
+ * instead of a pointer to the staq node embedded inside it.
  *
  * --> staq
  *  The staq handle, must be non-NULL.
  *
  * --> container
- * A pointer to a structure that has a staq_node field named sqnode_field.
+ * A pointer to a structure that has a staqnode field named sqnode_field.
  */
-#define Staq_pushback_type(staq, container, sqnode_field) \
-    Staq_pushback(staq, Staq_prepare_node(&((container)->sqnode_field), container))
+#define Staq_pushback_type(staq, container, sqnode_field)    \
+    do {                                                     \
+        assert(container);                                   \
+        Staq_pushback(staq, &((container)->sqnode_field));   \
+    } while(0)
 
-#define Staq_pushfront_type(staq, container, sqnode_field) \
-    Staq_pushfront(staq, Staq_prepare_node(&((container)->sqnode_field), container))
+#define Staq_pushfront_type(staq, container, sqnode_field)   \
+    do {                                                     \
+        assert(container);                                   \
+        Staq_pushfront(staq, &((container)->sqnode_field));  \
+    } while(0)
 
 /*
  * Wrapper around popfront.
@@ -115,22 +95,24 @@ static inline struct staq_node *Staq_prepare_node(
  * NULL. Otherwise it "returns" a pointer to the struct containing the
  * staq node that has been removed from the list
  */
-#define Staq_popfront_type(staq, container_type) \
-    (Staq_empty(staq) ? NULL : container(Staq_popfront(staq), container_type))
+#define Staq_popfront_type(staq, container_type, field) \
+    (Staq_empty(staq) ? NULL : container(Staq_popfront(staq), container_type, field))
 
 /*
  * Wrapper around Staq_put_after. This lets the user pass pointers to
  * containters, just like the macros above.
- * contb and conta must both have a staq node embedded in them as a field
+ * contb and conta must both have a staqnode embedded in them as a field
  * with the specified name.
+ *
  * conta must already be linked in the staq. contb is linked in  *after* it.
- * The .container pointer of the staq node inside contb is correctly
- * set before linking into the list.
  */
 #define Staq_put_after_type(staq, conta, contb, field)       \
+    do {                                                     \
+        assert(conta && contb);                              \
         Staq_put_after(staq,                                 \
                 &((conta)->field),                           \
-                Staq_prepare_node(&((contb)->field), contb))
+                &((contb)->field));                          \
+    }while(0)
 
 
 #endif

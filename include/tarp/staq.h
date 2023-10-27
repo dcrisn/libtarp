@@ -20,23 +20,17 @@ extern "C" {
  *                                                                         |
  * The staq is headed by a `struct staq` structure that can be initialized |
  * either statically on the stack or dynamically on the heap. The staq     |
- * is a linked list of 'struct staq_node' nodes. These are meant to be     |
+ * is a linked list of 'struct staqnode' nodes. These are meant to be      |
  * intrusively embedded inside the user's own dynamically-allocated        |
  * structures. The containing structure can be obtained back from a given  |
- * staq_node as each one has a `container` field meant to point back to    |
- * its containing struct. Strictly speaking, this pointer is unnecessary   |
- * overhead (the famous container_of macro could be used, ubiquitous in    |
- * the Linux kernel's intrusive doubly linked list) but it allows for      |
- * arguably more easily readable and usable code without resorting to      |
- * too much artifice.                                                      |
+ * staqnode using the 'container()' macro.                                 |
+ * See container.h and tests/staq/tests.c FMI.                             |
  *                                                                         |
  * The staq functions (push, pop etc) take and manipulate                  |
- * `struct staq_node`s. However, it would be error prone                   |
- * and inconvenient for the user to have to use these (the contained       |
- * staq_node's must have their `container` pointer set when pushing,       |
- * then the container, which is what the user ultimately wants, must       |
- * be obtained back from the staq_node). Macros are provided instead       |
- * to make the API easier to use.                                          |
+ * `struct staqnode`s. However, to make the api more friendly and          |
+ * user-data oriented, macros are provided that translate between the      |
+ * user container and the embedded staqnode and minimize the need for      |
+ * casting and directly calling the container() macro.                     |
  *                                                                         |
  * Specifically, the user should use the following macros:                 |
  *  For stacks: Staq_{top,bottom,push,pop}                                 |
@@ -49,36 +43,36 @@ extern "C" {
  *                                                                         |
  *    struct mystruct{                                                     |
  *       uint32_t u;                                                       |
- *       struct staq_node node;  // must embed a struct staq_node          |
+ *       struct staqnode node;  // must embed a struct staqnode            |
  *    };                                                                   |
  *                                                                         |
- *    struct staq *fifo = Staq_new();       // dynamic initialization      |
- *    struct staq lifo  = STAQ_INITIALIZER; // static initialization       |
+ *    struct staq *fifo = Staq_new(NULL);           // dynamic init        |
+ *    struct staq lifo  = STAQ_INITIALIZER(NULL);   // static init         |
  *                                                                         |
  *    struct mystruct *a, *b, *tmp;                                        |
  *    for (size_t i=0; i< 10; ++i){                                        |
  *       a = malloc(sizeof(struct mystruct));                              |
  *       b = malloc(sizeof(struct mystruct));                              |
  *       a->u = i; b->u = i;                                               |
- *       Staq_push(&lifo, a, node);   // stack push                        |
+ *       Staq_push(&lifo, a, node);  // stack push                         |
  *       Staq_enq(fifo, b, node);    // queue enqueue                      |
  *    }                                                                    |
  *                                                                         |
- *   Staq_foreach(&lifo, tmp, struct mystruct){                            |
+ *   Staq_foreach(&lifo, tmp, struct mystruct, node){                      |
  *      printf("LIFO value: %u", tmp->u);                                  |
  *   }                                                                     |
  *                                                                         |
  *   for (size_t i=0; i < 10; ++i){                                        |
- *       a = Staq_pop(&lifo, struct mystruct);                             |
+ *       a = Staq_pop(&lifo, struct mystruct, node);                       |
  *       printf("popped %u\n", a->u);                                      |
  *       free(a);                                                          |
  *                                                                         |
- *       b = Staq_dq(fifo, struct mystruct);                               |
+ *       b = Staq_dq(fifo, struct mystruct, node);                         |
  *       printf("dequeued %u\n", b->u);                                    |
  *       free(b);                                                          |
  *   }                                                                     |
  *                                                                         |
- *  Staq_destroy(&fifo, true);  // must destroy dynamic staq               |
+ *  Staq_destroy(&fifo, false);  // must destroy dynamic staq              |
  *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~        |
  *                                                                         |
  *                                                                         |
@@ -100,6 +94,8 @@ extern "C" {
  * Staq_putafter                       O(1)                                |
  * Staq_rotate                         O(n)                                |
  * Staq_upend                          O(n)                                |
+ * Staq_join                           O(1)                                |
+ * Staq_swap                           O(1)                                |
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |
  *                                                                         |
  * ~ NOTES ~                                                               |
@@ -137,22 +133,37 @@ extern "C" {
  *************************************************************************/
 
 struct staq;
+struct staqnode;
 
-struct staq_node {
-    struct staq_node *next;
-    void *container;
-};
+/*
+ * A callback function invoked by the Staq api when the user asks for a
+ * container to be deallocated.
+ * The function should first get the container from the staqnode using
+ * the container() macro, then carry out any deallocation as appropriate */
+typedef void (*staqnode_destructor)(struct staqnode *node);
 
 #include "staq_impl.h"
 
-/* Macro/function initializer for static staqs; they do the same thing */
-#define STAQ_INITIALIZER (struct staq){ .count=0, .front=NULL, .back=NULL }
-void Staq_init(struct staq *sq);
+
+/* Macro/function initializer for static staqs; they do the same thing.
+ *
+ * --> dtor
+ * This is a staqnode_destructor callback that certain functions
+ * that deallocate the enclosing container will call. Specifically,
+ * Staq_remove needs it to be set, as well as functions (Staq_clear,
+ * Staq_destroy) that take a free_container argument (only required
+ * when called with free_container=true). If these are not called,
+ * then dtor can be NULL. However, if these are called as indicated
+ * and a destructor was not specified, the program will crash.
+ */
+#define STAQ_INITIALIZER(dtor) STAQ_INITIALIZER__(dtor)
+void Staq_init(struct staq *sq, staqnode_destructor dtor);
 
 /*
  * Get a dynamically allocated and initialized staq.
- * The user must call Staq_destroy() on this when no longer needed. */
-struct staq *Staq_new(void);
+ * The user must call Staq_destroy() on this when no longer needed.
+ * See the dtor-related comments above Staq_init fmi. */
+struct staq *Staq_new(staqnode_destructor dtor);
 
 /*
  * True if the non-NULL staq sq is empty, else False. */
@@ -164,8 +175,9 @@ bool Staq_empty(const struct staq *sq);
  * non-NULL staq to remove the node from
  *
  * --> free_container
- * If true, free() is called on the container. Otherwise the structure is
- * simply unlinked and the user must call free() at some later time.
+ * If true, the *non-NULL* destructor callback specified at initialization
+ * time is called. Otherwise the structure is simply unlinked and it is assumed
+ * the user will free the container at some later time.
  *
  * <-- return
  * True if a removal took place. False otherwise (list was empty).
@@ -174,14 +186,15 @@ bool Staq_remove(struct staq *sq, bool free_container);
 
 /*
  * Remove each staq element in the given non-NULL staq.
- * If free_containers=True, free() is called on each container as
- * it gets unlinked. */
+ * If free_containers=True, the non-NULL destructor provided at
+ * initialization time gets called on each element, otherwise the elements
+ * are simply unlinked. */
 void Staq_clear(struct staq *sq, bool free_containers);
 
 /*
  * Remove each staq element and then free the staq handle itself.
- * If free_containers=True, free() is called on each container as it
- * gets unlinked.
+ * If free_containers=True, the non-NULL destructor provided at initialization
+ * time is called on each element as it gets unlinked.
  *
  * - The sq double pointer must be be non-NULL at both levels of indirection.
  * - The sq pointer will be set to NULL before returning.
@@ -209,17 +222,34 @@ void Staq_rotate(struct staq *sq, int dir, size_t num_rotations);
 size_t Staq_count(const struct staq *sq);
 
 /*
+ * Join the front/top of b to the back/bottom of a.
+ * - a and b must be non-NULL.
+ * - the contents of b are moved to a. The 'b' handle itself is
+ *   reset but not deallocated. The destructor calllback specified at
+ *   the time b was initialized is maintained.
+ */
+void Staq_join(struct staq *a, struct staq *b);
+
+/*
+ * Swap the contents of the two non-NULL staqs a and b; */
+void Staq_swap(struct staq *a, struct staq *b);
+
+/*
  * Get (peek at) the element at the stack top/bottom or queue front/back.
  * A pointer to the container of the respective staq node is returned.
+ *
+ * --> field
+ * the member field name inside the container referring to the embedded staqnode.
  *
  * - staq must be non-NULL
  * - container type is the type of the containing structure that the
  *   staq node is embedded in.
+ * - if the staq is empty, NULL is returned
  */
-#define Staq_top(staq, container_type)    Staq_peekfront_type(staq, container_type)
-#define Staq_bottom(staq, container_type) Staq_peekback_type(staq, container_type)
-#define Staq_front(staq, container_type)  Staq_peekfront_type(staq, container_type)
-#define Staq_back(staq, container_type)   Staq_peekback_type(staq, container_type)
+#define Staq_top(staq, container_type, field)    Staq_peekfront_type(staq, container_type, field)
+#define Staq_bottom(staq, container_type, field) Staq_peekback_type(staq, container_type, field)
+#define Staq_front(staq, container_type, field)  Staq_peekfront_type(staq, container_type, field)
+#define Staq_back(staq, container_type, field)   Staq_peekback_type(staq, container_type, field)
 
 /*
  * Push node onto the top of the stack.
@@ -228,13 +258,13 @@ size_t Staq_count(const struct staq *sq);
  * A non-NULL staq handle.
  *
  * --> container
- * A struct variable that has a `struct staq_node` embedded in it.
+ * A struct variable that has a `struct staqnode` embedded in it.
  * The staq node and by extension this contaning structure will be added
  * onto the stack.
  *
  * --> field
  * The name of the field inside the container that refers to the
- * `struct staq_node`. */
+ * `struct staqnode`. */
 #define Staq_push(staq, container, field) Staq_pushfront_type(staq, container, field)
 
 /*
@@ -244,22 +274,25 @@ size_t Staq_count(const struct staq *sq);
  * A non-NULL staq handle.
  *
  * --> container_type
- * The *type* of the structure that contains the `struct staq_node`.
+ * The *type* of the structure that contains the `struct staqnode`.
+ *
+ * --> field
+ * The name of the staqnode member field inside the container.
  *
  * <-- return
  * A pointer structure of type <container_type>. This is a pointer
  * to the structure that contains the staq node that was popped off
  * the stack. If the staq is empty, this is a NULL pointer.
  */
-#define Staq_pop(staq, container_type)    Staq_popfront_type(staq, container_type)
+#define Staq_pop(staq, container_type, field)    Staq_popfront_type(staq, container_type, field)
 
 /*
  * Enqueue or dequeue node.
  * These macros are part of the queue/FIFO interface;
  * see Staq_push, Staq_pop for information on the arguments and
  * return values. */
-#define Staq_enq(staq, container, field)  Staq_pushback_type(staq, container, field)
-#define Staq_dq(staq, container_type)     Staq_popfront_type(staq, container_type)
+#define Staq_enq(staq, container, field)      Staq_pushback_type(staq, container, field)
+#define Staq_dq(staq, container_type, field)  Staq_popfront_type(staq, container_type, field)
 
 /*
  * Insert contb into the list such that it comes *after* conta, i.e.
@@ -269,13 +302,12 @@ size_t Staq_count(const struct staq *sq);
  * a non-NULL, non-empty staq to link contb in to
  *
  * --> conta
- * a structure that contains a staq node as a field with the specified name.
+ * a structure that contains a staqnode as a field with the specified name.
  * conta must already exist in the staq.
  *
  * -->contb
  * a new structure, like conta, that is to be added to the list *after* conta,
- * as described. The macro takes care of correctly setting the <container>
- * field of the staq node embedded inside contb.
+ * as described.
  */
 #define Staq_putafter(staq, conta, contb, field) \
     Staq_put_after_type(staq, conta, contb, field)
@@ -291,13 +323,13 @@ size_t Staq_count(const struct staq *sq);
  * change that really makes sense is "putafter". If a new item is added after
  * 'i', the next value of 'i' is the same one it would've had if the insertion\
  * had not occurred. */
-#define Staq_foreach(staq, i, container_type)                                     \
+#define Staq_foreach(staq, i, container_type, field)                         \
     for (                                                                    \
-        struct staq_node *sqn_tmp = (staq)->front,                           \
+        struct staqnode *sqn_tmp = (staq)->front,                            \
           *sqn_tmp_next = ((sqn_tmp) ? sqn_tmp->next : NULL);                \
-        (i = ((sqn_tmp) ? container(sqn_tmp, container_type): NULL));        \
+        (i = ((sqn_tmp) ? container(sqn_tmp, container_type, field): NULL)); \
         sqn_tmp=sqn_tmp_next, sqn_tmp_next=(sqn_tmp ? sqn_tmp->next : NULL)  \
-            )
+        )
 
 
 #ifdef __cplusplus

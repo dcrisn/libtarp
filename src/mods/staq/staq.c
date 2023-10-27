@@ -1,4 +1,5 @@
 #include <tarp/common.h>
+#include <tarp/error.h>
 #include <tarp/staq.h>
 
 #include <stdbool.h>
@@ -7,13 +8,25 @@
 
 #include <tarp/error.h>
 
-void Staq_init(struct staq *sq){
-    *sq = STAQ_INITIALIZER;
+#if 0
+static inline void stackdump(struct staq *sq){
+    assert(sq);
+    printf("=== Staq(%zu) [top->bottom] ===\n", sq->count);
+    struct staqnode *sqnode = sq->front;
+    for (size_t i = 0 ; i < sq->count; i++){
+        printf("[%zu] node %p\n", sq->count-1-i, (void*)sqnode);
+        sqnode = sqnode->next;
+    }
+}
+#endif
+
+void Staq_init(struct staq *sq, staqnode_destructor dtor){
+    *sq = STAQ_INITIALIZER(dtor);
 }
 
-struct staq *Staq_new(void){
+struct staq *Staq_new(staqnode_destructor dtor){
     struct staq *sq = (struct staq *)salloc(sizeof(struct staq), NULL);
-    *sq = STAQ_INITIALIZER;
+    *sq = STAQ_INITIALIZER(dtor);
     return sq;
 }
 
@@ -27,12 +40,12 @@ size_t Staq_count(const struct staq *sq){
     return sq->count;
 }
 
-struct staq_node *Staq_peekfront(const struct staq *sq){
+struct staqnode *Staq_peekfront(const struct staq *sq){
     assert(sq);
     return sq->front;
 }
 
-struct staq_node *Staq_peekback(const struct staq *sq){
+struct staqnode *Staq_peekback(const struct staq *sq){
     assert(sq);
     return sq->back;
 }
@@ -67,7 +80,7 @@ struct staq_node *Staq_peekback(const struct staq *sq){
  *  The front of the queue and the top of the stack both coincide with the front
  *  of the underlying linked list.
  */
-void Staq_pushback(struct staq *sq, struct staq_node *node){
+void Staq_pushback(struct staq *sq, struct staqnode *node){
     assert(sq); assert(node);
     node->next = NULL;
 
@@ -78,10 +91,10 @@ void Staq_pushback(struct staq *sq, struct staq_node *node){
 }
 
 /* NOTE popback would be O(n) so is not provided. */
-struct staq_node *Staq_popfront(struct staq *sq){
+struct staqnode *Staq_popfront(struct staq *sq){
     assert(sq);
     if (sq->count==0) return NULL;
-    struct staq_node *node = sq->front;
+    struct staqnode *node = sq->front;
     sq->front = node->next;
     sq->count--;
 
@@ -92,7 +105,7 @@ struct staq_node *Staq_popfront(struct staq *sq){
     return node;
 }
 
-void Staq_pushfront(struct staq *sq, struct staq_node *node){
+void Staq_pushfront(struct staq *sq, struct staqnode *node){
     assert(sq); assert(node);
     node->next = sq->front;
 
@@ -103,11 +116,16 @@ void Staq_pushfront(struct staq *sq, struct staq_node *node){
 
 bool Staq_remove(struct staq *sq, bool free_container){
     assert(sq);
-    struct staq_node *node = Staq_popfront(sq);
+    struct staqnode *node = Staq_popfront(sq);
+
     if (node){
-        if (free_container) salloc(0, node->container);
+        if (free_container){
+            THROWS(ERROR_MISCONFIGURED, sq->dtor==NULL, "missing destructor");
+            sq->dtor(node);
+        }
         return true;
     }
+
     return false;
 }
 
@@ -117,7 +135,7 @@ void Staq_clear(struct staq *sq, bool free_containers){
     if (free_containers){
         while (Staq_remove(sq, free_containers));
     }
-    *sq = STAQ_INITIALIZER; // reset
+    *sq = STAQ_INITIALIZER(sq->dtor); // reset
 }
 
 void Staq_destroy(struct staq **sq, bool free_containers){
@@ -128,16 +146,49 @@ void Staq_destroy(struct staq **sq, bool free_containers){
     *sq = NULL;
 }
 
-static inline void stackdump(struct staq *sq){
-    assert(sq);
-    printf("=== Staq(%zu) [top->bottom] ===\n", sq->count);
-    struct staq_node *sqnode = sq->front;
-    for (size_t i = 0 ; i < sq->count; i++){
-        printf("[%zu] node %p\n", sq->count-1-i, (void*)sqnode);
-        sqnode = sqnode->next;
+void Staq_join(struct staq *a, struct staq *b){
+    assert(a);
+    assert(b);
+
+    if (a->count == 0){
+        a->count = b->count;
+        a->front = b->front;
+        a->back = b->back;
+        *b = STAQ_INITIALIZER(b->dtor); /* reset b */
+
+        return;
     }
+
+    a->count += b->count;
+    a->back->next = b->front;
+    a->back = b->back;
+    *b = STAQ_INITIALIZER(b->dtor);
 }
 
+void Staq_swap(struct staq *a, struct staq *b){
+    assert(a);
+    assert(b);
+
+    assert(a); assert(b);
+    struct staq tmp = {
+        .count = a->count,
+        .front = a->front,
+        .back = a->back,
+        .dtor = a->dtor
+    };
+
+    a->front = b->front;
+    a->back = b->back;
+    a->count = b->count;
+    a->dtor = b->dtor;
+
+    b->front = tmp.front;
+    b->back  = tmp.back;
+    b->count = tmp.count;
+    b->dtor = a->dtor;
+}
+
+// this is REALLLY SLOW; TODO; do it like for dllist
 void Staq_rotate(struct staq *sq, int dir, size_t num_rotations){
     assert(sq);
 
@@ -196,7 +247,7 @@ void Staq_upend(struct staq *sq){
     size_t count = sq->count;
     if (count < 2) return;
 
-    struct staq_node *a, *b, *c;
+    struct staqnode *a, *b, *c;
     a = b = c = sq->front;
     while (a && a->next){
         b = a->next;
@@ -212,8 +263,8 @@ void Staq_upend(struct staq *sq){
 // insert node after x
 void Staq_put_after(
         struct staq *sq,
-        struct staq_node *x,
-        struct staq_node *node)
+        struct staqnode *x,
+        struct staqnode *node)
 {
     assert(sq);
     assert(x);

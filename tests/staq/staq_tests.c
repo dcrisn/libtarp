@@ -7,15 +7,19 @@
 #include <tarp/common.h>
 #include <tarp/log.h>
 #include <tarp/staq.h>
-#include <tarp/staq_impl.h>
 
 struct testnode {
     uint64_t num;
-    struct staq_node sqnode;
+    struct staqnode sqnode;
 };
 
+void destructor(struct staqnode *node){
+    assert(node);
+    salloc(0, container(node, struct testnode, sqnode));
+}
+
 enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){
-    struct staq *sq = Staq_new();
+    struct staq *sq = Staq_new(destructor);
 
     /* push size elements to the stack one by one, then pop them
     * off and see if the count remains consistent throughout */
@@ -35,7 +39,7 @@ enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){
     for (size_t i = 1; i <= staqsz; ++i){
         struct testnode *node;
         if (stackmode){
-            node = Staq_pop(sq, struct testnode);
+            node = Staq_pop(sq, struct testnode, sqnode);
             assert(node);
             if (node->num != staqsz+1-i){
                 debug("expected %zu got %zu", staqsz+1-i, node->num);
@@ -43,7 +47,7 @@ enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){
             }
         }
         else{
-            node = Staq_dq(sq, struct testnode);
+            node = Staq_dq(sq, struct testnode, sqnode);
             assert(node);
             if (node->num != i){
                 debug("expected %zu, got %zu", i, node->num);
@@ -97,7 +101,7 @@ enum testStatus test_count_push_pop(void){
 }
 
 enum testStatus test_stack_upend__(size_t size){
-    struct staq sq = STAQ_INITIALIZER;
+    struct staq sq = STAQ_INITIALIZER(destructor);
 
     // push elements with values 1...size
     for (size_t i = 1; i <= size; ++i){
@@ -116,7 +120,7 @@ enum testStatus test_stack_upend__(size_t size){
     // ensure the elements are popped back in the *same* order they were
     // pushed; in effect, upending turns the LIFO into a FIFO
     for (size_t i = 1; i <= size; ++i){
-        struct testnode *node = Staq_pop(&sq, struct testnode);
+        struct testnode *node = Staq_pop(&sq, struct testnode, sqnode);
         assert(node);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
@@ -128,7 +132,7 @@ enum testStatus test_stack_upend__(size_t size){
 }
 
 enum testStatus test_queue_upend__(size_t size){
-    struct staq sq = STAQ_INITIALIZER;
+    struct staq sq = STAQ_INITIALIZER(destructor);
 
     // enqueue size elements
     for (size_t i = 1; i <= size; ++i){
@@ -147,7 +151,7 @@ enum testStatus test_queue_upend__(size_t size){
     // ensure the elements are dequeued back in the *reverse* order they were
     // enqueued; in effect, upending turns the FIFO into a LIFO
     for (size_t i = 0; i < size; ++i){
-        struct testnode *node = Staq_dq(&sq, struct testnode);
+        struct testnode *node = Staq_dq(&sq, struct testnode, sqnode);
         assert(node);
         if (node->num != size-i){
             debug("expected %zu got %zu", size-i, node->num);
@@ -192,7 +196,7 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
      *    have been rotated by num_rotations positions */
     for (size_t num_rotations = 0; num_rotations <= rotations; ++num_rotations){
 
-        struct staq sq = STAQ_INITIALIZER;
+        struct staq sq = STAQ_INITIALIZER(destructor);
         // insert items with values 0...size-1, i.e. all values mod size
         for (size_t i = 0; i < size; ++i){
             struct testnode *node = salloc(sizeof(struct testnode), NULL);
@@ -211,7 +215,7 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
 
         size_t modulus = size;
         for (size_t i = 0; i < size; ++i){
-            struct testnode *node = Staq_pop(&sq, struct testnode);
+            struct testnode *node = Staq_pop(&sq, struct testnode, sqnode);
 
             /* discard congruent multiples (a%n == (a+(k*n))%n) */
             size_t numrot = num_rotations % size;
@@ -284,7 +288,7 @@ enum testStatus test_staq_rotate(void){
 
 enum testStatus test_peek(void){
     struct testnode *node;
-    struct staq sq = STAQ_INITIALIZER;
+    struct staq sq = STAQ_INITIALIZER(destructor);
     size_t len = 6;
     for (size_t i = 0; i < len; ++i){
         node = salloc(sizeof(struct testnode), NULL);
@@ -293,7 +297,7 @@ enum testStatus test_peek(void){
     }
 
     for (size_t i = 0 ; i<len; ++i){
-        node = Staq_front(&sq, struct testnode);
+        node = Staq_front(&sq, struct testnode, sqnode);
         assert(node);
         //debug("FRONT: %u (i=%zu)", node->num, i);
         if (node->num != i){
@@ -301,7 +305,7 @@ enum testStatus test_peek(void){
             return TEST_FAIL;
         }
 
-        node = Staq_back(&sq, struct testnode);
+        node = Staq_back(&sq, struct testnode, sqnode);
         assert(node);
         //debug("BACK: %u (i=%zu)", node->num, i);
         size_t rotations=i;
@@ -323,7 +327,7 @@ enum testStatus test_peek(void){
 
 
 enum testStatus test_insert_after(void){
-    struct staq sq = STAQ_INITIALIZER;
+    struct staq sq = STAQ_INITIALIZER(destructor);
     struct testnode *node;
     size_t magic = 0xff;
     // insert 3 nodes with values 1,2,3
@@ -337,11 +341,11 @@ enum testStatus test_insert_after(void){
     for (size_t i = 0; i<3; ++i){
         node = salloc(sizeof(struct testnode), NULL);
         node->num = magic;
-        Staq_putafter(&sq, Staq_front(&sq, struct testnode), node, sqnode);
+        Staq_putafter(&sq, Staq_front(&sq, struct testnode, sqnode), node, sqnode);
         Staq_rotate(&sq, 1, 2);
     }
 #if 0
-    Staq_foreach(&sq, node, struct testnode){
+    Staq_foreach(&sq, node, struct testnode, sqnode){
         info("item with val %zu", node->num);
     }
 #endif
@@ -349,7 +353,7 @@ enum testStatus test_insert_after(void){
     // check that the items, read from the front, are in a sequence
     // of 1,magic,2,magic,3,magic
     for (size_t i = 1; i <= 3; ++i){
-        node = Staq_dq(&sq, struct testnode);
+        node = Staq_dq(&sq, struct testnode, sqnode);
         assert(node);
         //debug("FRONT: %zu", node->num);
         if (node->num != i){
@@ -358,7 +362,7 @@ enum testStatus test_insert_after(void){
         }
         free(node);
 
-        node = Staq_dq(&sq, struct testnode);
+        node = Staq_dq(&sq, struct testnode, sqnode);
         assert(node);
         //debug("FRONT2: %zu", node->num);
         if (node->num != magic){
@@ -371,7 +375,7 @@ enum testStatus test_insert_after(void){
 }
 
 enum testStatus test_staq_join(void){
-    struct staq a = STAQ_INITIALIZER, b = STAQ_INITIALIZER;
+    struct staq a = STAQ_INITIALIZER(destructor), b = STAQ_INITIALIZER(destructor);
     struct testnode *node;
 
     size_t len = 7482;
@@ -389,7 +393,7 @@ enum testStatus test_staq_join(void){
     // with the correct concatenation 0...n,0...n
     Staq_join(&a, &b);
 #if 0
-    Staq_foreach(&a, node, struct testnode){
+    Staq_foreach(&a, node, struct testnode, sqnode){
         info("val %zu", node->num);
     }
 #endif
@@ -401,7 +405,7 @@ enum testStatus test_staq_join(void){
     }
 
     for (size_t i = 0; i<len*2; ++i){
-        node = Staq_dq(&a, struct testnode);
+        node = Staq_dq(&a, struct testnode, sqnode);
         assert(node);
         if (node->num != i%len){
             debug("expected %zu got %zu", i%len, node->num);
@@ -409,6 +413,90 @@ enum testStatus test_staq_join(void){
         }
         free(node);
     }
+    return TEST_PASS;
+}
+
+// test that 2 lists can swap heads
+enum testStatus test_staq_head_swap(void){
+    struct staq a,b;
+    a = STAQ_INITIALIZER(destructor);
+    b= STAQ_INITIALIZER(destructor);
+
+    uint64_t vals[] = {1, 2, 3, 4, 5, 6, 7};
+    // create 2 staqs, one with all items, one only with the last 3, then
+    // swap their heads and verify
+    for (size_t i=0; i<ARRLEN(vals);++i){
+        struct testnode *node = salloc(sizeof(struct testnode), NULL);
+        node->num = vals[i];
+        Staq_enq(&a, node, sqnode);
+    }
+    for (size_t i=ARRLEN(vals)-4; i<ARRLEN(vals);++i){
+        struct testnode *node = salloc(sizeof(struct testnode), NULL);
+        node->num = vals[i];
+        Staq_enq(&b, node, sqnode);
+    }
+
+    Staq_swap(&a, &b);
+
+    if (Staq_count(&a) != ARRLEN(vals)-3){
+        debug("expected %zu got %zu", ARRLEN(vals)-3, Staq_count(&a));
+        return TEST_FAIL;
+    }
+    if (Staq_count(&b) != ARRLEN(vals)){
+        debug("expected %zu got %zu", ARRLEN(vals), Staq_count(&b));
+        return TEST_FAIL;
+    }
+
+    for (size_t i=0; i<ARRLEN(vals);++i){
+        struct testnode *node = Staq_dq(&b, struct testnode, sqnode);
+        assert(node);
+        if (node->num != vals[i]){
+            debug("expected %zu got %zu", vals[i], node->num);
+            return TEST_FAIL;
+        }
+        free(node);
+    }
+    for (size_t i=ARRLEN(vals)-4; i<ARRLEN(vals);++i){
+        struct testnode *node = Staq_dq(&a, struct testnode, sqnode);
+        assert(node);
+        if (node->num != vals[i]){
+            debug("expected %zu got %zu", vals[i], node->num);
+            return TEST_FAIL;
+        }
+        free(node);
+    }
+
+    return TEST_PASS;
+}
+
+/*
+ * Push massive number of nodes;
+ * With each pushed node:
+ *  - rotate the staq 100 times to the back/bottom
+ *  - upend the whole staq
+ *  - rotate the staq 100 times to the front/top
+ */
+extern enum testStatus test_staq_performance(void){
+    size_t num = 87 * 1000 * 1000;
+    //size_t num = 87;
+
+    struct staq q = STAQ_INITIALIZER(destructor);
+    struct testnode *node;
+
+    for (size_t i = 0; i < num; i++){
+        node = salloc(sizeof(struct testnode), NULL);
+        Staq_enq(&q, node, sqnode);
+        Staq_rotate(&q, 1, 10);
+        //Staq_upend(&q);
+        //Staq_rotate(&q, -1, 100);
+    }
+
+    for (size_t i = 0; i < num; ++i){
+        node = Staq_dq(&q, struct testnode, sqnode);
+        salloc(0, node);
+    }
+
+    Staq_clear(&q, true);
     return TEST_PASS;
 }
 
