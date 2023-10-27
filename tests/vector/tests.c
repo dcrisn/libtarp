@@ -16,16 +16,16 @@ struct stuff {
     const char *c;
 };
 
-define_vector(u8, uint8_t)
-define_vector(u16, uint16_t)
-define_vector(u32, uint32_t)
-define_vector(u64, uint64_t)
-define_vector(stuff, struct stuff)
-define_vector(voidptr, void *)
-define_vector(float, float)
-define_vector(double, double)
-define_vector(int, int)
-define_vector(string, const char *)
+define_vector(_u8, uint8_t)
+define_vector(_u16, uint16_t)
+define_vector(_u32, uint32_t)
+define_vector(_u64, uint64_t)
+define_vector(_stuff, struct stuff)
+define_vector(_voidptr, void *)
+define_vector(_float, float)
+define_vector(_double, double)
+define_vector(_int, int)
+define_vector(_string, const char *)
 
 enum testStatus test_vect_count(void){
     vector *vstuff = Vect_new_stuff(10);

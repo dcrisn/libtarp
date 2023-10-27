@@ -11,7 +11,7 @@ extern "C" {
 #include "vector_impl.h"
 
 /***************************************************************************
- * Vector (dynamically growing array)                                      |
+ * Vector (dynamic array)                                                  |
  *                                                                         |
  * === API ===                                                             |
  *---------------------                                                    |
@@ -27,37 +27,43 @@ extern "C" {
  *    the type and will be appended to the functions below in place of     |
  *    <name>. E.g. Vect_front_u8, Vect_pushb_db etc.                       |
  *                                                                         |
- * vector *Vect_new_<name>(size_t capacity);                               |
+ *    Strictly speaking this is only necessary if multiple vector instances|
+ *    are defined (geneated) in the same compilation unit. Otherwise the   |
+ *    SHORTNAME argument could be left emty e.g. the invocation could be   |
+ *    define_vector(,int)                                                  |
+ *                                                                         |
+ * vector *Vect_new<name>(size_t capacity);                                |
  * void Vect_destroy(vector **v);                                          |
  * void Vect_clear(vector *v);                                             |
  * bool Vect_isempty(const vector *v);                                     |
  * size_t Vect_count(const vector *v);                                     |
- * void Vect_pushb_<name>(vector *v, TYPE value);                          |
- * TYPE Vect_popb_<name>(vector *v);                                       |
- * TYPE Vect_get_<name>(const vector *v, size_t pos);                      |
- * TYPE *Vect_getptr_<name>(const vector *v, size_t pos);                  |
- * void Vect_set_<name>(vector *v, size_t pos, TYPE value);                |
- * TYPE Vect_front_<name>(const vector *v);                                |
- * TYPE Vect_back_<name>(const vector *v);                                 |
- * TYPE *Vect_begin_<name>(const vector *v);                               |
- * TYPE *Vect_end_<name>(const vector *v);                                 |
- * void Vect_resize_<name>(vector *v, size_t count, TYPE fill);            |
- * void Vect_insert_<name>(vector *v, size_t pos, TYPE value);             |
- * void Vect_remove_<name>(vector *v, size_t pos);                         |
+ * int Vect_pushb<name>(vector *v, TYPE value);                            |
+ * TYPE Vect_popb<name>(vector *v);                                        |
+ * TYPE Vect_get<name>(const vector *v, size_t pos);                       |
+ * TYPE *Vect_getptr<name>(const vector *v, size_t pos);                   |
+ * void Vect_set<name>(vector *v, size_t pos, TYPE value);                 |
+ * TYPE Vect_front<name>(const vector *v);                                 |
+ * TYPE Vect_back<name>(const vector *v);                                  |
+ * TYPE *Vect_begin<name>(const vector *v);                                |
+ * TYPE *Vect_end<name>(const vector *v);                                  |
+ * void Vect_resize<name>(vector *v, size_t count, TYPE fill);             |
+ * int Vect_insert<name>(vector *v, size_t pos, TYPE value);               |
+ * void Vect_remove<name>(vector *v, size_t pos);                          |
  *                                                                         |
  * NOTES:                                                                  |
  *  - indexing (as passed through the 'pos' argument to various functions) |
  *    is 0-based. The elements in the vector ar at positions               |
- *    0 .. Vect_count()-1.                                                 |
+ *    [0 .. Vect_count()-1].                                               |
  *  - out-of-bounds indexing, NULL pointers or other illegal inputs that   |
- *    don't meet the preconditions causes *undefined behavior* and a very  |
- *    crash. No error code is returned and inputs are expected to be valid.|
+ *    don't meet the preconditions cause *undefined behavior* and a very   |
+ *    likely crash. No error code is returned and inputs are expected to   |
+ *    be valid.                                                            |
  *    The logic behind this is that returning an error code not only makes |
  *    the function interfaces more cumbersome to use, but it's likely to   |
  *    be ignored and then kick the problem down the road by returning      |
  *    invalid unchecked outputs. Instead of code to check the error code,  |
  *    the user should write code to validate the inputs.                   |
- *    Don't pass out-of-bounds index values. Done.                         |
+ *    Don't pass out-of-bounds index values.                               |
  *                                                                         |
  * === RUNTIME COMPLEXITY CHARACTERISTICS ===                              |
  *---------------------------------------------                            |
@@ -109,7 +115,14 @@ size_t Vect_count(const vector *v);
 
 /*
  * Release all vector-associated resources and set the *v pointer to NULL.
- * v *must not* be NULL. */
+ * v *must not* be NULL.
+ *
+ * NOTE
+ * if the user elements are dynamically allocated pointers they are *not*
+ * freed. Only the vector slots storing those pointers will be freed.
+ * Therefore in this case before calling destroy() the user should iterate
+ * over the vector and deallocate dynamically allocated elements as necessary.
+ */
 void Vect_destroy(vector **v);
 
 /*
@@ -124,7 +137,14 @@ bool Vect_isempty(const vector *v);
  *
  * The capacity of v remains the same, i.e. any internal memory is not freed.
  * Shrinking/growing will happen on insertions and deletions according to the
- * usual algorithm. */
+ * usual algorithm.
+ *
+ * NOTE
+ * if the user elements are pointers to dynamically allocated memory this
+ * will make them inaccessible through the vector! IOW their memory is not
+ * released potentially causing memory leak. See the note above Vect_destroy
+ * FMI.
+ */
 void Vect_clear(vector *v);
 
 /*
@@ -143,7 +163,7 @@ size_t Vect_maxcap(size_t elemsz);
  * If the request cannot be satisfied (due to the excessive values for
  * the capacity and/or the size of each element), NULL is returned.
  */
-vector *Vect_new_<name>(size_t capacity);
+vector *Vect_new<name>(size_t capacity);
 
 /*
  * Insert the given value at the end of the vector v.
@@ -151,51 +171,52 @@ vector *Vect_new_<name>(size_t capacity);
  * v *must not* be NULL.
  *
  * The insertion may cause the vector to grow. This fails if the new
- * capacity is > Vect_maxcap().If errnum is != NULL, ERROR_OUTOFBOUNDS
- * will be stored in it. */
-void Vect_pushb_<name>(vector *v, TYPE value, int *errnum);
+ * capacity is > Vect_maxcap(). In this case ERROR_OUTOFBOUNDS is returned,
+ * the element is not pushed and the vector is not grown.
+ */
+int Vect_pushb<name>(vector *v, TYPE value, int *errnum);
 
 /*
  * Remove the last element in the vector and return it.
  *  - v must be non-NULL and non-empty. */
-TYPE Vect_popb_<name>(vector *v);
+TYPE Vect_popb<name>(vector *v);
 
 /*
  * Get the element at position pos in vector.
- * - pos must be < Vect_count()
+ * - pos is 0-based and must be < Vect_count()
  * - v must not be NULL */
-TYPE Vect_get_<name>(const vector *v, size_t pos);
+TYPE Vect_get<name>(const vector *v, size_t pos);
 
 /*
  * Get a pointer to the element at position pos in vector.
  *  - pos must be < Vect_count()
  *  - v must not be NULL */
-TYPE *Vect_getptr_<name>(const vector *v, size_t pos);
+TYPE *Vect_getptr<name>(const vector *v, size_t pos);
 
 /*
  * Set the element at position pos in vector to value.
  * - v must not be NULL
  * - pos must be < Vect_count() */
-void Vect_set_<name>(vector *v, size_t pos, TYPE value);
+void Vect_set<name>(vector *v, size_t pos, TYPE value);
 
 /*
  * Return the first element in the non-null and non-empty vector v. */
-TYPE Vect_front_<name>(const vector *v);
+TYPE Vect_front<name>(const vector *v);
 
 /*
  * Return the last element in the non-null and non-empty vector v */
-TYPE Vect_back_<name>(const vector *v);
+TYPE Vect_back<name>(const vector *v);
 
 /*
  * Return a pointer to the first element in the vector.
  *  - v must be non-NULL
  *  - if v is empty, returns the same value as Vect_end() */
-TYPE *Vect_begin_<name>(const vector *v);
+TYPE *Vect_begin<name>(const vector *v);
 
 /*
  * Return a pointer to *past* the last element in the vector.
  *  - v must be non-NULL */
-TYPE *Vect_end_<name>(const vector *v);
+TYPE *Vect_end<name>(const vector *v);
 
 /*
  * Change the vector capacity such that count elements can be accomodated.
@@ -207,15 +228,17 @@ TYPE *Vect_end_<name>(const vector *v);
  * If count > the current capacity, new elements are inserted, each
  * with value FILL.
  * If count == the current count, nothing is changed. */
-void Vect_resize_<name>(vector *v, size_t count, TYPE fill);
+void Vect_resize<name>(vector *v, size_t count, TYPE fill);
 
 /*
  * Insert an element with the specified value at position pos in the vector.
  *  - v must be non-NULL
  *  - pos must be <= Vect_count(). If pos==0, the insertion is at the front of
  *    the vector. If pos==Vect_count(), the insertion is at the back of the
- *    vector, equivalent to Vect_pushb. */
-void Vect_insert_<name>(vector *v, size_t pos, TYPE value);
+ *    vector, equivalent to Vect_pushb, and the same return value is returned
+ *    (otherwise the return value is always 0).
+ */
+int Vect_insert<name>(vector *v, size_t pos, TYPE value);
 
 /*
  * Remove the element at position pos in the vector.
@@ -223,7 +246,6 @@ void Vect_insert_<name>(vector *v, size_t pos, TYPE value);
  *  - pos must be < Vect_count(). The vector must be non-empty. */
 void Vect_remove_<name>(vector *v, size_t pos);
 #endif
-
 
 
 

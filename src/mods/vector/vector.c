@@ -2,7 +2,7 @@
 #include <tarp/log.h>
 #include <tarp/vector.h>
 
-/* 
+/*
  * Obviously, *at the very least* ensure
  * (SIZE_MAX - TARP_VECTOR_MAX_CAPACITY) >= sizeof(struct vector). */
 #define TARP_VECTOR_MAX_MEM (SIZE_MAX>>2)
@@ -80,7 +80,7 @@ struct vector *shrink__(struct vector *v){
 }
 
 void Vect_clear(vector *v){
-    assert(v); 
+    assert(v);
     v->occupied = 0;
 }
 
