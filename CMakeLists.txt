@@ -29,6 +29,7 @@ add_compile_options(
     -fstrict-aliasing
     -Wstrict-aliasing
     -fdiagnostics-color=always
+    -Wno-format-truncation
     )
 
 add_definitions(
@@ -36,6 +37,7 @@ add_definitions(
     # add functions from endian.h. Note the header and function names are
     # slightly different on the BSDs */
     -D_DEFAULT_SOURCE  # Linux, GNU libc (but probably musl etc)
+    #-DAVL_NODES_WITH_HEIGHT_FIELD
     )
 
 if (DEBUG)
