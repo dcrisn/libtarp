@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <time.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -47,14 +48,12 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...){
 void *salloc(size_t size, void *ptr){
     void *mem = NULL;
 
-    if(ptr){
-        if (!size){
-            free(ptr);
-            return NULL;
-        }
-        mem = realloc(ptr, size);
-    }else{
-        mem = calloc(1, size);
+    if (size > 0){
+        if (ptr) mem = realloc(ptr, size);
+        else     mem = calloc(1, size);
+    } else {
+        free(ptr);
+        return NULL;
     }
 
     THROW(ERROR_BADALLOC, !mem);
