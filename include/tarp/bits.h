@@ -225,8 +225,8 @@ static inline int posmsb(uint64_t v){
     if (!v) return 0;
 
     int pos = 0;
-    while (v>>=1 && ++pos);
-    return pos;
+    while ((v>>=1) && ++pos);
+    return pos+1;
 }
 
 /*
