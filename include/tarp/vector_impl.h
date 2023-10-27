@@ -12,7 +12,7 @@ struct vector {
     size_t itemsz;
 
     // not a flexible array member so as not to invalidate the user's vector
-    // handle on reallocation (only rellocate 'bytes', not the whole vector)
+    // handle on reallocation (only relocate 'bytes', not the whole vector)
     uint8_t *bytes;
 };
 
