@@ -56,9 +56,42 @@ void *salloc(size_t size, void *ptr);
 #define bool2str(val) ((val) ? "True":"False")
 
 /*
+ * Prototype for a function that when called with two non-NULL
+ * void pointers a and b, it first casts them to their proper types,
+ * compares them, and returns one of the following values:
+ *    -1  (a<b)
+ *     1  (a>b)
+ *     0  (a==b)
+ *
+ * IOW it returns one of the constant members of the comparatorResult
+ * enumeration. */
+enum comparatorResult    {LT = -1, EQ = 0, GT = 1};
+typedef enum comparatorResult (*comparator)(const void *a, const void *b);
+
+/*
+ * Predicate helpers that evaluate to boolean true when the result of
+ * comparing a and b using the given comparator is LT, GT, or EQ. */
+#define lt(a, b, cmp) (cmp(a, b) < 0)
+#define gt(a, b, cmp) (cmp(a, b) > 0)
+#define eq(a, b, cmp) (cmp(a, b) == 0)
+
+/*
  * Given a start pointer 'base' to type TYPE, get a pointer OFFSET positions
  * from it . */
 #define get_pointer_at_position(base, type, offset) (((type *)base)+offset)
 
+/*
+ * Macro that expands to 'static' when called with argument type=private,
+ * and to nothing when called with argument type=public.
+ * Useful in macros that autogenerate code so the visibility can be
+ * controlled via an argument to the macro.
+ *
+ * E.g.
+ * vis(public)  int i;     // int i
+ * vis(private) int i;     // static int i
+ */
+#define vis_private static
+#define vis_public
+#define vis(type) vis_##type
 
 #endif
