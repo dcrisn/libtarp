@@ -188,7 +188,31 @@ void Staq_swap(struct staq *a, struct staq *b){
     b->dtor = a->dtor;
 }
 
-// this is REALLLY SLOW; TODO; do it like for dllist
+/*
+ * Find the (n mod Staq_count())-th node and return it.
+ * - The staq must be non-empty.
+ * - n is 1-based; n must be > 0
+ *
+ * The search is done front/top to back/bottom.
+ */
+static inline struct staqnode *find_nth(const struct staq *sq, size_t n){
+    assert(sq);
+    assert(sq->count > 0);
+    assert(n>0);
+
+    n = n % sq->count; /* if out of bounds, wrap around */
+
+    struct staqnode *node = sq->front;
+    while (n > 0){
+        node = node->next;
+        assert(node);
+        --n;
+    }
+
+    assert(node);
+    return node;
+}
+
 void Staq_rotate(struct staq *sq, int dir, size_t num_rotations){
     assert(sq);
 
@@ -199,7 +223,7 @@ void Staq_rotate(struct staq *sq, int dir, size_t num_rotations){
 
     size_t remainder = num_rotations % sq->count;
 
-    /* no effect, stack would be left unchanged */
+    /* 360 degree rotation, no effect, stack would be left unchanged; */
     if (remainder == 0) return;
 
     /* sq->count rotations does nothing as the stack ends up unchanged;
@@ -219,26 +243,23 @@ void Staq_rotate(struct staq *sq, int dir, size_t num_rotations){
          * worth providing a right-rotate rather than only a left-rotate?
          * Yes, for convenience. For example, putting the back node at the
          * front is as simple as Staq_rotate(sq, 1, 1) with right
-         * right-rotations, without needing to consult the length. */
+         * rotations, without needing to consult the length. */
         num_rotations = sq->count - num_rotations; // num rotations to the *left*
     }
 
-    // TODO
-    // This could be done more efficiently by simply finding the node
-    // and then doing the pointer manipulations *once* at the end rather
-    // than in a loop, but it requires special cases for lists with 2 and >2
-    // nodes. if num_rotations=n, start at the head, and find the node
-    // n-2 positions after it. Then: 1) point the back of the list to that node
-    // 2) make the node at n-1 the new tail and set its .next to NULL 3) make
-    // the node at n the new head.
-    // Still linear, but aside from the linear traversal, the pointer
-    // adjustments will be constant.
-    for (size_t i = 0; i < num_rotations; ++i){
-        sq->back->next = sq->front;
-        sq->back = sq->front;
-        sq->front = sq->front->next;
-    }
-    sq->back->next = NULL;
+    /* instead of rotating node by node, in a loop (and therefore adjusting
+     * pointers in a loop), which would be quite slow, a more efficient way
+     * of doing it is:
+     * - if n=num_rotations, find the (n-1)th node in the staq.
+     * - make the (n-1)th the tail of the queue and the nth node the head.
+     * This is equivalent to rotating the staq n times. */
+    size_t n = num_rotations-1;
+    struct staqnode *pre = (n==0) ? sq->front : find_nth(sq, n);
+    assert(pre);
+    sq->back->next = sq->front; /* close circle, tail moves */
+    sq->back = pre;
+    sq->front = pre->next;
+    pre->next = NULL;
 }
 
 // turn 12345 into 54321

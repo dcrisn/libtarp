@@ -255,7 +255,7 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
              * Cur_position is of course given by 'modulus-1-i'.
              */
             size_t expected;
-            if (dir == 1){ /* rotate to toward the top of the stack */
+            if (dir == 1){ /* rotate toward the top of the stack */
                 expected = ((modulus-1-i) + (modulus-numrot))%modulus;
             } else if (dir == -1){ /* rotate to the the bottom of the stack */
                 expected = ((modulus-1-i) + numrot)%modulus;
