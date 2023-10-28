@@ -6,6 +6,12 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdlib.h>
+
+#include "math_impl.h"
+
+#define positive(n) (n >= 0)
+#define negative(n) (n < 0)
 
 /*
  * FreeBSD source code  */
@@ -21,7 +27,6 @@ extern "C" {
     static inline type min##postfix(type a, type b){ \
         return (a < b) ? a : b; \
     }
-
 
 #define define_max(type, postfix) \
     static inline type max##postfix(type a, type b){ \
@@ -42,17 +47,26 @@ define_min_and_max(unsigned int, u)
 /*
  * Find a value a > v such that a ≡  b (mod m)
  */
-static inline uint32_t find_congruent_value(uint32_t v, uint32_t b, uint32_t m)
-{
-    if (v == b) return v+m; // return next higher
-    if (v < b)	return b;
+static inline uint32_t find_congruent_value(uint32_t v, uint32_t b, uint32_t m);
 
-    /* else v > b */
-    return v + (m - ((v%m) - (b%m)));
-}
+/*
+ * Find all primes up to, but excluding, limit.
+ * For i < limit set buff[i] to 1 if i is prime and otherwise to 0.
+ *
+ * buff must be of at least size LIMIT
+ */
+void find_primes(size_t limit, char *buff);
 
-#define positive(n) (n >= 0)
-#define negative(n) (n < 0)
+/* print out all the primes in the range [1, limit). */
+void dump_primes(size_t limit);
+
+/*
+ * find square root through binary search; x must be > 0;
+ * This macro will generate a function that takes, operates, and returns
+ * an unsigned integral type specified by UNSIGNED_TYPE e.g. uint64_t.
+ */
+#define define_sqrt(NAME, UNSIGNED_TYPE)    define_sqrt__(NAME, UNSIGNED_TYPE)
+
 
 #ifdef __cplusplus
 } /* extern "C" */
