@@ -7,8 +7,6 @@ extern "C" {
 
 #include <stdlib.h>
 
-#include "dllist_impl.h"
-
 /***************************************************************************
  * Dllist - general-purpose doubly-linked list                             |
  *                                                                         |
@@ -19,9 +17,9 @@ extern "C" {
  *                                                                         |
  * The dllist is headed by a `struct dllist` structure that can be         |
  * initialized either statically on the stack or dynamically on the heap.  |
- * The dllist, as the name imlplies, is a doubly-linked list of            |
+ * The dllist, as the name implies, is a doubly-linked list (of            |
  * `struct dlnode`s intrusively embedded inside the user's own             |
- * dynamically-allocated structures.                                       |
+ * dynamically-allocated structures).                                      |
  * See the `staq` documentation FMI on this.                               |
  *                                                                         |
  * See the `staq` documentation FMI on the API: macros are provided        |
@@ -36,36 +34,39 @@ extern "C" {
  *                                                                         |
  *    struct mystruct{                                                     |
  *       uint32_t u;                                                       |
- *       struct dlnode node;  // must embed a struct dlnode                |
+ *       struct dlnode link;  // must embed a struct dlnode                |
  *    };                                                                   |
  *                                                                         |
- *    struct dllist *fifo = Dll_new();          // dynamic initialization  |
- *    struct dllist lifo  = DLLIST_INITIALIZER; // static initialization   |
+ *    // dynamic initialization                                            |
+ *    struct dllist *fifo = Dll_new(NULL);                                 |
+ *                                                                         |
+ *    // static initialization                                             |
+ *    struct dllist lifo  = DLLIST_INITIALIZER(NULL);                      |
  *                                                                         |
  *    struct mystruct *a, *b, *tmp;                                        |
  *    for (size_t i=0; i< 10; ++i){                                        |
  *       a = malloc(sizeof(struct mystruct));                              |
  *       b = malloc(sizeof(struct mystruct));                              |
  *       a->u = i; b->u = i;                                               |
- *       Dll_pushback(&lifo, a, node);  // stack push                      |
- *       Dll_pushback(fifo, b, node);   // queue enqueue                   |
+ *       Dll_pushback(&lifo, a, link);  // stack push                      |
+ *       Dll_pushback(fifo, b, link);   // queue enqueue                   |
  *    }                                                                    |
  *                                                                         |
- *   Dll_foreach(&lifo, tmp, struct mystruct){                             |
+ *   Dll_foreach(&lifo, tmp, struct mystruct, link){                       |
  *      printf("LIFO value: %u", tmp->u);                                  |
  *   }                                                                     |
  *                                                                         |
  *   for (size_t i=0; i < 10; ++i){                                        |
- *       a = Dll_popback(&lifo, struct mystruct);                          |
+ *       a = Dll_popback(&lifo, struct mystruct, link);                    |
  *       printf("popped %u\n", a->u);                                      |
  *       free(a);                                                          |
  *                                                                         |
- *       b = Dll_popfront(fifo, struct mystruct);                          |
+ *       b = Dll_popfront(fifo, struct mystruct, link);                    |
  *       printf("dequeued %u\n", b->u);                                    |
  *       free(b);                                                          |
  *   }                                                                     |
  *                                                                         |
- *  Dll_destroy(&fifo, true);  // must destroy dynamic dllist              |
+ *  Dll_destroy(&fifo, false);  // must destroy dynamic dllist             |
  *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~        |
  *                                                                         |
  *                                                                         |
@@ -81,7 +82,7 @@ extern "C" {
  * - bidirectional iteration                                               |
  *                                                                         |
  * Dll_new                      O(1)                                       |
- * Dll_destroy                  O(n) // constant if list empty             |
+ * Dll_destroy                  O(n) // see [1]                            |
  * Dll_clear                    O(n)                                       |
  * Dll_count                    O(1)                                       |
  * Dll_empty                    O(1)                                       |
@@ -109,6 +110,8 @@ extern "C" {
  * Dll_rotate                   O(n)                                       |
  * Dll_rotateto                 O(1)                                       |
  * Dll_find_nth                 O(n)                                       |
+ *                                                                         |
+ * [1] - constant if the list is empty or free_containers=false            |
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |
  *                                                                         |
  * ~ NOTES ~                                                               |
@@ -119,9 +122,9 @@ extern "C" {
  *   the length of the list is traversed exactly once. The number of       |
  *   pointers changed for the actual rotation is otherwise constant.       |
  * - Dll_destroy and Dll_clear only take linear time if the list is not    |
- *   empty. This is because it must be traversed to free the nodes.        |
- *   If the nodes need not be freed or if the list is empty, their runtime |
- *   is constant.                                                          |
+ *   empty AND free_containers=true. This is because it must be traversed  |
+ *   to free the nodes. If the nodes need not be freed or if the list is   |
+ *   empty, their runtime is constant.                                     |
  * - Dll_split is linear but LESS than the length of the original list is  |
  *   traversed exactly once. Pointer manipulation for the actual split is  |
  *   otherwise constant.                                                   |
@@ -130,19 +133,26 @@ extern "C" {
 typedef struct dllist dllist;
 typedef struct dlnode dlnode;
 
+/* see the comments on the staqnode_destructor prototype in tarp/staq.h */
+typedef void (*dlnode_destructor)(struct dlnode *node);
 
-/* Macro/function initializer for static dllists; they do the same thing */
-#define DLLIST_INITIALIZER (struct dllist){ .count=0, .front=NULL, .back=NULL }
-void Dll_init(struct dllist *list);
+#include "dllist_impl.h"
+
+/* Macro/function initializer for static dllists; they do the same thing;
+ * See the comments above STAQ_INITIALIZER in tarp/staq.h fmi.   */
+#define DLLIST_INITIALIZER(dtor) DLLIST_INITIALIZER__(dtor)
+void Dll_init(struct dllist *list, dlnode_destructor dtor);
 
 /*
  * Get a dynamically allocated and initialized dllist.
  * The user must call Dll_destroy() on this when no longer needed. */
-struct dllist *Dll_new(void);
+struct dllist *Dll_new(dlnode_destructor dtor);
 
 /*
  * Remove all nodes from the list and optionally free() the containers.
- *  - list must be non-NULL */
+ *  - list must be non-NULL
+ *  - see main README FMI.
+ */
 void Dll_clear(struct dllist *list, bool free_containers);
 
 /*
@@ -150,7 +160,9 @@ void Dll_clear(struct dllist *list, bool free_containers);
  * then free the memory that had been allocated for the dllist handle
  * itself as returned by Dll_new, then finally set the list pointer to NULL.
  * - list must not be NULL and must point to a valid dllist handle returned
- *   by Dll_new. */
+ *   by Dll_new.
+ * - see main README fmi.
+ */
 void Dll_destroy(struct dllist **list, bool free_containers);
 
 /* Return number of elements in the non-NULL list */
@@ -160,12 +172,12 @@ size_t Dll_count(const struct dllist *list);
 bool Dll_empty(const struct dllist *list);
 
 /*
- * Get the next element after cont or the one previous one before it.
+ * Get the next element after cont or the previous one before it.
  * cont must be a pointer to structure that contains an embedded
  * dlnode as a field with the specified name, and it must currently
  * exist in a dllist. */
-#define Dll_next(cont, dlnode_field) (Dll_nextnode(&((cont)->dlnode_field)))
-#define Dll_prev(cont, dlnode_field) (Dll_prevnode(&((cont)->dlnode_field)))
+#define Dll_next(cont, field) Dll_next_(cont, field)
+#define Dll_prev(cont, field) Dll_prev(cont, field)
 
 /*
  * Get the front or back, without removing it, of the specified list.
@@ -178,8 +190,8 @@ bool Dll_empty(const struct dllist *list);
  * A pointer to the structure containing the dlnode at the front/back of
  * the list. This is of type <container_type>. This is NULL if the list
  * is empty */
-#define Dll_front(list, container_type)  Dll_peekfront_type(list, container_type)
-#define Dll_back(list, container_type)   Dll_peekback_type(list, container_type)
+#define Dll_front(list, container_type, field)  Dll_front_(list, container_type, field)
+#define Dll_back(list, container_type, field)   Dll_back_(list, container_type, field)
 
 /*
  * Push a container to the front/back of the specified list.
@@ -187,8 +199,8 @@ bool Dll_empty(const struct dllist *list);
  * --> container, field
  * container is a pointer to structure that has a dlnode embedded inside it
  * as a field with the specified name. */
-#define Dll_pushback(list, container, field)  Dll_push_back_type(list, container, field)
-#define Dll_pushfront(list, container, field) Dll_push_front_type(list, container, field)
+#define Dll_pushback(list, container, field)  Dll_pushback_(list, container, field)
+#define Dll_pushfront(list, container, field) Dll_pushfront_(list, container, field)
 
 /*
  * Pop a container from the front/back of the specified list.
@@ -196,14 +208,14 @@ bool Dll_empty(const struct dllist *list);
  * <-- return
  * A pointer to a structure of type <container_type> that has a dlnode
  * embedded inside it. */
-#define Dll_popback(list, container_type)     Dll_pop_back_type(list, container_type)
-#define Dll_popfront(list, container_type)    Dll_pop_front_type(list, container_type)
+#define Dll_popback(list, container_type, field)   Dll_popback_(list, container_type, field)
+#define Dll_popfront(list, container_type, field)  Dll_popfront_(list, container_type, field)
 
 /* Remove the specified container from the list.
  * The list must be non-NULL.
  * cont is a non-NULL pointer to a structure containing a dlnode as a field
  * with the specified name, and *must* exist in the list. */
-#define Dll_popnode(list, cont, dlnode_field) Dll_pop_node(list, &((cont)->field))
+#define Dll_popnode(list, cont, field) Dll_popnode_(list, cont, field)
 
 /*
  * Iterate over each element in the list, front to back.
@@ -219,26 +231,27 @@ bool Dll_empty(const struct dllist *list);
  *  - Dll_popnode, Dll_delnode, Dll_put_before, Dll_put_after.
  * No other changes should be made to any other parts of the list or the list
  * head. */
-#define Dll_foreach(list, i, container_type)                                 \
-    for (                                                                    \
-        struct dlnode *dln_tmp = (list)->front,                              \
-          *dln_tmp_next = ((dln_tmp) ? dln_tmp->next : NULL);                \
-        (i = ((dln_tmp) ? container(dln_tmp, container_type): NULL));        \
-        dln_tmp=dln_tmp_next, dln_tmp_next=(dln_tmp ? dln_tmp->next : NULL)  \
-            )
+#define Dll_foreach(list, i, container_type, field)  \
+    Dll_foreach_(list, i, container_type, field)
 
 /* Iterate over each element in the list, back to front.
  * See Dll_foreach FMI. */
-#define Dll_foreach_reverse(list, i, container_type)                         \
-    for (                                                                    \
-        struct dlnode *dln_tmp = (list)->back,                               \
-          *dln_tmp_prev = ((dln_tmp) ? dln_tmp->prev : NULL);                \
-        (i = ((dln_tmp) ? container(dln_tmp, container_type): NULL));        \
-        dln_tmp=dln_tmp_prev, dln_tmp_prev=(dln_tmp ? dln_tmp->prev : NULL)  \
-            )
+#define Dll_foreach_reverse(list, i, container_type, field)  \
+    Dll_foreach_reverse_(list, i, container_type, field)
+
+/* Like Dll_foreach but i is set to point to each link
+ * as opposed to container. */
+#define Dll_foreach_node(list, i)   \
+    Dll_foreach_node_(list, i)
+
+/* Iterate over each element in the list, back to front.
+ * See Dll_foreach FMI. */
+#define Dll_foreach_node_reverse(list, i)   \
+    Dll_foreach_node_reverse(list, i)
 
 /*
- * Join the non-NULL lists a and b such that b's front is joined to a's back */
+ * Join the non-NULL lists a and b such that b's front is joined to a's back;
+ * b is reset as if it was newly initialized */
 void Dll_join(struct dllist *a, struct dllist *b);
 
 /*
@@ -274,9 +287,8 @@ void Dll_upend(struct dllist *list);
  * <-- return
  * a pointer to a structure of type <container_type> that has a
  * dlnode embedded inside it. NULL if list is empty. */
-#define Dll_find_nth(list, n, container_type)                 \
-    ((n==0 || n > Dll_count(list)) ? NULL                     \
-      : container(Dll_find_nth_node(list,n), container_type))
+#define Dll_find_nth(list, n, container_type, field)                 \
+    Dll_find_nth_(list, n, container_type, field)
 
 /*
  * Rotate the non-NULL list until <container> ends up at the front.
@@ -285,7 +297,7 @@ void Dll_upend(struct dllist *list);
  * inside it as a field with the specified name. The node must exist
  * in the list. */
 #define Dll_rotateto(list, container, dlnode_field)             \
-    Dll_rotate_to_node(list, &((container)->dlnode_field))
+    Dll_rotateto_(list, container, dlnode_field)
 
 /*
  * Remove conta from the non-NULL list and replace it with contb.
@@ -295,7 +307,7 @@ void Dll_upend(struct dllist *list);
  * conta *must* exist in the list. contb *must not* exist in the list.
  */
 #define Dll_replace(list, conta, contb, dlnode_field) \
-    Dll_replace_node(list, &((conta)->dlnode_field), Dll_prepare_node(&((contb)->dlnode_field), contb))
+    Dll_replace_(list, conta, contb, dlnode_field)
 
 /*
  * Replace a with b and b with a in the given non-NULL list.
@@ -314,24 +326,20 @@ void Dll_upend(struct dllist *list);
  * conta must exist in the list, contb must *not* exist in the list.
  */
 #define Dll_put_after(list, conta, contb, dlnode_field)             \
-        Dll_put_node_after(list,                                    \
-                &((conta)->dlnode_field),                           \
-                Dll_prepare_node(&((contb)->dlnode_field), contb))
+    Dll_put_after_(list, conta, contb, dlnode_field)
 
 /*
  * Insert contb before conta in the specified non-NULL list.
  * See Dll_put_after fmi. */
 #define Dll_put_before(list, conta, contb, dlnode_field)           \
-        Dll_put_node_before(list,                                  \
-                &((conta)->dlnode_field),                          \
-                Dll_prepare_node(&((contb)->dlnode_field), contb))
+    Dll_put_before_(list, conta, contb, dlnode_field)
 
 /*
  * Remove *and free()* the specified node cont from the list.
  * - both cont and list must be non-NULL valid pointers and cont
  *   must exist in the list */
-#define Dll_delnode(list, cont, dlnode_field)                      \
-    Dll_remove_node(list, &((cont)->dlnode_field), true)
+#define Dll_delnode(list, cont, field)                      \
+    Dll_remove_node(list, &((cont)->field), true)
 
 /*
  * Remove *and free* the element at the front/back of the non-NULL list. */

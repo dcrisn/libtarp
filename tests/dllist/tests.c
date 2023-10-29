@@ -17,6 +17,7 @@ extern enum testStatus test_headswap(void);
 extern enum testStatus test_remove_front_and_back(void);
 extern enum testStatus test_list_join(void);
 extern enum testStatus test_list_split(void);
+extern enum testStatus test_list_performance(void);
 
 
 int main(int argc, char **argv){
@@ -42,7 +43,9 @@ int main(int argc, char **argv){
     Cohort_add(tests, test_headswap, "test that list heads can be swapped");
     Cohort_add(tests, test_remove_front_and_back, "Can remove front and back");
     Cohort_add(tests, test_list_join, "test list concatenation");
-    Cohort_add(tests, test_list_split, "test list concatenation");
+    Cohort_add(tests, test_list_split, "test list splitting");
+
+    //Cohort_add(tests, test_list_performance, "test list performance");
 
 
     enum testStatus res = Cohort_decimate(tests);

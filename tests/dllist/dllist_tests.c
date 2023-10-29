@@ -5,6 +5,7 @@
 
 #include <tarp/cohort.h>
 #include <tarp/common.h>
+#include <tarp/container.h>
 #include <tarp/log.h>
 #include <tarp/dllist.h>
 
@@ -12,6 +13,10 @@ struct testnode {
     size_t num;
     struct dlnode link;
 };
+
+void destructor(struct dlnode *node){
+    salloc(0, container(node, struct testnode, link));
+}
 
 /*
  * By default:
@@ -24,7 +29,7 @@ struct testnode {
  */
 enum testStatus test_enqdq_pushpop(size_t size, bool reversed_front_back, bool stackmode)
 {
-    struct dllist *list = Dll_new();
+    struct dllist *list = Dll_new(destructor);
 
     /* push size elements to the list one by one, then pop them
     * off and see if the count remains consistent throughout */
@@ -46,7 +51,7 @@ enum testStatus test_enqdq_pushpop(size_t size, bool reversed_front_back, bool s
 
 #if 0
     struct testnode *tmp;
-    Dll_foreach(list, tmp, struct testnode){
+    Dll_foreach(list, tmp, struct testnode, link){
         debug("tmp->num %zu", tmp->num);
     }
 #endif
@@ -56,8 +61,8 @@ enum testStatus test_enqdq_pushpop(size_t size, bool reversed_front_back, bool s
 
         if (stackmode){
             node = reversed_front_back
-                ? Dll_popfront(list, struct testnode)
-                : Dll_popback(list, struct testnode);
+                ? Dll_popfront(list, struct testnode, link)
+                : Dll_popback(list, struct testnode, link);
 
             assert(node);
             if (node->num != size+1-i){
@@ -67,8 +72,8 @@ enum testStatus test_enqdq_pushpop(size_t size, bool reversed_front_back, bool s
         }
         else{
             node = reversed_front_back
-                ? Dll_popback(list, struct testnode)
-                : Dll_popfront(list, struct testnode);
+                ? Dll_popback(list, struct testnode, link)
+                : Dll_popfront(list, struct testnode, link);
 
             assert(node);
             if (node->num != i){
@@ -130,10 +135,10 @@ enum testStatus test_count_push_pop(void){
     return TEST_PASS;
 }
 
-// test clear and destroy
+// test clear and destrog
 enum testStatus test_list_destruction(void){
-    struct dllist a = DLLIST_INITIALIZER;
-    struct dllist *b = Dll_new();
+    struct dllist a = DLLIST_INITIALIZER(destructor);
+    struct dllist *b = Dll_new(destructor);
     struct testnode *node;
 
     for (size_t i = 0; i < 500; ++i){
@@ -153,7 +158,7 @@ enum testStatus test_list_destruction(void){
 
 // test if the nth node can be found
 enum testStatus test_find_nth_node(void){
-    struct dllist list = DLLIST_INITIALIZER;
+    struct dllist list = DLLIST_INITIALIZER(destructor);
     struct testnode *node;
     size_t num = 500;
     for (size_t i = 1; i<=num; i++){
@@ -163,7 +168,7 @@ enum testStatus test_find_nth_node(void){
     }
 
     for (size_t i = 1; i<=num; ++i){
-        node = Dll_find_nth(&list, i, struct testnode);
+        node = Dll_find_nth(&list, i, struct testnode, link);
         assert(node);
         if(node->num != i){
             debug("expected %zu got %zu", i, node->num);
@@ -171,7 +176,7 @@ enum testStatus test_find_nth_node(void){
         }
     }
 
-    node = Dll_find_nth(&list, Dll_count(&list)+1, struct testnode);
+    node = Dll_find_nth(&list, Dll_count(&list)+1, struct testnode, link);
     if (node != NULL){
         debug("expected NULL, got %zu", node->num);
         return TEST_FAIL;
@@ -183,7 +188,7 @@ enum testStatus test_find_nth_node(void){
 
 // test reversing the list nodes
 enum testStatus test_list_upend(void){
-    struct dllist list = DLLIST_INITIALIZER;
+    struct dllist list = DLLIST_INITIALIZER(destructor);
     struct testnode *node;
 
     //size_t sizes[] = {1, 2, 3, 10, 100, 1000, 10000};
@@ -202,7 +207,7 @@ enum testStatus test_list_upend(void){
 
         // on upending the whole list, expect value to match j exactly
         for (size_t j = 1; j<=size; ++j){
-            node = Dll_popfront(&list, struct testnode);
+            node = Dll_popfront(&list, struct testnode, link);
             assert(node);
             if (node->num != j){
                 debug("expected %zu got %zu", j, node->num);
@@ -231,7 +236,7 @@ enum testStatus test_list_rotation__(size_t size, size_t rotations, int dir){
      *  - pop the elements from the list and verify the elements in the list
      *    have been rotated by num_rotations positions */
     for (size_t num_rotations = 0; num_rotations <= rotations; ++num_rotations){
-        struct dllist list = DLLIST_INITIALIZER;
+        struct dllist list = DLLIST_INITIALIZER(destructor);
 
         // insert items with values 0...size-1, i.e. all values mod size
         for (size_t i = 0; i < size; ++i){
@@ -251,7 +256,7 @@ enum testStatus test_list_rotation__(size_t size, size_t rotations, int dir){
 
         size_t modulus = size;
         for (size_t i = 0; i < size; ++i){
-            struct testnode *node = Dll_popfront(&list, struct testnode);
+            struct testnode *node = Dll_popfront(&list, struct testnode, link);
 
             /* discard congruent multiples (a%n == (a+(k*n))%n) */
             size_t numrot = num_rotations % size;
@@ -293,7 +298,7 @@ enum testStatus test_list_rotation(void){
 
 // rotate list as many times as neeed to make a specified node the front
 enum testStatus test_list_rotation_to_node(void){
-    struct dllist list = DLLIST_INITIALIZER;
+    struct dllist list = DLLIST_INITIALIZER(destructor);
     struct testnode *node;
 
     size_t size = 350;
@@ -303,10 +308,10 @@ enum testStatus test_list_rotation_to_node(void){
     }
 
     for (size_t i=1; i<=size; ++i){
-        node = Dll_find_nth(&list, i, struct testnode);
+        node = Dll_find_nth(&list, i, struct testnode, link);
         assert(node);
         Dll_rotateto(&list, node, link);
-        if (Dll_front(&list, struct testnode) != node){
+        if (Dll_front(&list, struct testnode, link) != node){
             debug("front does not match expected node");
             return TEST_FAIL;
         }
@@ -318,7 +323,7 @@ enum testStatus test_list_rotation_to_node(void){
 
 // test that modifying the list while iterating over it is fine
 enum testStatus test_foreach_forward(void){
-    struct dllist *list = Dll_new();
+    struct dllist *list = Dll_new(destructor);
     struct testnode *node;
 
     size_t num = 9;
@@ -334,7 +339,7 @@ enum testStatus test_foreach_forward(void){
      * insert 0x01 before items with values 5 and 6
      * insert 0x2 before items with values 5 and 6 */
     struct testnode *iter;
-    Dll_foreach(list, iter, struct testnode){
+    Dll_foreach(list, iter, struct testnode, link){
         if (iter->num <= 2 || iter->num >= 7){
             Dll_delnode(list, iter, link);
         } else if (iter->num ==3 || iter->num == 4){
@@ -364,7 +369,7 @@ enum testStatus test_foreach_forward(void){
 
     uint64_t values[] = {0xff, 0xff, 0x1, 0x5, 0x2, 0x1, 0x6, 0x2};
     for (size_t i = 0; i < (num-1); ++i){
-        node = Dll_front(list, struct testnode);
+        node = Dll_front(list, struct testnode, link);
         assert(node);
         if (values[i] != node->num){
             debug("expected %zu got %zu", values[i], node->num);
@@ -380,8 +385,8 @@ enum testStatus test_foreach_forward(void){
 // test that 2 lists can swap heads
 enum testStatus test_headswap(void){
     struct dllist a,b;
-    a = DLLIST_INITIALIZER;
-    b= DLLIST_INITIALIZER;
+    a = DLLIST_INITIALIZER(destructor);
+    b= DLLIST_INITIALIZER(destructor);
 
     uint64_t vals[] = {1, 2, 3, 4, 5, 6, 7};
     // create 2 lists, one with all items, one only with the last 3, then
@@ -409,7 +414,7 @@ enum testStatus test_headswap(void){
     }
 
     for (size_t i=0; i<ARRLEN(vals);++i){
-        struct testnode *node = Dll_popfront(&b, struct testnode);
+        struct testnode *node = Dll_popfront(&b, struct testnode, link);
         assert(node);
         if (node->num != vals[i]){
             debug("expected %zu got %zu", vals[i], node->num);
@@ -418,7 +423,7 @@ enum testStatus test_headswap(void){
         free(node);
     }
     for (size_t i=ARRLEN(vals)-4; i<ARRLEN(vals);++i){
-        struct testnode *node = Dll_popfront(&a, struct testnode);
+        struct testnode *node = Dll_popfront(&a, struct testnode, link);
         assert(node);
         if (node->num != vals[i]){
             debug("expected %zu got %zu", vals[i], node->num);
@@ -432,7 +437,7 @@ enum testStatus test_headswap(void){
 
 // can front and back be removed and are they freed correctly
 enum testStatus test_remove_front_and_back(void){
-    struct dllist a = DLLIST_INITIALIZER;
+    struct dllist a = DLLIST_INITIALIZER(destructor);
     struct testnode *node;
 
     size_t num = 2300;
@@ -465,7 +470,7 @@ enum testStatus test_remove_front_and_back(void){
 }
 
 enum testStatus test_list_join(void){
-    struct dllist a = DLLIST_INITIALIZER, b = DLLIST_INITIALIZER;
+    struct dllist a = DLLIST_INITIALIZER(destructor), b = DLLIST_INITIALIZER(destructor);
     struct testnode *node;
 
     size_t len = 7482;
@@ -483,7 +488,7 @@ enum testStatus test_list_join(void){
     // with the correct concatenation 0...n,0...n
     Dll_join(&a, &b);
 #if 0
-    Dll_foreach(&a, node, struct testnode){
+    Dll_foreach(&a, node, struct testnode, link){
         info("val %zu", node->num);
     }
 #endif
@@ -495,7 +500,7 @@ enum testStatus test_list_join(void){
     }
 
     for (size_t i = 0; i<len*2; ++i){
-        node = Dll_popfront(&a, struct testnode);
+        node = Dll_popfront(&a, struct testnode, link);
         assert(node);
         if (node->num != i%len){
             debug("expected %zu got %zu", i%len, node->num);
@@ -507,7 +512,7 @@ enum testStatus test_list_join(void){
 }
 
 enum testStatus test_list_split(void){
-    struct dllist a = DLLIST_INITIALIZER;
+    struct dllist a = DLLIST_INITIALIZER(destructor);
     struct testnode *node;
 
     size_t len = 15;
@@ -533,7 +538,7 @@ enum testStatus test_list_split(void){
     }
 
     for (size_t i = 0; i< (len/2); ++i){
-        node = Dll_popfront(&a, struct testnode);
+        node = Dll_popfront(&a, struct testnode, link);
         assert(node);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
@@ -543,7 +548,7 @@ enum testStatus test_list_split(void){
     }
 
     for (size_t i = b_len-1; i< len; ++i){
-        node = Dll_popfront(b, struct testnode);
+        node = Dll_popfront(b, struct testnode, link);
         assert(node);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
@@ -556,3 +561,35 @@ enum testStatus test_list_split(void){
     return TEST_PASS;
 }
 
+/*
+ * Push massive number of nodes;
+ * With each pushed node:
+ *  - rotate the list 100 times to the back/bottom
+ *  - upend the whole staq
+ *  - rotate the staq 100 times to the front/top
+ */
+extern enum testStatus test_list_performance(void){
+    debug("sizeof of dlnode is %zu", sizeof(struct dlnode));
+    size_t num = 80 * 1000;
+    //size_t num = 80 * 1000 * 1000;
+    //size_t num = 87;
+
+    struct dllist q = DLLIST_INITIALIZER(destructor);
+    struct testnode *node;
+
+    for (size_t i = 0; i < num; i++){
+        node = salloc(sizeof(struct testnode), NULL);
+        Dll_pushback(&q, node, link);
+        Dll_rotate(&q, 1, 100);
+        Dll_upend(&q);
+        Dll_rotate(&q, -1, 100);
+    }
+
+    for (size_t i = 0; i < num; ++i){
+        node = Dll_popfront(&q, struct testnode, link);
+        salloc(0, node);
+    }
+
+    Dll_clear(&q, true);
+    return TEST_PASS;
+}

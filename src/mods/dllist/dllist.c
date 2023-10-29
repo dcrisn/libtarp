@@ -1,18 +1,19 @@
 #include <tarp/common.h>
 #include <tarp/dllist.h>
 #include <tarp/log.h>
+#include <tarp/error.h>
 
 // equivalent to DLLIST_INITIALIZER, used to initialize statically
 // declared dllists. DLLIST_INITIALIZER uses c99 designated initializers
 // which will not compile with standard C++ (11)
-void Dll_init(struct dllist *list){
+void Dll_init(struct dllist *list, dlnode_destructor dtor){
     assert(list);
-    *list = DLLIST_INITIALIZER;
+    *list = DLLIST_INITIALIZER(dtor);
 }
 
-struct dllist *Dll_new(void){
+struct dllist *Dll_new(dlnode_destructor dtor){
     struct dllist *list = salloc(sizeof(struct dllist), NULL);
-    *list = DLLIST_INITIALIZER;
+    *list = DLLIST_INITIALIZER(dtor);
     return list;
 }
 
@@ -20,14 +21,15 @@ void Dll_clear(struct dllist *list, bool free_containers){
     assert(list);
     if (list->count == 0) return;
 
-    void *container;
     if (free_containers){
-        Dll_foreach(list, container, void){
-            free(container);
+        THROWS(ERROR_MISCONFIGURED, list->dtor==NULL, "missing destructor"); 
+        struct dlnode *i;
+        Dll_foreach_node(list, i){
+            list->dtor(i);
         }
     }
 
-    *list = DLLIST_INITIALIZER;  // reset
+    *list = DLLIST_INITIALIZER(list->dtor);  // reset
 }
 
 void Dll_destroy(struct dllist **list, bool free_containers){
@@ -58,12 +60,12 @@ struct dlnode *Dll_peek_back(const struct dllist *list){
     return list->back;
 }
 
-struct dlnode *Dll_nextnode(struct dlnode *node){
+struct dlnode *Dll_nextnode(const struct dlnode *node){
     assert(node);
     return node->next;
 }
 
-struct dlnode *Dll_prevnode(struct dlnode *node){
+struct dlnode *Dll_prevnode(const struct dlnode *node){
     assert(node);
     return node->prev;
 }
@@ -189,7 +191,10 @@ void Dll_remove_node(struct dllist *list, struct dlnode *node, bool free_contain
         list->count--;
     }
 
-    if (free_container) free(node->container);
+    if (free_container){
+        THROWS(ERROR_MISCONFIGURED, list->dtor==NULL, "missing destructor"); 
+        list->dtor(node);
+    }
 }
 
 // pop the specified node from the list, but do *not* free() it
@@ -304,7 +309,7 @@ void Dll_join(struct dllist *a, struct dllist *b){
     }
 
     a->count += b->count;
-    *b = DLLIST_INITIALIZER; /* reset */
+    *b = DLLIST_INITIALIZER(NULL); /* reset */
 }
 
 static inline size_t count_list_nodes(struct dllist *list){
@@ -327,9 +332,9 @@ static inline size_t count_list_nodes(struct dllist *list){
 struct dllist *Dll_split_list(struct dllist *list, struct dlnode *node){
     assert(list);
     assert(node);
-
+    
     size_t orig_len = list->count;
-    struct dllist *b = Dll_new();
+    struct dllist *b = Dll_new(list->dtor);
 
     if (node == list->front){
         Dll_swap_list_heads(list, b);
