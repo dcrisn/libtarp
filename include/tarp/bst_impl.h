@@ -162,6 +162,43 @@ static inline void println__(struct dllist *list){
     }
 }
 
+/*
+ * Pretty print of a tree to the console. For example:
+ *
+ *             .---- (4) bwdad
+ *           .---- (3) bde
+ *       .---- (2) bd
+ *       :   `---- (3) bca
+ *   <[(1)] bc
+ *       :   .---- (3) bbb
+ *       `---- (2) bb
+ *           :   .---- (4) bar
+ *           `---- (3) ba
+ *
+ * Parenthesized are the levels. Root is at level one.
+ * The function is meant as a visual debugging tool. It immediately gives
+ * you an idea of how balanced, or, conversely, degenerate, a tree is,
+ * for example.
+ *
+ * --> parent
+ *     The parent of the current node. Calling code should pass this as NULL
+ *     since the first node is root, which doesn't have a parent. Then the
+ *     function will call itself recursively starting from root.
+ *
+ * --> backlog
+ *     A linked list/ queue of strings (dllist), that the function must print
+ *     when reaching a particular node *before* printing the string
+ *     representation of the node itself. See below fmi.
+ *
+ * --> level
+ *    The current level the current node is at. Root is at level 1. Calling code
+ *    should therefore pass 1 for this parameter. This will then get incremented
+ *    recursively.
+ *
+ * --> node
+ *     The current node. Calling code should pass the root of a tree object for
+ *     this parameter.
+ */
 #define define_bst_graphic_dump_(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE,   \
         PRINTER_TYPE)                                                        \
     vis(vistype) void SHORTNAME##_dump_tree_graph(                           \

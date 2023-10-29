@@ -109,3 +109,7 @@ define_bst_height_getter(public, Bst, struct bstnode)
  */
 define_bst_graphic_dump(public, Bst, struct bst, struct bstnode, bstnode_printer)
 
+
+
+// TODO
+//void Bst_print(struct bst *tree, bool graphed, bstnode_printer pf);
