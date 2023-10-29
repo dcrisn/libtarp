@@ -11,8 +11,10 @@
 #include <tarp/avl.h>
 #include <tarp/staq.h>
 
+
 struct testnode {
-    size_t num;
+    size_t key;
+    size_t data;
     struct avlnode link;
     struct staqnode list;
 };
@@ -27,9 +29,9 @@ enum comparatorResult compf(const struct avlnode *a_, const struct avlnode *b_)
     assert(a);
     assert(b);
 
-    //debug("comparing a=%zu b=%zu", a->num, b->num);
-    if (a->num < b->num) return -1;
-    if (a->num > b->num) return 1;
+    //debug("comparing a=%zu b=%zu", a->key, b->key);
+    if (a->key < b->key) return -1;
+    if (a->key > b->key) return 1;
     return 0;
 }
 
@@ -40,7 +42,7 @@ const char *testnode2string(const struct avlnode *data){
     size_t len = 1024;
     char *buff = salloc(len, NULL);
     memset(buff, 0, len);
-    snprintf(buff, len, "%zu", node->num);
+    snprintf(buff, len, "%zu", node->key);
     return buff; // caller must free it
 }
 
@@ -54,31 +56,40 @@ void staq_dtor(struct staqnode *node){
     salloc(0, container(node, struct testnode, list));
 }
 
+
+
+
+// test insertion and lookup
 enum testStatus test_avl_insert(void){
     struct avltree tree = AVL_INITIALIZER(compf, destructor);
     struct testnode *node, *k;
 
     size_t num = 5 * 1000;
-    debug("===== insertion =====");
+    //debug("===== insertion =====");
     for (size_t i = 0; i < num; ++i){
         //debug("inserting node %zu", i);
         node = new_testnode();
-        node->num = i;
+        node->key = i;
         Avl_insert(&tree, node, link);
+    }
+
+    if (Avl_count(&tree) != num){
+        debug("tree count wrong: expected %zu got %zu", num, Avl_count(&tree));
+        return TEST_FAIL;
     }
 
     //debug("print it out, count=%zu ", Avl_count(&tree));
     //Avl_print(&tree, true, testnode2string);
 
-    debug("====lookup=====");
+    //debug("====lookup=====");
     // verify each inserted node is found
     for (size_t i = 0; i < num; ++i){
         k = new_testnode();
-        k->num = i;
+        k->key = i;
         struct avlnode *n = Avl_find_node(&tree, &k->link);
         node = n ? container(n, struct testnode, link) : NULL;
-        if (!node || node->num != k->num){
-            debug("expected %zu got %zu %p", k->num, node?node->num:0, node ? (void*)node : NULL);
+        if (!node || node->key != k->key){
+            debug("expected %zu got %zu %p", k->key, node?node->key:0, node ? (void*)node : NULL);
             return TEST_FAIL;
         }
         salloc(0, k);
@@ -91,7 +102,7 @@ enum testStatus test_avl_insert(void){
 /*
  * Insert:
  * - a certain number of sequential values, then remove them;
- * - a cerrtain number of random values, then remove them
+ * - a certain number of random values, then remove them
  * - a preselected sequence of values known to include double rotations
  * After each insert and after each delete, verify that the balance
  * factors at each node are correct and the heights of the trees match
@@ -115,9 +126,9 @@ enum testStatus test_avl_invariant_through_inserts_and_deletes(struct staq *inpu
         node = Staq_front(inputs, struct testnode, list);
         assert(node);
         if (!Avl_insert(&tree, node, link)){
-            //debug("duplicate value %zu", node->num);
+            //debug("duplicate value %zu", node->key);
             /* ensure it is actually a duplicate and not some weird insert fail*/
-            assert(Avl_has(&tree, node, struct testnode, link));
+            assert(Avl_has(&tree, node, link));
             continue;
         }
 
@@ -128,19 +139,19 @@ enum testStatus test_avl_invariant_through_inserts_and_deletes(struct staq *inpu
         }
     }
 
+#if 0
     //info("============== tree before deletions ================ ");
     //Avl_print(&tree, true, testnode2string);
     //exit(0);
 
-#if 0
     size_t height = Avl_height(&tree);
     struct staq q;
     struct testnode *cursor;
     info("\n============ BEFORE DELETE =====================");
     for (size_t j = 1; j <= height; ++j){
         info("===LEVEL %zu (tree count %zu)===", j, tree.count);
-        Avl_foreach_node_at_level(&tree, j, &q, cursor, struct testnode){
-            info("value=%zu bf=%i", cursor->num, cursor->link.bf);
+        Avl_foreach_node_at_level(&tree, j, &q, cursor, struct testnode, link){
+            info("value=%zu bf=%i", cursor->key, cursor->link.bf);
         }
     }
     info("==================================\n");
@@ -155,27 +166,15 @@ enum testStatus test_avl_invariant_through_inserts_and_deletes(struct staq *inpu
         bool deleted = Avl_unlink(&tree, node, link);
 
         if (!deleted){
-            if (Avl_has(&tree, node, testnode, link)){
-                debug("failed to delete node with value %zu from tree", node->num);
+            if (Avl_has(&tree, node, link)){
+                debug("failed to delete node with value %zu from tree", node->key);
                 return TEST_FAIL;
             }
         }
 
-    #if 0
-        // dump each tree level between removals
-        size_t height = Avl_height(&tree);
-        struct testnode *cursor;
-        struct staq q = STAQ_INITIALIZER;
-        for (size_t j = 1; j <= height; ++j){
-            info("===LEVEL %zu (tree count %zu)===", j, tree.count);
-            Avl_foreach_node_at_level(&tree, j, &q, cursor, struct testnode){
-                info("value=%zu bf=%i", cursor->num, cursor->link.bf);
-            }
-        }
-    #endif
         if (!isavl(&tree)){
             debug("tree in invalid AVL state after deletion of %zu (count=%zu)",
-                    node->num, Avl_count(&tree));
+                    node->key, Avl_count(&tree));
             info("returning fail here");
             return TEST_FAIL;
         }
@@ -203,8 +202,8 @@ enum testStatus test_avl_invariant(void){
 
     for (size_t i = 0; i < size; ++i){
         node = new_testnode();
-        node->num = rand() % size;
-        //info("node with value %zu", node->num);
+        node->key = rand() % size;
+        //info("node with value %zu", node->key);
         Staq_enq(&list, node, list);
     }
 
@@ -214,11 +213,11 @@ enum testStatus test_avl_invariant(void){
 
     Staq_clear(&list, true);
     list = STAQ_INITIALIZER(staq_dtor);
-    
+
     // sequential values
     for (size_t i = 0; i <size; ++i){
         node = new_testnode();
-        node->num = i;
+        node->key = i;
         Staq_enq(&list, node, list);
     }
     if (test_avl_invariant_through_inserts_and_deletes(&list) == TEST_FAIL){
@@ -232,7 +231,7 @@ enum testStatus test_avl_invariant(void){
     for (size_t i = 0; i < ARRLEN(inputs); ++i){
         //info("\ntrying to insert node %zu", inputs[i]);
         node = new_testnode();
-        node->num = inputs[i];
+        node->key = inputs[i];
         Staq_enq(&list, node, list);
     }
     if (test_avl_invariant_through_inserts_and_deletes(&list) == TEST_FAIL){
@@ -244,3 +243,207 @@ enum testStatus test_avl_invariant(void){
     return TEST_PASS;
 }
 
+enum testStatus test_avl_find_or_insert(void){
+    struct avltree tree = AVL_INITIALIZER(compf, destructor);
+    struct testnode *node;
+
+    size_t num = 5 * 1000;
+    for (size_t i = 0; i < num; ++i){
+        node = new_testnode();
+        node->key = i;
+
+        // all insertions should succeed on the first round
+        struct avlnode *found = Avl_find_or_insert(&tree, node, link);
+        if (found){
+            struct testnode *tmp = container(found, struct testnode, link);
+            debug("insertion failed; mistaken report of a duplicate (key %zu)",
+                    tmp->key);
+            return TEST_FAIL;
+        }
+    }
+
+    if (Avl_count(&tree) != num){
+        debug("tree count wrong: expected %zu got %zu", num, Avl_count(&tree));
+        return TEST_FAIL;
+    }
+
+    node = new_testnode();
+    // make sure all lookups succeed
+    for (size_t i = 0 ; i <num; ++i){
+        node->key = i;
+        if (!Avl_has(&tree, node, link)){
+            debug("entry with key %zu incorrectly not found in tree", i);
+            return TEST_FAIL;
+        }
+    }
+
+    for (size_t i = 0; i < num; ++i){
+        node->key = i;
+
+        // all insertions should FAIL on the second round as every node
+        // has already been inserted and they should be found
+        if (!Avl_find_or_insert(&tree, node, link)){
+            debug("insertion succeeded when it shouldn't have.");
+            return TEST_FAIL;
+        }
+    }
+
+    if (Avl_count(&tree) != num){
+        debug("tree count wrong: expected %zu got %zu", num, Avl_count(&tree));
+        return TEST_FAIL;
+    }
+
+    salloc(0, node);
+    Avl_clear(&tree, true);
+
+    return TEST_PASS;
+}
+
+enum testStatus test_avl_find_min_max(void){
+    struct avltree tree = AVL_INITIALIZER(compf, destructor);
+    struct testnode *node;
+
+    size_t num = 8 * 1000;
+    for (size_t i = 1; i <= num; ++i){
+        node = new_testnode();
+        node->key = i;
+        Avl_insert(&tree, node, link);
+
+        // each new element is the new max
+        node = Avl_max(&tree, struct testnode, link);
+        if (!node || node->key != i){
+            debug("Failed to find max");
+            return TEST_FAIL;
+        }
+
+        // min never changes
+        node = Avl_min(&tree, struct testnode, link);
+        if (!node || node->key != 1){
+            debug("Failed to find min");
+            return TEST_FAIL;
+        }
+    }
+
+    if (Avl_count(&tree) != num){
+        debug("tree count wrong: expected %zu got %zu", num, Avl_count(&tree));
+        return TEST_FAIL;
+    }
+
+
+    //Avl_print(&tree, true, testnode2string);
+
+    // find the kth min for k=0...num and max for k=num...0
+    for (size_t i = 1; i<=num; ++i){
+        node = Avl_kmin(&tree, i, struct testnode, link);
+        assert(node);
+        if (node->key != i){
+            debug("failed to find kmin for k=%zu (expected %zu got %zu)",
+                    i, i, node->key);
+            return TEST_FAIL;
+        }
+
+        node = Avl_kmax(&tree, i, struct testnode, link);
+        assert(node);
+        if (node->key != num+1 - i){
+            debug("failed to find kmax for k=%zu (expected %zu got %zu)",
+                    i, num+1-i, node->key);
+            return TEST_FAIL;
+        }
+    }
+
+    Avl_clear(&tree, true);
+    return TEST_PASS;
+}
+
+enum testStatus test_avl_height_getter(void){
+    struct avltree tree = AVL_INITIALIZER(compf, destructor);
+    struct testnode *node;
+
+    if (Avl_height(&tree) != -1){
+        debug("expected -1, got %i", Avl_height(&tree));
+        return TEST_FAIL;
+    }
+
+    size_t num = 800;
+
+    // each insertion increases the height by 0 or 1
+    size_t height = -1;
+    for (size_t i = 1; i <= num; ++i){
+        node = new_testnode();
+        node->key = i;
+        Avl_insert(&tree, node, link);
+
+        size_t got = Avl_height(&tree);
+        if (got != height && got != height+1){
+            debug("Erroneous height: expected %i or %i got %i", height, height+1, got);
+            return TEST_FAIL;
+        }
+        height = got;
+    }
+
+    if (Avl_count(&tree) != num){
+        debug("tree count wrong: expected %zu got %zu", num, Avl_count(&tree));
+        return TEST_FAIL;
+    }
+
+    Avl_clear(&tree, true);
+
+    if (Avl_height(&tree) != -1){
+        debug("expected -1, got %i", Avl_height(&tree));
+        return TEST_FAIL;
+    }
+
+    return TEST_PASS;
+}
+
+enum testStatus test_avl_level_order_iterator(void){
+    struct avltree tree = AVL_INITIALIZER(compf, destructor);
+    struct testnode *node;
+
+    size_t num = 8;
+    for (size_t i = 1; i <= num; ++i){
+        node = new_testnode();
+        node->key = i;
+        Avl_insert(&tree, node, link);
+    }
+
+    size_t num_levels = 4;
+    if (Avl_num_levels(&tree) != num_levels){
+        debug("expected %zu levels, got %zu", 4, Avl_num_levels(&tree));
+        return TEST_FAIL;
+    }
+
+    size_t level_nums[] = {1, 2, 4, 1};
+    for (size_t i = 0; i < ARRLEN(level_nums); ++i){
+        if (AVL_count_nodes_at_level(&tree, i+1) != level_nums[i]){
+            debug("Incorrect number of nodes at level %zu: expected %zu got %zu",
+                    i+1, level_nums[i], AVL_count_nodes_at_level(&tree, i+1));
+            return TEST_FAIL;
+        }
+    }
+
+    struct staq q;
+    size_t expected_order[] = {4, 2, 6, 1,3, 5, 7, 8}; /* in level order */
+    size_t actual_order[num];
+
+    size_t n = 0;
+    for (size_t i = 1; i <= Avl_num_levels(&tree); ++i){
+        Avl_foreach_node_at_level(&tree, i, &q, node, struct testnode, link){
+            //debug("got node with key %zu", node->key);
+           actual_order[n++] = node->key;
+        }
+    }
+
+    //Avl_print(&tree, testnode2string);
+
+    for (size_t i = 0; i < ARRLEN(expected_order); ++i){
+        if (expected_order[i] != actual_order[i]){
+            debug("Incorrect level order traversal: expected %zu got %zu",
+                    expected_order[i], actual_order[i]);
+            //return TEST_FAIL;
+        }
+    }
+
+    Avl_clear(&tree, true);
+    return TEST_PASS;
+}

@@ -25,7 +25,7 @@
   *  entails the 2 child subtrees differing in height by at most 1 (and
   *  performing restorative rotations if this condition is violated), 2 bits
   *  are sufficient for encoding values in the range [-1,1] where:
-  *   -1 = left-child heavy
+  *   -1 = left-child heavy (i.e. taller)
   *    0 = child subtrees equal in height
   *    1 = right-child heavy
   *
@@ -35,9 +35,9 @@
   * This means insertions and deletions are costlier than lookups (where
   * no change is made to the tree) and therefore the AVL is particularly
   * suited to lookup-focused deployments where deletions and insertions
-  * are comparatively rare. If this is not the case, the Red-black tree
-  * alternative may be worth considering as particularly deletions tend
-  * to be less expensive there.
+  * are comparatively rare (much like a hash table).
+  * If this is not the case, the Red-black tree alternative may be worth
+  * considering as particularly deletions tend to be less expensive there.
   *
   * Notes on the balance factor and height field
   * -------------------------------------------
@@ -56,7 +56,7 @@
   * significantly. The approach taken here is to use an external stack instead
   * to trace the way from root to the insertion/deletion spot, obviating the
   * need for parent pointers and avoiding the overhead -- at the cost of
-  * some added complexity and perhaps a minor slowdown.
+  * some added complexity.
   */
 
 #define unbalanced(node)          ((node)->bf < -1 || (node)->bf > 1)
@@ -95,9 +95,9 @@ static inline void copy_avlnode_fields(
 #endif
 }
 
-
 /*
- * NULL leaves have height -1, childless leaves have height 0. */
+ * For simplicity, NULL leaves have height 0, childless leaves have
+ * height 1. */
 static int validate_avl(const struct avlnode *node, bool *priv){
     if (!node) return 0;
     assert(priv);
@@ -120,6 +120,9 @@ static int validate_avl(const struct avlnode *node, bool *priv){
     return height;
 }
 
+/*
+ * Determine if the tree respects the avl properties. I.e. the balance
+ * factor is correct and accurate */
 bool isavl(const struct avltree *tree){
     assert(tree);
     if (tree->count == 0) return true;
@@ -150,10 +153,14 @@ define_bst_height_getter(private, avl, struct avlnode)
 define_bst_count_getter(public, Avl, struct avltree)
 define_bst_empty_predicate(public, Avl, struct avltree)
 define_bst_node_finder(public, Avl, struct avltree, struct avlnode)
+define_bst_max_getter(public, Avl, struct avltree, struct avlnode)
+define_bst_min_getter(public, Avl, struct avltree, struct avlnode)
 define_bst_boolean_lookup(public, Avl, struct avltree, struct avlnode)
 define_bst_inorder_successor_finder(private, avl, struct avlnode)
 define_bst_path_tracer(private, avl, struct avltree, struct avlnode, struct avl_waypoint)
 define_bst_cut_down(private, avl, struct avltree, struct avlnode)
+define_bst_graphic_dump(private, avl, struct avltree, struct avlnode, avlnode_printer)
+define_get_nodes_at_level(private, avl, struct avlnode, struct avlnode_ptr)
 
 define_bst_rotate_right(private, do_avl, struct avlnode) /* do_avl_rotate_{right,left} */
 define_bst_rotate_left(private, do_avl, struct avlnode)
@@ -173,7 +180,7 @@ void Avl_clear(struct avltree *tree, bool free_containers){
     assert(tree);
 
     if (free_containers){
-        THROWS(ERROR_MISCONFIGURED, tree->dtor==NULL, "missing destructor"); 
+        THROWS(ERROR_MISCONFIGURED, tree->dtor==NULL, "missing destructor");
         avl_cut_down(tree, tree->root);
     }
 
@@ -187,61 +194,14 @@ void Avl_destroy(struct avltree **tree, bool free_containers){
     *tree = NULL;
 }
 
-define_bst_graphic_dump(private, avl, struct avltree, struct avlnode, avlnode_printer)
-#if 0
-define_get_nodes_at_level(private, do, struct avlnode, struct avlnode_ptr)
-#endif
-
-
-void Avl_print(struct avltree *tree, bool graphed, avlnode_printer pf){
+void Avl_print(struct avltree *tree, avlnode_printer pf){
     assert(tree);
     assert(pf);
 
-    if (graphed){
-        struct dllist q = DLLIST_INITIALIZER(NULL);
-        avl_dump_tree_graph(tree, tree->root, pf, NULL, &q, 1);
-        Dll_clear(&q, false);
-    }
+    struct dllist q = DLLIST_INITIALIZER(NULL);
+    avl_dump_tree_graph(tree, tree->root, pf, NULL, &q, 1);
+    Dll_clear(&q, false);
 }
-
-// height means level here and is 1-based;
-// root is at level 1
-#if 0
-void Avl_get_nodes_at_level(
-        const struct avltree *tree,
-        size_t level,
-        struct staq *queue)
-{
-    assert(tree);
-    assert(queue);
-    *queue = STAQ_INITIALIZER;
-    do_get_nodes_at_level(tree->root, level, queue);
-
-#if 0
-    struct avlnode_ptr *i;
-    Staq_foreach(queue, i, struct avlnode_ptr){
-        info("-======entry %p====", (void *)i);
-    }
-#endif
-}
-#endif
-
-
-
-
-
-#if 0
-// TODO
-// replace note in tree with this node instead
-struct avlnode *Avl_set(struct avltree *tree, struct avlnode *node){
-    struct avlnode *old;
-    struct avlnode **found = find_avl_node_explore(tree, node, NULL);
-    if (!found) return NULL;
-    old = *found;
-    *found = node;
-    return old;
-}
-#endif
 
 #ifdef AVL_NODES_WITH_HEIGHT_FIELD
 /*
@@ -267,7 +227,7 @@ struct avlnode *Avl_set(struct avltree *tree, struct avlnode *node){
  * The explicit height-field approach is disabled (compiled out, that is)
  * by default but is still kept for 2 reasons:
  * 1) certain applications may need a height field regardless of AVL.
- * 2) for documentation, future reference and comparison with the hairier
+ * 2) for documentation, future reference and comparison with the more obscure
  * code that relies solely on the balance factor.
  */
 
@@ -704,6 +664,13 @@ void avl_delete_fixup(struct avltree *tree, struct staq *path){
 }
 
 /*
+ * Insert the given node in the tree if it's not a duplicate.
+ *
+ * Path must be a pointer to an initialized staq handle; this will be
+ * populated, stack-like, with struct avl-waypoint entries. The caller
+ * is responsible for destroying the path and popping any waypoint entries
+ * still on it.
+ *
  * NOTES
  *
  * (1) It takes a 2-edge long path for the AVL property to be broken. IOW
@@ -715,9 +682,15 @@ void avl_delete_fixup(struct avltree *tree, struct staq *path){
  * for consistency so that all balance factor updates happen in the fixup
  * function.
  */
-bool Avl_insert_node(struct avltree *tree, struct avlnode *node){
+static bool avl_try_insert(
+        struct staq *path,
+        struct avltree *tree,
+        struct avlnode *node)
+{
     assert(tree);
     assert(node);
+    assert(path);
+
     initialize_avl_node(node);
 
     if (!tree->root){
@@ -727,14 +700,12 @@ bool Avl_insert_node(struct avltree *tree, struct avlnode *node){
         return true;
     }
 
-    struct staq path = STAQ_INITIALIZER(waypoint_staq_dtor);
-    avl_trace_path_to_node(tree, &path, NULL, node);
-    struct avl_waypoint *parent = Staq_top(&path, struct avl_waypoint, link); /* (1) */
+    avl_trace_path_to_node(tree, path, NULL, node);
+    struct avl_waypoint *parent = Staq_top(path, struct avl_waypoint, link); /* (1) */
     assert(parent);
 
     if (parent->dir == 0){ /* node already exists */
         //debug("duplicate");
-        Staq_clear(&path, true);
         return false;
     }
 
@@ -746,11 +717,35 @@ bool Avl_insert_node(struct avltree *tree, struct avlnode *node){
     else                     p->right = node;
     tree->count++;
 
-    avl_insert_fixup(tree, &path);  /* (3) */
-    Staq_clear(&path, true);
+    avl_insert_fixup(tree, path);
     return true;
 }
 
+bool Avl_insert_node(struct avltree *tree, struct avlnode *node){
+    struct staq path = STAQ_INITIALIZER(waypoint_staq_dtor);
+    bool inserted = avl_try_insert(&path, tree, node);
+    Staq_clear(&path, true);
+    return inserted;
+}
+
+struct avlnode *Avl_find_or_insert_node(
+        struct avltree *tree, struct avlnode *node)
+{
+    struct avlnode *entry = NULL;
+
+    struct staq path = STAQ_INITIALIZER(waypoint_staq_dtor);
+    bool inserted = avl_try_insert(&path, tree, node);
+
+    if (!inserted){
+        struct avl_waypoint *duplicate = Staq_top(&path, struct avl_waypoint, link);
+        assert(duplicate);
+        entry = duplicate->ptr;
+        assert(entry);
+    }
+
+    Staq_clear(&path, true);
+    return entry;
+}
 
 /*
  * Deletion follows the usual tree-deletion algorithm. Things to note are that
@@ -797,7 +792,7 @@ bool Avl_delete_node(
     if (left_child_only(k) || right_child_only(k)){
         node = left_child_only(k) ? k->left : k->right;
     }
-    
+
     else if (both_children(k)){
         cur_ptr->dir = 1;
         Staq_push(&path, cur_ptr, link); /* (1) */
@@ -806,14 +801,12 @@ bool Avl_delete_node(
 
         if (suc != k->right){
             avl_trace_path_to_node(tree, &replacement_path, k->right, suc); /* (2) */
-            debug("before remove");
             Staq_remove(&replacement_path, true); /* pop suc pointer */
-            debug("after remove");
             struct avl_waypoint *suc_parent_ptr = \
                         Staq_top(&replacement_path, struct avl_waypoint, link);
             assert(suc_parent_ptr && suc_parent_ptr->ptr);
             suc_parent_ptr->ptr->left = suc->right;
-            
+
             Staq_join(&replacement_path, &path);
             Staq_swap(&path, &replacement_path);
         }
@@ -833,7 +826,7 @@ bool Avl_delete_node(
 
     salloc(0, cur_ptr);
     if (free_container){
-        THROWS(ERROR_MISCONFIGURED, tree->dtor==NULL, "missing destructor"); 
+        THROWS(ERROR_MISCONFIGURED, tree->dtor==NULL, "missing destructor");
         tree->dtor(node_tofree);
     }
 
@@ -843,8 +836,137 @@ bool Avl_delete_node(
     return true;
 }
 
+/*
+ * Find the k-th element when performing in-order traversal.
+ * K is 1 based such that k=1 is min(tree).
+ * When the node is found, the recursion unrolls, stopping the traversal.
+ *
+ * --> k
+ * which element to find (the kth when performing inorder traversal)
+ *
+ * --> n
+ * the current number of the node. 0 must be passed when calling this function.
+ *
+ * --> backward
+ * If true, the inorder traversal happens in reverse. That is, instead of
+ * left-parent-right, it's right-parent-left. This is useful when searching
+ * for a function closer to the max than to the min.
+ *
+ * --> found
+ *  Out-param. Must be non-NULL. Will be set to point to the kth node found.
+ *  NULL if no node is found (because k > count(tree)).
+ */
+static inline size_t find_kth_inorder(
+        const struct avlnode *node,
+        size_t k, size_t n,
+        bool backward,
+        struct avlnode **found)
+{
+    struct avlnode *child = NULL;
+
+    if (!node) return n;
+
+    child = backward ? node->right : node->left;
+    n = find_kth_inorder(child, k, n, backward, found);
+
+    /* found, return early, dont't even bother updating */
+    if (n == k) return n;
+
+    /* current node is the nth node when traversing in order ? */
+    if (++n == k){
+        *found = (struct avlnode*)node;
+        return n;
+    }
+
+    /* else keep looking */
+    child = backward ? node->left : node->right;
+    return find_kth_inorder(child, k, n, backward, found);
+}
+
+/*
+ * If n is the number of nodes in the tree, then note:
+ *  - the kth smallest element is the n-(k-1)th greatest element
+ *  - the kth greatest element is the n-(k-1)th smallest element
+ * Therefore finding the k-th smallest/greatest can be cast as the same
+ * problem.
+ *
+ * NOTE that for small k it is most efficient to start from the closer end
+ * (the min end OR the max end, that is, whichever one is closer).
+ * This is so that the portion of the tree that needs to be traversed is
+ * minimized. That is, if you want the 3rd smallest element, you need to
+ * start from the smallest element and work backward. Similarly, if you
+ * want the 3rd greatest element, you want to start from the greatest element
+ * and work backward. Therefore the algorithm tries to figure out the closest
+ * extremum, and start searching from there as the recursion unrolls.
+ * This intuitively means that the performance for finding both the kth min
+ * and max degrades the farther k is from min/max and the closer it is to the
+ * middlle. While for small k that can be placed close to either the min or max
+ * end the performance will be very good -- near constant.
+ *
+ * The algorithm is essentially equivalent to linear search (as opposed to
+ * binary search, sadly) in a sorted list and therefore the complexity is O(n).
+ * For binary search (and O(log n) complexity), we would need to augment to
+ * avlnode structs with another field: the count of the subtree rooted at that
+ * node. This would make it possible to rule out traversal of any subtree of
+ * unsuitable size. However, it's desirable to keep the basic core data
+ * structure as lean as possible so under these circumstances this algorithm is
+ * fine -- as long as k is kept reasonably small (close to min/max).
+ * Alternatively, just use a min/max heap since that's their whole point.
+ */
+struct avlnode *Avl_get_kth_min(const struct avltree *tree, size_t k){
+    assert(tree);
+    assert(k>0);
+
+    if (k > tree->count) return NULL;
+
+    struct avlnode *found = NULL;
+    size_t half = tree->count/2;
+    find_kth_inorder(tree->root,
+            (k > half) ? tree->count - (k-1) : k,
+            0,
+            (k > half) ? true : false,
+            &found);
+
+    return found;
+}
+
+struct avlnode *Avl_get_kth_max(const struct avltree *tree, size_t k){
+    assert(tree);
+    assert(k>0);
+
+    if (k > tree->count) return NULL;
+
+    return Avl_get_kth_min(tree, tree->count - (k-1));
+}
+
+size_t Avl_num_levels(const struct avltree *tree){
+    return Avl_height(tree) + 1;
+}
+
+void Avl_get_nodes_at_level(
+        const struct avltree *tree,
+        size_t level,
+        struct staq *queue)
+{
+    assert(queue);
+    assert(tree);
+
+    *queue = STAQ_INITIALIZER(NULL);
+    avl_get_nodes_at_level(tree->root, level, queue, NULL);
+}
+
+size_t AVL_count_nodes_at_level(const struct avltree *tree, size_t level){
+    assert(tree);
+    size_t count = 0;
+    avl_get_nodes_at_level(tree->root, level, NULL, &count);
+    return count;
+}
+
 #if 0
-TODO
-// find_or_insert
+TODO: implement set operations e.g.
+struct avltree *Avl_join(struct avltree *a, struct avltree *b);
+struct avltree *Avl_intersect(struct avltree *a, struct avltree *b);
+struct avltree *Avl_difference(struct avltree *a, struct avltree *b);
 #endif
+
 
