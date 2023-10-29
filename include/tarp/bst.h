@@ -8,33 +8,28 @@ extern "C" {
 
 #include <stdio.h>
 #include <stdlib.h>
-
-#include <tarp/dllist.h>
-#include <tarp/staq.h>
 #include <tarp/common.h>
-#include <tarp/log.h>
 
+struct bst;
+struct bstnode;
 
 /*
  * A BST must be associated with a comparator function at creation time.
- * The comparator gets called with two node values a and b.
- * They are void pointers so the comparator should know how to properly
- * cast them. The return value indicates the (in)equality of a and b in the
- * mold of (3)strcmp (see the comparatorResult enumeration below).
- *    < 0 (a<b)
- *    > 0 (a>b)
- *    0(a==b)
+ * see common.h
  */
-typedef int (*comparator)(const void *a, const void *b);
-
-enum comparatorResult    {LT = -1, EQ = 0, GT = 1};
 
 /*
  * A function that when called with a non-NULL void pointer to some user data
  * (the container of a (potentially augmented) bstnode) returns a non-NULL
  * succint string representation of it. The string should be
  * dynamically allocated and it will be freed internally by the API. */
-typedef const char *(*printer)(const void *node);
+typedef const char *(*bstnode_printer)(const struct bstnode *node);
+
+/*
+ * A function that when called with a non-NULL bstnode pointer, it should
+ * return a void pointer to its enclosing container as appropriate.
+ * The return value *must* be obtained from get_container() */
+typedef void (*bstnode_destructor)(struct bstnode *node);
 
 /*
  * Generic basic binary search tree node;
@@ -61,10 +56,10 @@ typedef const char *(*printer)(const void *node);
 struct bstnode {
     struct bstnode *left;
     struct bstnode *right;
-#ifndef MAGIC_CONTAINERS
-    void *container;
-#endif
 };
+
+typedef enum comparatorResult (*bst_comparator)\
+    (const struct bstnode *a, const struct bstnode *b);
 
 /*
  * The key and value pair stored in nodes is bundled together inside
@@ -73,9 +68,12 @@ struct bstnode {
  * and insertions. */
 struct bst{
     struct bstnode *root;
-    comparator cmp;
+    bst_comparator cmp;
     size_t count;
+    bstnode_destructor dtor;
 };
+
+#include "bst_impl.h"
 
  /* defined in bst.c */
 struct bst_waypoint;
@@ -97,30 +95,18 @@ struct bstnode_ptr;
  *   destination) or 1 (RIGHT).
  */
 enum pathTraceDirection  {LEFT = -1, EQUAL = 0, RIGHT = 1};
-struct staq_node;
-
-#define BST_NODE_INITIALIZER(container) \
-    (struct bstnode){ \
-        .left=NULL, \
-        .right=NULL, \
-        .container = (container) ? container : NULL \
-}
+struct staqnode;
 
 /* Macro/function initializer for static BSTs; they do the same thing.
  * cmpf is non-NULL pointer to comparator function (see above). */
-#define BST_INITIALIZER(cmpf)     \
-    (struct bst){                 \
-        .count = 0,               \
-        .root = NULL,             \
-        .cmp = cmpf               \
-    }
+#define BST_INITIALIZER(cmpf, dtor)   BST_INITIALIZER__(cmpf, dtor)
+void Bst_init(struct bst *tree, bst_comparator cmpf, bstnode_destructor dtor);
 
-void Bst_init(struct bst *tree, comparator cmpf);
 size_t Bst_count(const struct bst *tree);
 bool Bst_empty(const struct bst *tree);
 struct bstnode *Bst_find_node(const struct bst *tree, const struct bstnode *key);
 struct bstnode *Bst_find_inorder_sucessor(const struct bstnode *node);
-void Bst_print(struct bst *tree, bool graphed, printer pf);
+void Bst_print(struct bst *tree, bool graphed, bstnode_printer pf);
 
 /*
  * Return the height at the given bst node.
@@ -232,161 +218,47 @@ struct bstnode *rotate_right(
  *
  ********************************************************************/
 
-#define define_bst_waypoint_structure(SHORTNAME, TYPE)          \
-    struct SHORTNAME##_waypoint {                               \
-        staq_node link;                                         \
-        TYPE *ptr;                                              \
-        enum pathTraceDirection dir;                            \
+#define define_bst_waypoint_structure(SHORTNAME, TYPE)                 \
+    struct SHORTNAME##_waypoint {                                      \
+        staqnode link;                                                 \
+        TYPE *ptr;                                                     \
+        enum pathTraceDirection dir;                                   \
     };
 
-#define define_bstnode_ptr_wrapper_structure(SHORTNAME, TYPE)   \
-    struct SHORTNAME##_ptr {                                    \
-        staq_node link;                                         \
-        TYPE *p;                                                \
+#define define_bstnode_ptr_wrapper_structure(SHORTNAME, TYPE)    \
+    struct SHORTNAME##_ptr {                                     \
+        staqnode link;                                           \
+        TYPE *p;                                                 \
     };
 
 #define define_bst_count_getter(vistype, SHORTNAME, TREE_TYPE)      \
-    vis(vistype) size_t SHORTNAME##_count(const TREE_TYPE *tree){   \
-        assert(tree);                                               \
-        return tree->count;                                         \
-    }
+    define_bst_count_getter_(vistype, SHORTNAME, TREE_TYPE)
 
 #define define_bst_empty_predicate(vistype, SHORTNAME, TREE_TYPE)  \
-    vis(vistype) bool SHORTNAME##_empty(const TREE_TYPE *tree){    \
-        assert(tree);                                              \
-        return (tree->count == 0);                                 \
-    }
+    define_bst_empty_predicate_(vistype, SHORTNAME, TREE_TYPE)
 
 #define define_bst_node_finder(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE) \
-    vis(vistype) NODE_TYPE *SHORTNAME##_find_node(                       \
-            const TREE_TYPE *tree,                                       \
-            const NODE_TYPE *key)                                        \
-{                                                                        \
-    assert(tree);                                                        \
-    assert(key);                                                         \
-    if (tree->count == 0) return NULL;                                   \
-                                                                         \
-    NODE_TYPE *node = tree->root;                                        \
-    comparator cmp = tree->cmp;                                          \
-    assert(node);                                                        \
-    while (node){                                                        \
-        switch(cmp(container(key, void), container(node, void))){        \
-        case LT: node = node->left; break;                               \
-        case EQ: return node;                                            \
-        case GT: node = node->right; break;                              \
-        default: assert(false);                                          \
-        }                                                                \
-    }                                                                    \
-    return NULL;                                                         \
-}
+    define_bst_node_finder_(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)
+
+#define define_bst_boolean_lookup(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE) \
+    define_bst_boolean_lookup_(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)
 
 #define define_bst_inorder_successor_finder(vistype, SHORTNAME, NODE_TYPE)  \
-    vis(vistype) NODE_TYPE *SHORTNAME##_find_inorder_successor(      \
-            const NODE_TYPE *node)                                          \
-{                                                                           \
-        assert(node);                                                       \
-        node = node->right;                                                 \
-        while (node && node->left){                                         \
-            node = node->left;                                              \
-        }                                                                   \
-        return (NODE_TYPE*)node;                                            \
-}
+    define_bst_inorder_successor_finder_(vistype, SHORTNAME, NODE_TYPE)
 
-#define define_bst_path_tracer(                                         \
-        vistype, SHORTNAME, TREE_TYPE, NODE_TYPE, WAYPOINT_TYPE)        \
-    vis(vistype) void SHORTNAME##_trace_path_to_node(                   \
-        const TREE_TYPE *tree,                                          \
-        struct staq *path,                                              \
-        const NODE_TYPE *src,                                           \
-        const NODE_TYPE *dst)                                           \
-{                                                                       \
-    assert(tree);                                                       \
-    assert(path);                                                       \
-    assert(dst);                                                        \
-    NODE_TYPE *node = src ? (NODE_TYPE*)src : tree->root;               \
-                                                                        \
-    *path = STAQ_INITIALIZER;                                           \
-    WAYPOINT_TYPE *p;                                                   \
-                                                                        \
-    if (tree->count == 0) return;                                       \
-                                                                        \
-    comparator cmp = tree->cmp;                                         \
-    assert(node);                                                       \
-    assert(cmp);                                                        \
-    debug("reached here");                                              \
-                                                                        \
-    size_t waypointsz = sizeof(WAYPOINT_TYPE);                          \
-                                                                        \
-    while (node){                                                       \
-        switch(cmp(container(dst, void), container(node, void))){       \
-        case LT:                                                        \
-            p = salloc(waypointsz, NULL);                               \
-            p->ptr = node; p->dir = LEFT;                               \
-            Staq_push(path, p, link);                                   \
-            node = node->left;                                          \
-            break;                                                      \
-        case GT:                                                        \
-            p = salloc(waypointsz, NULL);                               \
-            p->ptr = node; p->dir = RIGHT;                              \
-            Staq_push(path, p, link);                                   \
-            node = node->right;                                         \
-            break;                                                      \
-        case EQ:                                                        \
-            p = salloc(waypointsz, NULL);                               \
-            p->ptr = node; p->dir = EQUAL;                              \
-            Staq_push(path, p, link);                                   \
-            return;                                                     \
-        default: assert(false);                                         \
-        }                                                               \
-    }                                                                   \
-}
+#define define_bst_path_tracer(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE, WAYPOINT_TYPE) \
+    define_bst_path_tracer_(                                                     \
+        vistype, SHORTNAME, TREE_TYPE, NODE_TYPE, WAYPOINT_TYPE)
 
 /* NOTE: always frees the container as well! */
-#define define_bst_cut_down(vistype, SHORTNAME, NODE_TYPE)    \
-    vis(vistype) void SHORTNAME##_cut_down(NODE_TYPE *root){  \
-        if (!root) return;                                    \
-        SHORTNAME##_cut_down(root->left);                     \
-        SHORTNAME##_cut_down(root->right);                    \
-        free(root->container);                                \
-}
-
+#define define_bst_cut_down(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)    \
+    define_bst_cut_down_(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)
 
 #define define_bst_rotate_left(vistype, SHORTNAME, NODE_TYPE)          \
-    vis(vistype) NODE_TYPE *SHORTNAME##_rotate_left(                   \
-            NODE_TYPE *a, NODE_TYPE *b)                                \
-{                                                                      \
-    a->right = b->left;                                                \
-    b->left = a;                                                       \
-    return b;                                                          \
-}
+    define_bst_rotate_left_(vistype, SHORTNAME, NODE_TYPE)
 
 #define define_bst_rotate_right(vistype, SHORTNAME, NODE_TYPE)         \
-    vis(vistype) NODE_TYPE *SHORTNAME##_rotate_right(                  \
-            NODE_TYPE *a, NODE_TYPE *b)                                \
-{                                                                      \
-    a->left = b->right;                                                \
-    b->right = a;                                                      \
-    return b;                                                          \
-}
-
-/*
- * Thin wrapper for storing strings in a dllist */
-struct string_qlink {
-    dlnode link;
-    const char *s;
-};
-
-/*
- * Helper function to print BACKLOG -- used
- * by BST_graphed_print__() function.
- */
-static inline void println__(struct dllist *list){
-    assert(list);
-    struct string_qlink *sql;
-    Dll_foreach(list, sql, struct string_qlink){
-        printf("%s", sql->s);
-    }
-}
+    define_bst_rotate_right_(vistype, SHORTNAME, NODE_TYPE)
 
 /*
  * Pretty print of a tree to the console. For example:
@@ -425,121 +297,31 @@ static inline void println__(struct dllist *list){
  *     The current node. Calling code should pass the root of a tree object for
  *     this parameter.
  */
-#define define_bst_graphic_dump(vistype, SHORTNAME, NODE_TYPE)               \
-    vis(vistype) void SHORTNAME##_dump_tree_graph(                           \
-            NODE_TYPE *node,                                                 \
-            printer node2string,                                             \
-            NODE_TYPE *parent,                                               \
-            struct dllist *backlog,                                          \
-            size_t level)                                                    \
-{                                                                            \
-    debug("called");                                                         \
-    if (!node) return;                                                       \
-                                                                             \
-    char *level_trace = ":   ";                                              \
-    char *padding     = "    ";                                              \
-    const size_t sz = 30;                                                    \
-    char str[sz];  memset(str, 0, ARRLEN(str));                              \
-    char *right_fill = NULL;                                                 \
-    char *left_fill = NULL;                                                  \
-    level = level > 0 ? level : 1;                                           \
-    struct string_qlink sql; /* static, kept in scope by recursion frames */ \
-                                                                             \
-    void *udata = container(node, void); /* node2string must interpret it */ \
-                                                                             \
-     /* the decision of what string to and what to pass to the children */   \
-     /* is made at each node and it depends on whether the current node */   \
-     /* does NOT have a parent(is root), or is a left or right child ... */  \
-    if (!parent){                                                            \
-        /* root */                                                           \
-        const char *s = node2string(udata);                                  \
-        snprintf(str, sz-1, "<[(%zu)] %-6s\n", level, s);                    \
-        free((void*)s);                                                      \
-                                                                             \
-        right_fill = left_fill = padding;                                    \
-        /* info("root; fill right and left: '%s'", right_fill); */           \
-    }                                                                        \
-    else if (node == parent->right){                                         \
-        const char *s = node2string(udata);                                  \
-        snprintf(str, sz-1, ".---- (%zu) %-6s\n", level, s);                 \
-        free((void*)s);                                                      \
-                                                                             \
-        left_fill = level_trace;                                             \
-        right_fill = padding;                                                \
-    }                                                                        \
-    else if (node == parent->left){                                          \
-        const char *s = node2string(udata);                                  \
-        snprintf(str, sz-1, "`---- (%zu) %-6s\n", level, s);                 \
-        free((void*)s);                                                      \
-                                                                             \
-        right_fill = level_trace;                                            \
-        left_fill = padding;                                                 \
-    }                                                                        \
-                                                                             \
-    /* print right children first (recursively), then current node, then */  \
-    /* left child; since the print must be line by line, hence rightmost */  \
-    /* to leftmost                                                       */  \
-                                                                             \
-    /* ... but the decision of whether the string constructed by the  */     \
-    /* current node is passed on to the child so that they can append */     \
-    /* their own string part depends on whether the node HAS a right  */     \
-    /* and/or left child, respectively                                */     \
-    if (node->right){                                                        \
-        sql.s = right_fill;                                                  \
-        Dll_pushback(backlog, &sql, link);                                   \
-        SHORTNAME##_dump_tree_graph(                                         \
-                node->right, node2string, node, backlog, level+1);           \
-        Dll_popback(backlog, struct string_qlink); /* pop child filler */    \
-    }                                                                        \
-                                                                             \
-    /* root does not have a backlog */                                       \
-    if (parent){                                                             \
-        println__(backlog);                                                  \
-    }                                                                        \
-    printf("%s", str);                                                       \
-                                                                             \
-    if (node->left){                                                         \
-        sql.s = left_fill;                                                   \
-        Dll_pushback(backlog, &sql, link);                                   \
-        SHORTNAME##_dump_tree_graph(                                         \
-                node->left, node2string, node, backlog, level+1);            \
-        Dll_popback(backlog, struct string_qlink); /* pop child filler  */   \
-    }                                                                        \
-                                                                             \
-    return;                                                                  \
-}
+#define define_bst_graphic_dump(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE, PRINTER_TYPE)    \
+    define_bst_graphic_dump_(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE, PRINTER_TYPE)
 
 #define define_bst_height_getter(vistype, SHORTNAME, NODE_TYPE)             \
-    vis(vistype) int SHORTNAME##_find_node_height(const NODE_TYPE *node){   \
-        if(!node) return -1;                                                \
-        return 1 + MAX(                                                     \
-                SHORTNAME##_find_node_height(node->left),                   \
-                SHORTNAME##_find_node_height(node->right)                   \
-                );                                                          \
-    }
+    define_bst_height_getter_(vistype, SHORTNAME, NODE_TYPE)
 
-#define define_get_nodes_at_level(                                           \
-        vistype, SHORTNAME, NODE_TYPE, PTR_WRAPPER_TYPE)                     \
-    vis(vistype) void SHORTNAME##_get_nodes_at_level(                        \
-            const NODE_TYPE *root,                                           \
-            size_t level,                                                    \
-            struct staq *list                                                \
-            )                                                                \
-{                                                                            \
-    if (!root) return;                                                       \
-    assert(list);                                                            \
-                                                                             \
-    /* reached desired level */                                              \
-    if (level == 1){                                                         \
-        PTR_WRAPPER_TYPE *p = salloc(sizeof(NODE_TYPE), NULL);               \
-        p->p = (NODE_TYPE *)root;                                            \
-        Staq_enq(list, p, link);                                             \
-        return;                                                              \
-    }                                                                        \
-                                                                             \
-    SHORTNAME##_get_nodes_at_level(root->left, level-1, list);               \
-    SHORTNAME##_get_nodes_at_level(root->right, level-1, list);              \
-}
+/*
+ * level is taken here to mean 'depth' and it is 1-based. Root is at
+ * level one. The tree has as many levels as it has height/depth;
+ * If q is not NULL, each node is enqueued in FIFO fashion, from the left
+ * of the tree to the right. If count is not NULL, the count of the number
+ * of nodes at the specified level is stored in it. It must have been
+ * initialized to 0 before calling this function.
+ *
+ * NOTE this function is recursive so it's not recommended for non-balanced
+ * BST if they can degenerate and cause the recursion depth to be exceeded.
+ */
+#define define_get_nodes_at_level(vistype, SHORTNAME, NODE_TYPE, PTR_WRAPPER_TYPE) \
+    define_get_nodes_at_level_(vistype, SHORTNAME, NODE_TYPE, PTR_WRAPPER_TYPE)
+
+#define define_bst_max_getter(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)  \
+    define_bst_max_getter_(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)
+
+#define define_bst_min_getter(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)    \
+    define_bst_min_getter_(vistype, SHORTNAME, TREE_TYPE, NODE_TYPE)
 
 
 
