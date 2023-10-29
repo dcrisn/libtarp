@@ -17,13 +17,8 @@ vector *allocate_vector__(struct vector *v, size_t capacity, size_t itemsz)
 {
     if (capacity < TARP_VECTOR_MIN_CAPACITY) capacity = TARP_VECTOR_MIN_CAPACITY;
 
-    if (capacity > TARP_VECTOR_MAX_MEM){
-        debug("vector with excessive capacity %zu requested", capacity);
-        return NULL;
-    }
-
     if (capacity > Vect_maxcap(itemsz)){
-        debug("refusing to allocate vector (cap=%zu itemsz=%zu",
+        debug("vector with excessive capacity %zu requested (itemsz=%zu)",
                 capacity, itemsz);
         return NULL;
     }
