@@ -15,6 +15,7 @@ set(LIBTARP_PATCH_NUMBER 1)
 option(DEBUG "Build debug binaries" OFF)
 option(USE_SANITIZERS "Use program sanitizers" OFF)
 option(RUN_TESTS "Generate test targets" OFF)
+option(BUILD_EXAMPLES "Build example binaries")
 
 add_compile_options(
     -Wall
@@ -47,6 +48,7 @@ if (DEBUG)
 else()
     message("This is a *PRODUCTION* build")
     add_compile_options(-O3)
+    #add_definitions(-DNDEBUG)  # strip out asserts
 endif()
 
 if (USE_SANITIZERS)
@@ -76,6 +78,10 @@ endif()
 
 if (RUN_TESTS)
     message("Build will include tests")
+endif()
+
+if (BUILD_EXAMPLES)
+    message("Build will include examples")
 endif()
 
 # set language standard
@@ -164,4 +170,8 @@ INSTALL(TARGETS tarp md5hash
 # tests
 if (RUN_TESTS)
     add_subdirectory(tests)
+endif()
+
+if (BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
