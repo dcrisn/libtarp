@@ -130,7 +130,7 @@ enum testStatus test_basic_hasht(void){
 
 enum testStatus test_hasht_duplicates(void){
     struct hasht *ht = Hasht_new(NULL, getkey, destructor, 0);
-    struct testnode *node;
+    struct testnode *node, *tmp;
 
     size_t inputs[] = {1,2,3,4,5,6,7,8,9,10};
     size_t key = 88; // arbitrary
@@ -155,14 +155,16 @@ enum testStatus test_hasht_duplicates(void){
         return TEST_FAIL;
     }
 
-    struct hashtnode *tmp = Hasht_get(ht, node, link);
+    node = new_testnode();
+    node->key = key;
+    tmp = Hasht_get(ht, node, link);
     assert(tmp);
-    node = container(tmp, struct testnode, link);
-    if (node->data != inputs[0]){
+    if (tmp->data != inputs[0]){
         debug("count correct but item invalid: expected %u got %u",
-                inputs[0], node->data);
+                inputs[0], tmp->data);
         return TEST_FAIL;
     }
+    salloc(0, node);
 
     Hasht_clear(ht, true);
 
@@ -186,16 +188,14 @@ enum testStatus test_hasht_duplicates(void){
     for (ssize_t i = ARRLEN(inputs)-1; i >= 0; --i){
         tmp = Hasht_get(ht, node, link);
         assert(tmp);
-        struct testnode *tmpcont = container(tmp, struct testnode, link);
-
         unsigned expected_data = inputs[i]; // LIFO
 
-        if (tmpcont->data != expected_data){
-            debug("expected %u got %u", expected_data, tmpcont->data);
+        if (tmp->data != expected_data){
+            debug("expected %u got %u", expected_data, tmp->data);
             return TEST_FAIL;
         }
 
-        Hasht_remove(ht, tmpcont, link);
+        Hasht_delete(ht, tmp, link);
     }
 
     salloc(0, node);

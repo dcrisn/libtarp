@@ -93,6 +93,7 @@ void Hasht_destroy(struct hasht **hasht, bool free_containers){
         destroy_chains(ht);
     }
 
+    salloc(0, ht->buckets);
     salloc(0, ht);
     *hasht = NULL;
 }
@@ -250,16 +251,20 @@ struct hasht *maybe_resize(struct hasht *ht, bool isdel){
 }
 
 struct hashtnode *Hasht_get_entry(
-        const struct hasht *ht,
+        struct hasht *ht,
         const struct hashtnode *node)
 {
     assert(ht); assert(node);
+    ht->cached = NULL;
+
     if (ht->count == 0) return NULL;
 
     uint64_t index = node2index(ht, node);
     struct hashtnode *i = (ht->buckets+index)->next;
     while (i){
-        if (equal_keys(ht, i, node)) return i ;
+        if (equal_keys(ht, i, node)){
+            ht->cached = i; return i;
+        }
         i = i->next;
     }
 
@@ -268,7 +273,7 @@ struct hashtnode *Hasht_get_entry(
 
 bool Hasht_has_entry(const struct hasht *ht, const struct hashtnode *node)
 {
-    return (Hasht_get_entry(ht, node) != NULL);
+    return (Hasht_get_entry((struct hasht*)ht, node) != NULL);
 }
 
 bool Hasht_remove_entry(

@@ -70,8 +70,13 @@ struct hasht {
     key_getter key;                  /* callback that specifies the key (3) */
     hashtnode_destructor dtor;
     struct hashtnode *buckets;       /* slots for chains (4) */
+    struct hashtnode *cached;        /* see avl_impl.h; same idea here */
 };
 
+#define Hasht_get_(hash_table, container_ptr, field) \
+    Hasht_get_entry(hash_table, &((container_ptr)->field)) \
+      ? container((hash_table)->cached, typeof(*(container_ptr)), field) \
+      : NULL
 
 
 #endif

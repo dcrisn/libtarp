@@ -25,6 +25,7 @@ extern "C" {
  *------------------------------------------------                          |
  * new                           O(1)                                       |
  * destroy                       O(n)  // [1]                               |
+ * clear                         O(n)  // [1]
  * count                         O(1)                                       |
  * empty                         O(1)                                       |
  * has                           O(1)  // amortized                         |
@@ -131,6 +132,12 @@ struct hasht *Hasht_new(
 void Hasht_destroy(struct hasht **hasht, bool free_containers);
 
 /*
+ * Like Hasht_destroy but the handle itelf is not destructed, such that
+ * it can be reused. Only the elements are removed and if free_containers=true,
+ * destructed. */
+void Hasht_clear(struct hasht *ht, bool free_containers);
+
+/*
  * Return the theoretical maximum number of elements that could be stored
  * in the hash table before new insertions are rejected. NOTE failures
  * e.g. due to memory shortfall could occur long before then.
@@ -160,7 +167,7 @@ bool Hasht_has_entry(const struct hasht *ht, const struct hashtnode *key);
  * ht and key must be non-NULL
  * */
 struct hashtnode *Hasht_get_entry(
-        const struct hasht *ht,
+        struct hasht *ht,
         const struct hashtnode *key);
 
 /*
@@ -211,7 +218,7 @@ bool Hasht_insert_entry(
     Hasht_insert_entry(hash_table, &((container)->field), false)
 
 #define Hasht_get(hash_table, container, field) \
-    Hasht_get_entry(hash_table, &((container)->field))
+    Hasht_get_(hash_table, container, field)
 
 #define Hasht_has(hash_table, container, field) \
     Hasht_has_entry(hash_table, &((container)->field))
