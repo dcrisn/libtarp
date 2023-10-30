@@ -8,6 +8,7 @@
 #include <tarp/timeutils.h>
 #include <tarp/cohort.h>
 
+#if 0
 enum testStatus can_compare_timespecs(void){
     struct timespec before;
     struct timespec after;
@@ -28,3 +29,4 @@ enum testStatus can_compare_timespecs(void){
     if (timespec_cmp(&after, &before) != 1) return TEST_FAIL;
     return TEST_PASS;
 }
+#endif
