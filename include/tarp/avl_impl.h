@@ -14,9 +14,16 @@ struct avlnode {
 #endif
 };
 
+/*
+ * (1) the lookup function should set this to NULL when called and
+ * to the lookup result (potentially NULL) when returning; this
+ * allows macros e.g. Avl_find() to correcty return a pointer to the
+ * container instead of the embedded link, simplifying things for the user.
+ * Without this two calls would need to be made (has(), find()) since calling
+ * container() on a NULL pointer is illegal. See the Avl_find macro below. */
 struct avltree{
     struct avlnode *root;
-    struct avlnode *cached;
+    struct avlnode *cached; /* (1) */
     avl_comparator cmp;
     size_t count;
     avlnode_destructor dtor;
@@ -69,6 +76,24 @@ void Avl_get_nodes_at_level(
                ? container(pointer->p, container_type, field) : NULL));        \
              salloc(0, pointer)                                                \
              )
+
+
+/*
+ * If the Avl_find_node routine finds a match, it stores the finding in
+ * tree->cached; therfore we can immediately get it from there; of course,
+ * the user has only specified the container pointer, not type -- but this
+ * is easily obtained through typeof. Finally, the macro "returns" a pointer
+ * to the container instead of the embedded avlnode link, saving the user
+ * some hassle */
+#define Avl_find_(tree, container_ptr, field) \
+    Avl_find_node(tree, &((container_ptr)->field)) \
+     ? container((tree)->cached, typeof(*(container_ptr)), field) \
+     : NULL
+
+#define Avl_find_or_insert_(tree, container_ptr, field) \
+    Avl_find_or_insert_node(tree, &((container_ptr)->field)) \
+      ? container((tree)->cached, typeof(*(container_ptr)), field) \
+      : NULL
 
 
 #endif

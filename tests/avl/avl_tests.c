@@ -86,8 +86,7 @@ enum testStatus test_avl_insert(void){
     for (size_t i = 0; i < num; ++i){
         k = new_testnode();
         k->key = i;
-        struct avlnode *n = Avl_find_node(&tree, &k->link);
-        node = n ? container(n, struct testnode, link) : NULL;
+        node = Avl_find(&tree, k, link);
         if (!node || node->key != k->key){
             debug("expected %zu got %zu %p", k->key, node?node->key:0, node ? (void*)node : NULL);
             return TEST_FAIL;
@@ -253,11 +252,10 @@ enum testStatus test_avl_find_or_insert(void){
         node->key = i;
 
         // all insertions should succeed on the first round
-        struct avlnode *found = Avl_find_or_insert(&tree, node, link);
-        if (found){
-            struct testnode *tmp = container(found, struct testnode, link);
+        node = Avl_find_or_insert(&tree, node, link);
+        if (node){
             debug("insertion failed; mistaken report of a duplicate (key %zu)",
-                    tmp->key);
+                    node->key);
             return TEST_FAIL;
         }
     }

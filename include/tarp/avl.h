@@ -166,7 +166,7 @@ int Avl_height(const struct avltree *tree);
  * A pointer to a matching struct avlnode. If no matching element is found,
  * NULL is returned. */
 struct avlnode *Avl_find_node(
-        const struct avltree *tree, const struct avlnode *key);
+        struct avltree *tree, const struct avlnode *key);
 
 /*
  * Look up the node in the tree; if it exists, return a pointer to the existing
@@ -252,10 +252,10 @@ size_t AVL_count_nodes_at_level(const struct avltree *tree, size_t level);
     Avl_delete_node(tree, &((container_ptr)->field), false)
 
 #define Avl_find(tree, container_ptr, field) \
-    Avl_find_node(tree, &((container_ptr)->field))
+    Avl_find_(tree, container_ptr, field)
 
 #define Avl_find_or_insert(tree, containter_ptr, field) \
-    Avl_find_or_insert_node(tree, &((containter_ptr)->field))
+    Avl_find_or_insert_(tree, containter_ptr, field)
 
 #define Avl_has(tree, container_ptr, field) \
     Avl_has_node(tree, &((container_ptr)->field))
