@@ -12,7 +12,6 @@ file(GLOB examples
 # the corresponding source file (minus the extension)
 foreach(source_file ${examples})
     cmake_path(GET source_file STEM filestem)
-    message("stem is ${filestem}")
 
     SET(example "${filestem}")
 
