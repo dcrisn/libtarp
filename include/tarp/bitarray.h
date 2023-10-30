@@ -71,7 +71,10 @@ struct bitarray{
 /*
  * Allocate new bit array big enough to hold nbits > 0.
  * If one=True, all bits in the new array will be
- * initialized to 1, otherwise 0. */
+ * initialized to 1, otherwise 0.
+ *
+ * NULL is returned on failure (excessive width).
+ * */
 struct bitarray *Bitr_new(size_t nbits, bool one);
 
 /*
@@ -82,7 +85,12 @@ void Bitr_destroy(struct bitarray **bitr);
  * Get the total number of bits the bit array can hold */
 size_t Bitr_width(const struct bitarray *bitr);
 
-
+/*
+ * Return the maximum possible width in bytes of the internal buffer
+ * of the bitarray. If any operation would results in an allocation
+ * that breaks this limit, the operation fails and NULL is typically
+ * returned. */
+size_t Bitr_maxcap(void);
 
 /*
  * Initialize bitarray from buffer.
@@ -100,7 +108,11 @@ size_t Bitr_width(const struct bitarray *bitr);
  *
  * <-- return
  * <bitr> (or a dynamically allocated bitarray, if NULL) initialized as explained
- * above. If <bitr> is not NULL, then NULL is returned if not wide enough.
+ * above.
+ * NULL is returned if:
+ *  - <bitr> is not NULL and is not wide enough or
+ *  - <bitr> is NULL but the allocation required is greater than allowed
+ *    (see Bitr_maxcap).
  */
 struct bitarray *Bitr_frombuff(
         struct bitarray *bitr,
@@ -116,8 +128,11 @@ struct bitarray *Bitr_frombuff(
  * as a separator to be ignored can be specified via 'sep'. Otherwise 'sep'
  * should be NULL.
  *
- * NULL is returned for an invalid bitstring or if the width of bitr
- * (if not NULL) is insufficient.
+ * NULL is returned if:
+ *  - the bitstring is invalid
+ *  - the width of bitr (if not NULL) is insufficient
+ *  - bitr is NULL but the allocation required for creating a new bit array
+ *    breaks the maximum allowed width limit.
  *
  * See Bitr_frombuff FMI.
  */
@@ -151,7 +166,10 @@ uint64_t Bitr_tou64(const struct bitarray *bitr);
 struct bitarray *Bitr_clone(const struct bitarray *bitr);
 
 /*
- * Return a new bit array that is initialized by repeating bitr n > 0 times. */
+ * Return a new bit array that is initialized by repeating bitr n > 0 times.
+ *
+ * NULL is returned if the resulting bitarray would be wider than allowed.
+ */
 struct bitarray *Bitr_repeat(
         const struct bitarray *bitr,
         size_t n
@@ -160,7 +178,11 @@ struct bitarray *Bitr_repeat(
 /*
  * Append a to b. If b has bits 1..n, a's bits will come after n. That is, a's
  * least significant bit is more significant than b's most significant bit.
- * B and A themselves remains unchanged and a new bit array is returned. */
+ * B and A themselves remain unchanged and a new bit array is returned.
+ *
+ * NULL is returned if the concatenation would result in a bit array
+ * wider than allowed.
+ */
 struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b);
 
 /*

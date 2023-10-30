@@ -3,12 +3,20 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 #include <tarp/common.h>
 #include <tarp/bits.h>
 #include <tarp/bitarray.h>
 #include <tarp/log.h>
 #include <tarp/error.h>
+
+static const size_t MAX_BITARRAY_WIDTH = SIZE_MAX >> 10;
+
+
+size_t Bitr_maxcap(void){
+    return MAX_BITARRAY_WIDTH;  /* bytes */
+}
 
 /*
  * The required size is the number of bytes required to store nbits (which
@@ -19,8 +27,8 @@
  *  How many bits the array should be big enough to store.
  *
  * --> totsz
- *  If not NULL, the total size that needs to be dynamically allocated for the
- *  struct bitarray will be stored in it.
+ *  If not NULL, the total size (in bytes) that needs to be dynamically
+ *  allocated for the struct bitarray will be stored in it.
  *
  * --> bitarray_sz
  * If not NULL, the size required for the bitarray buffer itself, in bytes,
@@ -40,16 +48,16 @@ static void calculate_required_size__(uint32_t nbits, size_t *totsz, size_t *bit
     if (bitarray_sz) *bitarray_sz = buffer_size;
 }
 
-struct bitarray *allocate_bitarray(
-        void *(*allocator)(size_t nbits, void *priv),
-        size_t nbits,
-        void *priv)
+struct bitarray *allocate_bitarray(size_t nbits, void *priv)
 {
     assert(nbits > 0);
 
     size_t totsz, buffsz;
     calculate_required_size__(nbits, &totsz, &buffsz);
-    struct bitarray *new = (struct bitarray *)allocator(totsz, priv);
+
+    if (buffsz > Bitr_maxcap()) return NULL;
+
+    struct bitarray *new = salloc(totsz, priv);
     new->width = nbits;
     new->size = buffsz;
     return new;
@@ -61,8 +69,10 @@ static void fill_bitarray__(struct bitarray *bitr, uint8_t byte){
 }
 
 struct bitarray *Bitr_new(size_t nbits, bool one){
-    struct bitarray *new = allocate_bitarray(salloc, nbits, NULL);
-    fill_bitarray__(new, one ? FULL_BYTE : NULL_BYTE);
+    struct bitarray *new = allocate_bitarray(nbits, NULL);
+    if (new){
+        fill_bitarray__(new, one ? FULL_BYTE : NULL_BYTE);
+    }
     return new;
 }
 
@@ -86,7 +96,9 @@ struct bitarray *Bitr_frombuff(
     if (bitr){
         if (bits2bytes(bitr->width, false) < buffsz) return NULL;
     } else{
-        bitr = allocate_bitarray(salloc, bytes2bits(buffsz), NULL);
+        if (buffsz > Bitr_maxcap()) return NULL;
+        bitr = allocate_bitarray(bytes2bits(buffsz), NULL);
+        if (!bitr) return NULL;
     }
 
     memcpy(bitr->bytes, buffer, buffsz);
@@ -307,10 +319,13 @@ struct bitarray *Bitr_repeat(
 {
     assert(bitr);
 
-    /* user should consider overflow here when calling the function; it's
-     * expected usage is reasonable and only artificial testing would
-     * cause a size_t wraparound */
-    struct bitarray *new = allocate_bitarray(salloc, Bitr_width(bitr) * n, NULL);
+    /* the bitarray would have to be grown beyond the max limit;
+     * NOTE allocate_bitarray alredy checks for this but the multiplication
+     * could overflow and wrap around before it is even called */
+    if (Bitr_maxcap()/n < bitr->size) return NULL;
+
+    struct bitarray *new = allocate_bitarray(Bitr_width(bitr) * n, NULL);
+    if (!new) return NULL;
 
     size_t w = Bitr_width(bitr);
     if (w >= BITS_IN_BYTE && ismult2(w)){ /* fastpath, just copy byte ranges */
@@ -328,7 +343,12 @@ struct bitarray *Bitr_repeat(
 }
 
 struct bitarray *Bitr_join(struct bitarray *a, const struct bitarray *b){
-    struct bitarray *new = allocate_bitarray(salloc, Bitr_width(a) + Bitr_width(b), NULL);
+    assert(a); assert(b);
+
+    if ((Bitr_maxcap() - a->size) < b->size)
+        return NULL;
+
+    struct bitarray *new = allocate_bitarray(Bitr_width(a) + Bitr_width(b), NULL);
     size_t wa = Bitr_width(a);
     size_t wb = Bitr_width(b);
 
@@ -521,7 +541,8 @@ struct bitarray *Bitr_fromstring(struct bitarray *bitr,
     if (bitr){
         if (bitr->width < true_len) return NULL;
     }else{
-        bitr = allocate_bitarray(salloc, true_len, NULL);
+        bitr = allocate_bitarray(true_len, NULL);
+        if (!bitr) return NULL;
     }
 
     /* bsi = bitstring index; bai = bitarray index */

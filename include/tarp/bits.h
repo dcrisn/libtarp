@@ -96,7 +96,7 @@ static inline size_t bytes2bits(size_t nbytes){
 /*
  * Convert bits to bytes.
  *
- * if round is false, then if nbits is not a multiple of 8, an extra byte
+ * if round is true, then if nbits is not a multiple of 8, an extra byte
  * is added to the result. IOW, if round=true, return number of bytes required
  * to store nbits; otherwise truncate the excess bits.
  */
