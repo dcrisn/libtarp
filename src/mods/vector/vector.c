@@ -5,7 +5,7 @@
 /*
  * Obviously, *at the very least* ensure
  * (SIZE_MAX - TARP_VECTOR_MAX_CAPACITY) >= sizeof(struct vector). */
-#define TARP_VECTOR_MAX_MEM (SIZE_MAX>>2)
+#define TARP_VECTOR_MAX_MEM (SIZE_MAX>>8)
 #define TARP_VECTOR_MIN_CAPACITY 16
 
 size_t Vect_maxcap(size_t itemsz){
@@ -30,7 +30,7 @@ vector *allocate_vector__(struct vector *v, size_t capacity, size_t itemsz)
 
     v->capacity = capacity;
     v->itemsz = itemsz;
-    v->bytes = realloc(v->bytes, capacity*itemsz);
+    v->bytes = salloc(capacity*itemsz, v->bytes);
     return v;
 }
 
