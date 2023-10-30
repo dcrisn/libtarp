@@ -152,10 +152,9 @@ define_bst_waypoint_structure(avl, struct avlnode)
 define_bst_height_getter(private, avl, struct avlnode)
 define_bst_count_getter(public, Avl, struct avltree)
 define_bst_empty_predicate(public, Avl, struct avltree)
-define_bst_node_finder(public, Avl, struct avltree, struct avlnode)
+define_bst_node_finder(private, avl, struct avltree, struct avlnode)
 define_bst_max_getter(public, Avl, struct avltree, struct avlnode)
 define_bst_min_getter(public, Avl, struct avltree, struct avlnode)
-define_bst_boolean_lookup(public, Avl, struct avltree, struct avlnode)
 define_bst_inorder_successor_finder(private, avl, struct avlnode)
 define_bst_path_tracer(private, avl, struct avltree, struct avlnode, struct avl_waypoint)
 define_bst_cut_down(private, avl, struct avltree, struct avlnode)
@@ -744,7 +743,21 @@ struct avlnode *Avl_find_or_insert_node(
     }
 
     Staq_clear(&path, true);
+    tree->cached = entry;
     return entry;
+}
+
+struct avlnode *Avl_find_node(
+        struct avltree *tree,
+        const struct avlnode *key)
+{
+    assert(tree);
+    tree->cached = avl_find_node(tree, key);
+    return tree->cached;
+}
+
+bool Avl_has_node(const struct avltree *tree, const struct avlnode *key){
+    return (avl_find_node(tree, key) != NULL);
 }
 
 /*
