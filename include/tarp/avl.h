@@ -9,9 +9,6 @@ extern "C" {
 #include <stdlib.h>
 
 #include <tarp/common.h>
-#include <tarp/staq.h>
-#include <tarp/bst.h>
-
 
 /*--------------------------------------------------------------------------.
  * AVL -- heigt balanced tree                                               |

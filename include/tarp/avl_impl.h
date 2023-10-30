@@ -1,9 +1,9 @@
 #ifndef TARP_AVL_IMPL_H
 #define TARP_AVL_IMPL_H
 
-#include <tarp/common.h>
 #include <tarp/staq.h>
 #include <tarp/bst.h>
+
 
 struct avlnode {
     struct avlnode *left;
