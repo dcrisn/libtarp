@@ -2,6 +2,7 @@
 #define TARP_CONTAINER_IMPL_H
 
 #include <stdint.h>
+#include <tarp/pedantic.h>
 
 // To intrude or not to intrude?
 // -----------------------------
