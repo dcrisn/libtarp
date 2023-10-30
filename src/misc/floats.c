@@ -22,13 +22,13 @@ long db2long(double d, bool truncate, long fallback, bool *safe){
     double limit = ldexp(1.0, bytes2bits(sizeof(long))-1);
 
     if (d >= -(limit) && d < limit){
-        *safe = true;
+        if (safe) *safe = true;
         /* safe because the value being cast is within the range of
          * a signed long [-2^63, +2^63) */
         return (long)d;
     }
 
-    *safe = false;
+    if (safe) *safe = false;
     return fallback;
 }
 
