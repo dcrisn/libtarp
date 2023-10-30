@@ -249,5 +249,3 @@ enum comparatorResult compf(const struct avlnode *a_, const struct avlnode *b_)
     return EQ;                              // 0
 }
 ```
-
-
