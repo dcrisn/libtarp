@@ -132,6 +132,23 @@ bool isavl(const struct avltree *tree){
     return is;
 }
 
+static inline bool cache_hit(const struct avltree *tree, const struct avlnode *match)
+{
+    assert(tree); assert(match);
+    if (tree->cached && eq(tree->cached, match, tree->cmp)) return true;
+    return false;
+}
+
+static inline void clear_cache(struct avltree *tree){
+    assert(tree);
+    tree->cached = NULL;
+}
+
+static inline void update_cache(struct avltree *tree, struct avlnode *node){
+    assert(tree);
+    tree->cached = node;
+}
+
 void Avl_init(struct avltree *tree, avl_comparator cmpf, avlnode_destructor dtor)
 {
     assert(tree);
@@ -722,14 +739,30 @@ static bool avl_try_insert(
 
 bool Avl_insert_node(struct avltree *tree, struct avlnode *node){
     struct staq path = STAQ_INITIALIZER(waypoint_staq_dtor);
+
+    /* duplicate => insertion *will* fail */
+    if (cache_hit(tree, node)) return false;
+
     bool inserted = avl_try_insert(&path, tree, node);
     Staq_clear(&path, true);
     return inserted;
 }
 
+/*
+ * If we get a cache hit, the node must positively exist in the tree
+ * (because deletions clear the cache as appropriate) and therefore
+ * the insertion will fail.
+ *
+ * NOTE the cache is only updated on lookups, not insertions. Therefore
+ * if the insertion succeeds, semantically this is an insertion, not a lookup,
+ * and the cache stays the way it is. Conversely if the insertion fails, the
+ * duplicate node is returned and so it can be considered a lookup.
+ */
 struct avlnode *Avl_find_or_insert_node(
         struct avltree *tree, struct avlnode *node)
 {
+    if (cache_hit(tree, node)) return tree->cached; /* (1) */
+
     struct avlnode *entry = NULL;
 
     struct staq path = STAQ_INITIALIZER(waypoint_staq_dtor);
@@ -740,10 +773,10 @@ struct avlnode *Avl_find_or_insert_node(
         assert(duplicate);
         entry = duplicate->ptr;
         assert(entry);
+        update_cache(tree, entry);
     }
 
     Staq_clear(&path, true);
-    tree->cached = entry;
     return entry;
 }
 
@@ -752,12 +785,19 @@ struct avlnode *Avl_find_node(
         const struct avlnode *key)
 {
     assert(tree);
-    tree->cached = avl_find_node(tree, key);
-    return tree->cached;
+
+    if (cache_hit(tree, key)) return tree->cached;
+
+    struct avlnode *found = avl_find_node(tree, key);
+
+    /* Only update the cache on successful lookups */
+    if (found) tree->cached = found;
+
+    return found;
 }
 
 bool Avl_has_node(const struct avltree *tree, const struct avlnode *key){
-    return (avl_find_node(tree, key) != NULL);
+    return (Avl_find_node((struct avltree *)tree, key) != NULL);
 }
 
 /*
@@ -844,6 +884,7 @@ bool Avl_delete_node(
     }
 
     Staq_clear(&path, true);
+    clear_cache(tree);
 
     tree->count--;
     return true;

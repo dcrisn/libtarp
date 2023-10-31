@@ -41,7 +41,13 @@ struct avlnode_qwrap{
 static struct avltree initialize_avl_tree(avl_comparator cmp, avlnode_destructor dtor)
 {
     assert(cmp);
-    return (struct avltree){.root = NULL, .cmp = cmp, .count=0, .dtor=dtor};
+    return (struct avltree){
+        .root = NULL,
+        .cached = NULL,
+        .cmp = cmp,
+        .count=0,
+        .dtor=dtor
+    };
 }
 
 #define AVL_INITIALIZER__(cmp, dtor) initialize_avl_tree(cmp, dtor)
