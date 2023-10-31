@@ -43,83 +43,6 @@ struct hasht *allocate_hasht__(struct hasht *ht, size_t num_buckets){
     return ht;
 }
 
-size_t Hasht_count(const struct hasht *ht){
-    assert(ht);
-    return ht->count;
-}
-
-bool Hasht_empty(const struct hasht *ht){
-    return (Hasht_count(ht) == 0);
-}
-
-static inline void destroy_chains(struct hasht *ht){
-    assert(ht);
-
-    THROWS(ERROR_MISCONFIGURED, ht->dtor==NULL, "missing destructor");
-    struct hashtnode *htn, *tmp;
-
-    for (size_t i = 0; i < ht->num_buckets; ++i){
-        htn = (ht->buckets+i)->next;
-        while (htn){
-            tmp = htn->next;
-            ht->dtor(htn);
-            htn = tmp;
-        }
-    }
-}
-
-void Hasht_clear(struct hasht *ht, bool free_containers){
-    assert(ht);
-
-    if (free_containers){
-        destroy_chains(ht);
-    }
-
-    salloc(0, ht->buckets);
-    ht->num_buckets = 0;
-    ht->count = 0;
-
-    /* reallocate a minimum number of buckets */
-    allocate_hasht__(ht, 0);
-}
-
-void Hasht_destroy(struct hasht **hasht, bool free_containers){
-    assert(hasht);
-    assert(*hasht);
-
-    struct hasht *ht = *hasht;
-
-    if (free_containers){
-        destroy_chains(ht);
-    }
-
-    salloc(0, ht->buckets);
-    salloc(0, ht);
-    *hasht = NULL;
-}
-
-struct hasht *Hasht_new(
-        hashf hashfunc,
-        key_getter keyfunc,
-        hashtnode_destructor dtor,
-        unsigned lf)
-{
-    THROWS(ERROR_MISCONFIGURED, keyfunc==NULL, "hasht key getter not provided");
-    hashfunc = hashfunc ? hashfunc : HASHT_DEFAULT_HASHFUNC;
-    lf = (lf>0) ? lf : HASHT_DEFAULT_LOAD_FACTOR;
-
-    struct hasht *ht = allocate_hasht__(NULL, 0);
-    assert(ht);  /* cannot exceed limit on first allocation */
-
-    ht->count = 0;
-    ht->lf = lf;
-    ht->key = keyfunc;
-    ht->hash = hashfunc;
-    ht->dtor = dtor;
-
-    return ht;
-}
-
 /*
  * Greatest mersenne prime under 64 bits. See
  * https://oeis.org/A000043 or https://www.mersenne.org/primes/  */
@@ -194,6 +117,102 @@ static bool equal_keys(const struct hasht *ht,
     return true;
 }
 
+static inline bool cache_hit(const struct hasht *ht, const struct hashtnode *match)
+{
+    assert(ht); assert(match);
+    if (ht->cached && equal_keys(ht, ht->cached, match)) return true;
+    return false;
+}
+
+static inline void clear_cache(struct hasht *ht){
+    assert(ht);
+    ht->cached = NULL;
+}
+
+static inline void update_cache(struct hasht *ht, struct hashtnode *node){
+    assert(ht);
+    ht->cached = node;
+}
+
+static inline void destroy_chains(struct hasht *ht){
+    assert(ht);
+
+    THROWS(ERROR_MISCONFIGURED, ht->dtor==NULL, "missing destructor");
+    struct hashtnode *htn, *tmp;
+
+    for (size_t i = 0; i < ht->num_buckets; ++i){
+        htn = (ht->buckets+i)->next;
+        while (htn){
+            tmp = htn->next;
+            ht->dtor(htn);
+            htn = tmp;
+        }
+    }
+}
+
+size_t Hasht_count(const struct hasht *ht){
+    assert(ht);
+    return ht->count;
+}
+
+bool Hasht_empty(const struct hasht *ht){
+    return (Hasht_count(ht) == 0);
+}
+
+void Hasht_clear(struct hasht *ht, bool free_containers){
+    assert(ht);
+
+    if (free_containers){
+        destroy_chains(ht);
+    }
+
+    salloc(0, ht->buckets);
+    ht->num_buckets = 0;
+    ht->count = 0;
+    clear_cache(ht);
+
+    /* reallocate a minimum number of buckets */
+    allocate_hasht__(ht, 0);
+}
+
+void Hasht_destroy(struct hasht **hasht, bool free_containers){
+    assert(hasht);
+    assert(*hasht);
+
+    struct hasht *ht = *hasht;
+
+    if (free_containers){
+        destroy_chains(ht);
+    }
+
+    salloc(0, ht->buckets);
+    salloc(0, ht);
+    *hasht = NULL;
+}
+
+struct hasht *Hasht_new(
+        hashf hashfunc,
+        key_getter keyfunc,
+        hashtnode_destructor dtor,
+        unsigned lf)
+{
+    THROWS(ERROR_MISCONFIGURED, keyfunc==NULL, "hasht key getter not provided");
+    hashfunc = hashfunc ? hashfunc : HASHT_DEFAULT_HASHFUNC;
+    lf = (lf>0) ? lf : HASHT_DEFAULT_LOAD_FACTOR;
+
+    struct hasht *ht = allocate_hasht__(NULL, 0);
+    assert(ht);  /* cannot exceed limit on first allocation */
+
+    ht->count = 0;
+    ht->lf = lf;
+    ht->key = keyfunc;
+    ht->hash = hashfunc;
+    ht->dtor = dtor;
+    clear_cache(ht);
+
+    return ht;
+}
+
 /*
  * Let clf be the current load factor just calculated.
  * Let slf be the load factor threshold specified at initialization time.
@@ -250,20 +269,32 @@ struct hasht *maybe_resize(struct hasht *ht, bool isdel){
     return ht;
 }
 
+/*
+ * Cache the last lookup. This allows two things:
+ *  1) macros that return a container pointer rather than hashtnode pointer
+ *  can perform a lookup and if successful immediately use the container
+ *  macro on the value in the cache -- instead of having to look it up again
+ *  (the existence check is necessary because it's illegal to call the
+ *  container macro on a NULL pointer)
+ * 2) a run of lookups for the same value is reduced to constant time complexity
+ * beyond the initial call.
+ */
 struct hashtnode *Hasht_get_entry(
         struct hasht *ht,
         const struct hashtnode *node)
 {
     assert(ht); assert(node);
-    ht->cached = NULL;
 
     if (ht->count == 0) return NULL;
+
+    if (cache_hit(ht, node)) return ht->cached;
 
     uint64_t index = node2index(ht, node);
     struct hashtnode *i = (ht->buckets+index)->next;
     while (i){
         if (equal_keys(ht, i, node)){
-            ht->cached = i; return i;
+            update_cache(ht, i);
+            return i;
         }
         i = i->next;
     }
@@ -298,6 +329,10 @@ bool Hasht_remove_entry(
     if (!i) return false;
     prev->next = i->next;
 
+    /* Always clear the cache on deletions to prevent breaking lookups/insertions
+     * (e.g. sucessfully finding an element when it has in fact been removed) */
+    if (cache_hit(ht, node)) clear_cache(ht);
+
     if (free_container){
         THROWS(ERROR_MISCONFIGURED, ht->dtor==NULL, "missing destructor");
         ht->dtor(i);
@@ -311,11 +346,6 @@ bool Hasht_remove_entry(
 
 // ensure no entry exists in the chain starting at head with the same key
 // as node; head is the chain head (the first dummy node)
-//
-// (1) the new node is inserted at the start of the chain. Meaning subsequent
-// insertions/deletions will find this first before any older duplicates
-// (or other nodes in the list that are not duplicates but ended up in the
-// same bucket due to collisions)
 static inline bool unique(const struct hasht *ht,
         const struct hashtnode *head,
         const struct hashtnode *node)
@@ -330,6 +360,17 @@ static inline bool unique(const struct hasht *ht,
     return true;
 }
 
+
+// (1) the cache is always cleared when a request is made to remove the
+// element that happens to be in the cache at that moment. Meaning if
+// we get a cache hit, then the element positively exists in the table
+// and therefore if allow_duplicates=false, we can return straight away.
+//
+// (2) the new node is inserted at the start of the chain. Meaning subsequent
+// insertions/deletions will find this first before any older duplicates
+// (or other nodes in the list that are not duplicates but ended up in the
+// same bucket due to collisions). A sequence of insertions and retrievals
+// of duplicates therefore trivially has LIFO semantics.
 bool Hasht_insert_entry(struct hasht *ht, struct hashtnode *node,
         bool allow_duplicates)
 {
@@ -339,10 +380,11 @@ bool Hasht_insert_entry(struct hasht *ht, struct hashtnode *node,
     struct hashtnode *head = ht->buckets+index;
 
     if (!allow_duplicates){
+        if (cache_hit(ht, node)) return false;  /* (1) */
         if (!unique(ht, head, node)) return false;
     }
 
-    node->next = head->next; /* (1) */
+    node->next = head->next; /* (2) */
     head->next = node;
 
     ht->count++;
