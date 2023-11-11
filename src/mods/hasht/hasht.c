@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <tarp/common.h>
+#include <tarp/log.h>
 #include <tarp/error.h>
 #include <tarp/bits.h>
 #include <tarp/hash/hash.h>

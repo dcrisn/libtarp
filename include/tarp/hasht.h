@@ -79,7 +79,7 @@ typedef void (*key_getter)(const struct hashtnode *node, void **start, size_t *l
 typedef void (*hashtnode_destructor)(struct hashtnode *htn);
 
 
-#include "hasht_impl.h"
+#include "impl/hasht_impl.h"
 
 /*
  * Dynamically allocate a new hash table handle and initialize it.

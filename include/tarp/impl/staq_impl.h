@@ -19,6 +19,7 @@ typedef struct staq staq;
 typedef struct staqnode staqnode;
 
 
+#ifndef __cplusplus
 static inline struct staq staq_initializer(staqnode_destructor dtor){
     return (struct staq){
         .count=0,
@@ -29,6 +30,8 @@ static inline struct staq staq_initializer(staqnode_destructor dtor){
 }
 
 #define STAQ_INITIALIZER__(dtor) staq_initializer(dtor)
+#endif
+
 
 /*
  * Users should use the macro wrappers around these functions;
@@ -54,6 +57,8 @@ void Staq_dup_back(struct staq *sq);
 void Staq_dup_front(struct staq *sq);
 void Staq_put_after(struct staq *sq, struct staqnode *x, struct staqnode *node);
 
+
+#ifndef __cplusplus
 /*
  * Wrappers around the peekfront and peekback functions;
  * Evaluates to a pointer not to the staq node, but to its containing
@@ -113,5 +118,7 @@ void Staq_put_after(struct staq *sq, struct staqnode *x, struct staqnode *node);
                 &((contb)->field));                          \
     }while(0)
 
+
+#endif
 
 #endif

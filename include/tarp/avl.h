@@ -102,7 +102,7 @@ typedef enum comparatorResult (*avl_comparator)
 typedef const char *(*avlnode_printer)(const struct avlnode *node);
 
 
-#include "avl_impl.h"
+#include "impl/avl_impl.h"
 
 
 /*

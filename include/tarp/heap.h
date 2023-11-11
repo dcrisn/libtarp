@@ -94,7 +94,7 @@ typedef void (*heapnode_destructor)(struct heapnode *node);
 typedef void (*xheapnode_destructor)(struct xheapnode *node);
 
 
-#include "heap_impl.h"
+#include "impl/heap_impl.h"
 
 /*
  * For dynamically-allocated heap handles */

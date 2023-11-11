@@ -141,7 +141,7 @@ struct staqnode;
  * the container() macro, then carry out any deallocation as appropriate */
 typedef void (*staqnode_destructor)(struct staqnode *node);
 
-#include "staq_impl.h"
+#include "impl/staq_impl.h"
 
 
 /* Macro/function initializer for static staqs; they do the same thing.

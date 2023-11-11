@@ -73,7 +73,7 @@ struct bst{
     bstnode_destructor dtor;
 };
 
-#include "bst_impl.h"
+#include "impl/bst_impl.h"
 
  /* defined in bst.c */
 struct bst_waypoint;

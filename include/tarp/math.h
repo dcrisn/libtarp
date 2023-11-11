@@ -8,7 +8,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "math_impl.h"
+#include "impl/math_impl.h"
 
 #define positive(n) (n >= 0)
 #define negative(n) (n < 0)

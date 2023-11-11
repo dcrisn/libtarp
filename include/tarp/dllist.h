@@ -136,7 +136,7 @@ typedef struct dlnode dlnode;
 /* see the comments on the staqnode_destructor prototype in tarp/staq.h */
 typedef void (*dlnode_destructor)(struct dlnode *node);
 
-#include "dllist_impl.h"
+#include "impl/dllist_impl.h"
 
 /* Macro/function initializer for static dllists; they do the same thing;
  * See the comments above STAQ_INITIALIZER in tarp/staq.h fmi.   */

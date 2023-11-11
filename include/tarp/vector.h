@@ -8,7 +8,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "vector_impl.h"
+#include "impl/vector_impl.h"
 
 /***************************************************************************
  * Vector (dynamic array)                                                  |

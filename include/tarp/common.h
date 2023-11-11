@@ -1,6 +1,11 @@
 #ifndef __TARP_COMMON__
 #define __TARP_COMMON__
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -8,6 +13,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+
 
 void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 
@@ -74,6 +80,8 @@ typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 #define lt(a, b, cmp) (cmp(a, b) < 0)
 #define gt(a, b, cmp) (cmp(a, b) > 0)
 #define eq(a, b, cmp) (cmp(a, b) == 0)
+#define lte(a, b, cmp) (cmp(a, b) <= 0)
+#define gte(a, b, cmp) (cmp(a, b) >= 0)
 
 /*
  * Given a start pointer 'base' to type TYPE, get a pointer OFFSET positions
@@ -93,5 +101,10 @@ typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 #define vis_private static
 #define vis_public
 #define vis(type) vis_##type
+
+
+#ifdef __cplusplus
+}   /* extern "C" */
+#endif
 
 #endif

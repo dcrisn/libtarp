@@ -19,11 +19,15 @@ struct dlnode {
 };
 
 
+#ifndef __cplusplus
+
 static inline struct dllist initialize_dllist(dlnode_destructor dtor){
     return (struct dllist){ .count=0, .front=NULL, .back=NULL, .dtor = dtor };
 }
 
 #define DLLIST_INITIALIZER__(dtor) initialize_dllist(dtor)
+
+#endif
 
 
 /*
@@ -62,6 +66,7 @@ struct dllist *Dll_split_list(struct dllist *list, struct dlnode *node);
 void Dll_rotate_to_node(struct dllist *list, struct dlnode *node);
 struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
 
+#ifndef __cplusplus
 /*
  * Wrappers around the peek_front and peek_back functions;
  * Evaluates to a pointer not to the staq node, but to its containing
@@ -121,7 +126,7 @@ struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
 #define Dll_next_(container, field) (Dll_nextnode(&((container)->dlnode_field)))
 #define Dll_prev_(container, field) (Dll_prevnode(&((container)->dlnode_field)))
 
-#define Dll_popnode_(list, cont, dlnode_field) Dll_pop_node(list, &((cont)->field))
+#define Dll_popnode_(list, cont, field) Dll_pop_node(list, &((cont)->field))
 
 #define Dll_foreach_(list, i, container_type, field)                         \
     for (                                                                    \
@@ -188,5 +193,7 @@ struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
                 &((contb)->dlnode_field));                           \
     }while(0)
 
+
+#endif
 
 #endif
