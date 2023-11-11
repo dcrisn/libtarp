@@ -6,8 +6,8 @@
 extern "C" {
 #endif
 
-#include <tarp/log.h>
 #include <stdio.h>
+
 
 /*
  * Constants describing error conditions, meant to either be returned as
@@ -29,11 +29,14 @@ enum ErrorCode{
     ERRORCODE_SUCCESS = 0, /* success */
     ERROR_BADALLOC=1,
     ERROR_RUNTIMEERROR,
+    ERROR_INTERNALERROR,
     ERROR_NOSPACE,
     ERROR_OUTOFBOUNDS,
     ERROR_BADPOINTER,
     ERROR_INVALIDVALUE, /* generic, encompasses ERROR_OUTOFBOUNDS etc */
+    ERROR_EXPIRED,
     ERROR_EMPTY,
+    ERROR_BADTIMEPOINT,
     ERROR_MISCONFIGURED,
     ERRORCODE_LAST__
 };
@@ -74,6 +77,7 @@ void throw__(
     }while(0)
 
 #define ASSUME(cond, ...) do{ if (!cond) warn(__VA_ARGS__); } while(0)
+
 
 #ifdef __cplusplus
 } /* extern "C" */

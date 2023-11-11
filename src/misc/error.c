@@ -6,11 +6,14 @@ static const char *error_codes[] = {
     [ERRORCODE_SUCCESS]      = "Success",
     [ERROR_BADALLOC]         = "Memory allocation failure",
     [ERROR_RUNTIMEERROR]     = "Fatal runtime error",
+    [ERROR_INTERNALERROR]    = "Internal error",
     [ERROR_NOSPACE]          = "Insufficient buffer size",
     [ERROR_OUTOFBOUNDS]      = "Value outside acceptable bounds",
     [ERROR_BADPOINTER]       = "NULL or otherwise invalid pointer provided",
     [ERROR_INVALIDVALUE]     = "Unacceptable value provided",
+    [ERROR_EXPIRED]          = "Expired (e.g. destructed etc) resource or dependency",
     [ERROR_EMPTY]            = "Cannot read from or access empty resource",
+    [ERROR_BADTIMEPOINT]     = "Unacceptable timepoint specified",
     [ERROR_MISCONFIGURED]    = "Invalid or missing configuration"
 };
 
