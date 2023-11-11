@@ -2,6 +2,7 @@
 #define TARP_FLOATS_H
 
 #include <math.h>
+#include <stdbool.h>
 
 /*
  * Some helpers for working with floating point numbers.
