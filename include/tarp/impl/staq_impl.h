@@ -58,7 +58,6 @@ void Staq_dup_front(struct staq *sq);
 void Staq_put_after(struct staq *sq, struct staqnode *x, struct staqnode *node);
 
 
-#ifndef __cplusplus
 /*
  * Wrappers around the peekfront and peekback functions;
  * Evaluates to a pointer not to the staq node, but to its containing
@@ -118,7 +117,5 @@ void Staq_put_after(struct staq *sq, struct staqnode *x, struct staqnode *node);
                 &((contb)->field));                          \
     }while(0)
 
-
-#endif
 
 #endif

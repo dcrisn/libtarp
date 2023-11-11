@@ -66,7 +66,6 @@ struct dllist *Dll_split_list(struct dllist *list, struct dlnode *node);
 void Dll_rotate_to_node(struct dllist *list, struct dlnode *node);
 struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
 
-#ifndef __cplusplus
 /*
  * Wrappers around the peek_front and peek_back functions;
  * Evaluates to a pointer not to the staq node, but to its containing
@@ -193,7 +192,5 @@ struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
                 &((contb)->dlnode_field));                           \
     }while(0)
 
-
-#endif
 
 #endif
