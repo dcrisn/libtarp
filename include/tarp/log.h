@@ -1,9 +1,11 @@
 #ifndef TARP_LOG_H
 #define TARP_LOG_H
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 
 #include <tarp/common.h>
 
@@ -59,7 +61,6 @@ void log_message(int priority, const char *fmt, ...);
     log_message(LOG_DEBUG, \
         color(YELLOW,   "[DEBUG] ") "%s(),%s:%d | " \
         fmt "%s", __func__, __FILE__, __LINE__, __VA_ARGS__)
-#endif
 
 /* To silence warning about variadic macro expecting two params;
  * Notice the empty string passed as the second argument will be fed to the "%s"
@@ -72,3 +73,6 @@ void log_message(int priority, const char *fmt, ...);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
+
+
+#endif  /* TARP_LOG_H */
