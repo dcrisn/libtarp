@@ -14,7 +14,10 @@ static const char *error_codes[] = {
     [ERROR_EXPIRED]          = "Expired (e.g. destructed etc) resource or dependency",
     [ERROR_EMPTY]            = "Cannot read from or access empty resource",
     [ERROR_BADTIMEPOINT]     = "Unacceptable timepoint specified",
-    [ERROR_MISCONFIGURED]    = "Invalid or missing configuration"
+    [ERROR_MISCONFIGURED]    = "Invalid or missing configuration",
+    [ERROR_IO]               = "Input-Output error",
+    [ERROR_READ]             = "Read error or partial read",
+    [ERROR_WRITE]            = "Write error or partial write"
 };
 
 const char *tarp_strerror(unsigned int code){
