@@ -41,6 +41,7 @@ enum ErrorCode{
     ERROR_IO,
     ERROR_READ,
     ERROR_WRITE,
+    ERROR_CONFLICT,
     ERRORCODE_LAST__
 };
 

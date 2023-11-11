@@ -72,6 +72,10 @@ void EventPump::run(void){
     Evp_run(m_raw_state);
 }
 
+int EventPump::push_event(unsigned event_type, void *data){
+    return Evp_push_uev(m_raw_state, event_type, data);
+}
+
 void EventPump::track_callback(std::shared_ptr<tarp::Callback> callback){
     assert(callback);
     ++m_callback_id;

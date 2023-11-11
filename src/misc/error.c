@@ -17,7 +17,8 @@ static const char *error_codes[] = {
     [ERROR_MISCONFIGURED]    = "Invalid or missing configuration",
     [ERROR_IO]               = "Input-Output error",
     [ERROR_READ]             = "Read error or partial read",
-    [ERROR_WRITE]            = "Write error or partial write"
+    [ERROR_WRITE]            = "Write error or partial write",
+    [ERROR_CONFLICT]         = "Unsatisfiable request due to conflict"
 };
 
 const char *tarp_strerror(unsigned int code){

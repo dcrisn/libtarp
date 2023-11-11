@@ -4,6 +4,8 @@
 /*
  * C++ wrapper for tarp/event.h
  *
+ * See tarp/event.h FMI.
+ *
  * General API notes
  * ==================
  *
@@ -318,6 +320,8 @@ public:
     int set_uev_callback(unsigned event_type, tarp::uev_callback cb);
     int set_timer_callback(std::chrono::microseconds interval,
             tarp::timer_callback cb);
+
+    int push_event(unsigned event_type, void *data=nullptr);
 
 private:
     struct evp_handle *get_raw_evp_handle(void) override;

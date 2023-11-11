@@ -554,6 +554,9 @@ int Evp_register_uev_watch(struct evp_handle *handle, struct user_event_watch *u
     // aready registered ?
     if (uev->registered) return ERROR_INVALIDVALUE;
 
+    // another callback aready registered ?
+    if (uev->event_type) return ERROR_CONFLICT;
+
     handle->watch[uev->event_type] = uev;
     uev->registered = true;
     return ERRORCODE_SUCCESS;

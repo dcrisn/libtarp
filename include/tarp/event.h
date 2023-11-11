@@ -151,6 +151,28 @@ int Evp_init_fdmon(
 int Evp_register_fdmon(struct evp_handle *handle, struct fd_event *fdev);
 void Evp_unregister_fdmon(struct evp_handle *handle, struct fd_event *fdev);
 
+/*
+ * Register a callback to be invoked for specific user events;
+ * The event_type is a number that *must* be smaller than
+ * MAX_USER_EVENT_TYPE_VALUE identifying the type of event the callback
+ * is to be bound to. The event types as well as the semantics of the 'data'
+ * pointer are defined by the user.
+ *
+ * Events of the specified type are pushed using Evp_push_uev; callbacks
+ * bound to that particular event type are then invoked. The 'data' argument
+ * is also passed to them unchanged.
+ *
+ * NOTE If an event is pushed with no callback to handle it, the event is
+ * silently removed.
+ *
+ * NOTE
+ * Only one callback can be bound to a particular event type; if this does
+ * not suffice for a given scenario, the user should maintain state in
+ * their own callback and multiplex as appropriate.
+ *
+ * NOTE if a callback has already been bound for a particular event type,
+ * it must be un-bound before a new one can be registered in its place.
+ */
 int Evp_init_uev_watch(
         struct user_event_watch *uev, unsigned event_type,
         user_event_callback cb, void *priv);
