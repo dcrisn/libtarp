@@ -30,8 +30,8 @@ enum comparatorResult uintcmp(unsigned int a, unsigned int b){
 }
 
 enum comparatorResult heapnodecmp(const struct heapnode *_a, const struct heapnode *_b){
-    struct testnode *a = container(_a, struct testnode, heaplink);
-    struct testnode *b = container(_b, struct testnode, heaplink);
+    struct testnode *a = get_container(_a, struct testnode, heaplink);
+    struct testnode *b = get_container(_b, struct testnode, heaplink);
 
     if (a->prio > b->prio) return GT;
     else if (a->prio < b->prio) return LT;
@@ -40,14 +40,14 @@ enum comparatorResult heapnodecmp(const struct heapnode *_a, const struct heapno
 
 void testnode_heapdtor(struct heapnode *node){
     assert(node);
-    salloc(0, container(node, struct testnode, heaplink));
+    salloc(0, get_container(node, struct testnode, heaplink));
 }
 
 gen_heapsort_routine(heapsort, unsigned int)
 
 enum comparatorResult xheapnodecmp(const struct xheapnode *_a, const struct xheapnode *_b){
-    struct testnode *a = container(_a, struct testnode, xheaplink);
-    struct testnode *b = container(_b, struct testnode, xheaplink);
+    struct testnode *a = get_container(_a, struct testnode, xheaplink);
+    struct testnode *b = get_container(_b, struct testnode, xheaplink);
 
     if (a->prio > b->prio) return GT;
     else if (a->prio < b->prio) return LT;
@@ -56,7 +56,7 @@ enum comparatorResult xheapnodecmp(const struct xheapnode *_a, const struct xhea
 
 void testnode_xheapdtor(struct xheapnode *node){
     assert(node);
-    salloc(0, container(node, struct testnode, xheaplink));
+    salloc(0, get_container(node, struct testnode, xheaplink));
 }
 
 /*

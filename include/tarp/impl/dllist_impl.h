@@ -73,10 +73,10 @@ struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
  * structure. This is NULL if the staq is empty (that is, if the
  * embedded staq node would itlself be NULL) */
 #define Dll_front_(list, container_type, field) \
-    ((Dll_empty(list)) ? NULL : container(Dll_peek_front(list), container_type, field))
+    ((Dll_empty(list)) ? NULL : get_container(Dll_peek_front(list), container_type, field))
 
 #define Dll_back_(list, container_type) \
-    (Dll_empty(list) ? NULL : container(Dll_peek_back(list), container_type, field))
+    (Dll_empty(list) ? NULL : get_container(Dll_peek_back(list), container_type, field))
 
 /*
  * Wrappers around push_back, push_front
@@ -110,10 +110,10 @@ struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
  * dlnode that has been removed from the list
  */
 #define Dll_popfront_(list, container_type, field) \
-    (Dll_empty(list) ? NULL : container(Dll_pop_front(list), container_type, field))
+    (Dll_empty(list) ? NULL : get_container(Dll_pop_front(list), container_type, field))
 
 #define Dll_popback_(list, container_type, field) \
-    (Dll_empty(list) ? NULL : container(Dll_pop_back(list), container_type, field))
+    (Dll_empty(list) ? NULL : get_container(Dll_pop_back(list), container_type, field))
 
 
 /*
@@ -128,20 +128,20 @@ struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
 
 #define Dll_popnode_(list, cont, field) Dll_pop_node(list, &((cont)->field))
 
-#define Dll_foreach_(list, i, container_type, field)                         \
-    for (                                                                    \
-        struct dlnode *dln_tmp = (list)->front,                              \
-          *dln_tmp_next = ((dln_tmp) ? dln_tmp->next : NULL);                \
-        (i = ((dln_tmp) ? container(dln_tmp, container_type, field): NULL)); \
-        dln_tmp=dln_tmp_next, dln_tmp_next=(dln_tmp ? dln_tmp->next : NULL)  \
+#define Dll_foreach_(list, i, container_type, field)                               \
+    for (                                                                          \
+        struct dlnode *dln_tmp = (list)->front,                                    \
+          *dln_tmp_next = ((dln_tmp) ? dln_tmp->next : NULL);                      \
+        (i = ((dln_tmp) ? get_container(dln_tmp, container_type, field): NULL));   \
+        dln_tmp=dln_tmp_next, dln_tmp_next=(dln_tmp ? dln_tmp->next : NULL)        \
             )
 
-#define Dll_foreach_reverse_(list, i, container_type, field)                 \
-    for (                                                                    \
-        struct dlnode *dln_tmp = (list)->back,                               \
-          *dln_tmp_prev = ((dln_tmp) ? dln_tmp->prev : NULL);                \
-        (i = ((dln_tmp) ? container(dln_tmp, container_type, field): NULL)); \
-        dln_tmp=dln_tmp_prev, dln_tmp_prev=(dln_tmp ? dln_tmp->prev : NULL)  \
+#define Dll_foreach_reverse_(list, i, container_type, field)                       \
+    for (                                                                          \
+        struct dlnode *dln_tmp = (list)->back,                                     \
+          *dln_tmp_prev = ((dln_tmp) ? dln_tmp->prev : NULL);                      \
+        (i = ((dln_tmp) ? get_container(dln_tmp, container_type, field): NULL));   \
+        dln_tmp=dln_tmp_prev, dln_tmp_prev=(dln_tmp ? dln_tmp->prev : NULL)        \
             )
 
 #define Dll_foreach_node_(list, i)                                           \
@@ -162,7 +162,7 @@ struct dlnode *Dll_find_nth_node(const struct dllist *list, size_t n);
 
 #define Dll_find_nth_(list, n, container_type, field)                 \
     ((n==0 || n > Dll_count(list)) ? NULL                             \
-      : container(Dll_find_nth_node(list,n), container_type, field))
+      : get_container(Dll_find_nth_node(list,n), container_type, field))
 
 #define Dll_rotateto_(list, container, dlnode_field)                  \
     do {                                                              \

@@ -147,7 +147,7 @@
 //   a non-POD object could be used.
 // - user is responsible for their own structures in terms of freeing them etc.
 // - encapsulation is reduced. Api functions are compelled to return pointers
-//   to the embedded structure and the user has to call container() on them
+//   to the embedded structure and the user has to call get_container() on them
 //   to get a pointer to the containing structure.
 // - api becomes slightly more cumbersome to use. Macros need an extra argument
 //   (the name of the embedded struct member field inside the container)
@@ -187,8 +187,7 @@
 #endif /* ifdef __GNUC__ */
 
 
-
-#define get_container(node, container_type, field) \
+#define get_container__(node, container_type, field) \
     container_of(node, container_type, field)
 
 

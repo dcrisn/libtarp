@@ -20,7 +20,7 @@ struct avlnode {
  * allows macros e.g. Avl_find() to correcty return a pointer to the
  * container instead of the embedded link, simplifying things for the user.
  * Without this two calls would need to be made (has(), find()) since calling
- * container() on a NULL pointer is illegal. See the Avl_find macro below. */
+ * get_container() on a NULL pointer is illegal. See the Avl_find macro below. */
 struct avltree{
     struct avlnode *root;
     struct avlnode *cached; /* (1) */
@@ -58,16 +58,16 @@ bool isavl(const struct avltree *tree);
 
 
 #define Avl_min_(tree, container_type, field) \
-    Avl_empty(tree) ? NULL : container(Avl_get_min(tree), container_type, field)
+    Avl_empty(tree) ? NULL : get_container(Avl_get_min(tree), container_type, field)
 
 #define Avl_max_(tree, container_type, field) \
-    Avl_empty(tree) ? NULL : container(Avl_get_max(tree), container_type, field)
+    Avl_empty(tree) ? NULL : get_container(Avl_get_max(tree), container_type, field)
 
 #define Avl_kmin_(tree, k, container_type, field) \
-    (Avl_count(tree) < k) ? NULL : container(Avl_get_kth_min(tree, k), container_type, field)
+    (Avl_count(tree) < k) ? NULL : get_container(Avl_get_kth_min(tree, k), container_type, field)
 
 #define Avl_kmax_(tree, k, container_type, field) \
-    (Avl_count(tree) < k) ? NULL : container(Avl_get_kth_max(tree, k), container_type, field)
+    (Avl_count(tree) < k) ? NULL : get_container(Avl_get_kth_max(tree, k), container_type, field)
 
 void Avl_get_nodes_at_level(
         const struct avltree *tree,
@@ -79,7 +79,7 @@ void Avl_get_nodes_at_level(
     for (struct avlnode_ptr *pointer=NULL;                                     \
             ((pointer = Staq_dq(q, struct avlnode_ptr, link)) &&               \
              (i = (pointer && pointer->p)                                      \
-               ? container(pointer->p, container_type, field) : NULL));        \
+               ? get_container(pointer->p, container_type, field) : NULL));    \
              salloc(0, pointer)                                                \
              )
 
@@ -91,14 +91,14 @@ void Avl_get_nodes_at_level(
  * is easily obtained through typeof. Finally, the macro "returns" a pointer
  * to the container instead of the embedded avlnode link, saving the user
  * some hassle */
-#define Avl_find_(tree, container_ptr, field) \
-    Avl_find_node(tree, &((container_ptr)->field)) \
-     ? container((tree)->cached, typeof(*(container_ptr)), field) \
+#define Avl_find_(tree, container_ptr, field)                         \
+    Avl_find_node(tree, &((container_ptr)->field))                    \
+     ? get_container((tree)->cached, typeof(*(container_ptr)), field) \
      : NULL
 
-#define Avl_find_or_insert_(tree, container_ptr, field) \
-    Avl_find_or_insert_node(tree, &((container_ptr)->field)) \
-      ? container((tree)->cached, typeof(*(container_ptr)), field) \
+#define Avl_find_or_insert_(tree, container_ptr, field)                \
+    Avl_find_or_insert_node(tree, &((container_ptr)->field))           \
+      ? get_container((tree)->cached, typeof(*(container_ptr)), field) \
       : NULL
 
 

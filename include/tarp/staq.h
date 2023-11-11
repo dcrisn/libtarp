@@ -22,14 +22,14 @@ extern "C" {
  * is a linked list of 'struct staqnode' nodes. These are meant to be      |
  * intrusively embedded inside the user's own dynamically-allocated        |
  * structures. The containing structure can be obtained back from a given  |
- * staqnode using the 'container()' macro.                                 |
+ * staqnode using the 'get_container()' macro.                             |
  * See container.h and tests/staq/tests.c FMI.                             |
  *                                                                         |
  * The staq functions (push, pop etc) take and manipulate                  |
  * `struct staqnode`s. However, to make the api more friendly and          |
  * user-data oriented, macros are provided that translate between the      |
  * user container and the embedded staqnode and minimize the need for      |
- * casting and directly calling the container() macro.                     |
+ * casting and directly calling the get_container() macro.                 |
  *                                                                         |
  * Specifically, the user should use the following macros:                 |
  *  For stacks: Staq_{top,bottom,push,pop}                                 |
@@ -138,7 +138,7 @@ struct staqnode;
  * A callback function invoked by the Staq api when the user asks for a
  * container to be deallocated.
  * The function should first get the container from the staqnode using
- * the container() macro, then carry out any deallocation as appropriate */
+ * the get_container() macro, then carry out any deallocation as appropriate */
 typedef void (*staqnode_destructor)(struct staqnode *node);
 
 #include "impl/staq_impl.h"
@@ -322,12 +322,12 @@ void Staq_swap(struct staq *a, struct staq *b);
  * change that really makes sense is "putafter". If a new item is added after
  * 'i', the next value of 'i' is the same one it would've had if the insertion\
  * had not occurred. */
-#define Staq_foreach(staq, i, container_type, field)                         \
-    for (                                                                    \
-        struct staqnode *sqn_tmp = (staq)->front,                            \
-          *sqn_tmp_next = ((sqn_tmp) ? sqn_tmp->next : NULL);                \
-        (i = ((sqn_tmp) ? container(sqn_tmp, container_type, field): NULL)); \
-        sqn_tmp=sqn_tmp_next, sqn_tmp_next=(sqn_tmp ? sqn_tmp->next : NULL)  \
+#define Staq_foreach(staq, i, container_type, field)                              \
+    for (                                                                         \
+        struct staqnode *sqn_tmp = (staq)->front,                                 \
+          *sqn_tmp_next = ((sqn_tmp) ? sqn_tmp->next : NULL);                     \
+        (i = ((sqn_tmp) ? get_container(sqn_tmp, container_type, field): NULL));  \
+        sqn_tmp=sqn_tmp_next, sqn_tmp_next=(sqn_tmp ? sqn_tmp->next : NULL)       \
         )
 
 

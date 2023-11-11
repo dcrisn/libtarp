@@ -22,21 +22,21 @@ struct udata {
 
 void udata_list_destructor(struct dlnode *node){
     assert(node);
-    struct udata *s = container(node, struct udata, list_link);
+    struct udata *s = get_container(node, struct udata, list_link);
     free(s);
 }
 
 void udata_heap_destructor(struct heapnode *node){
     assert(node);
-    struct udata *s = container(node, struct udata, heap_link);
+    struct udata *s = get_container(node, struct udata, heap_link);
     free(s);
 }
 
 enum comparatorResult udata_heap_cmp(
     const struct heapnode *_a, const struct heapnode *_b)
 {
-    struct udata *a = container(_a, struct udata, heap_link);
-    struct udata *b = container(_b, struct udata, heap_link);
+    struct udata *a = get_container(_a, struct udata, heap_link);
+    struct udata *b = get_container(_b, struct udata, heap_link);
 
     if (a->key > b->key) return GT;
     else if (a->key < b->key) return LT;

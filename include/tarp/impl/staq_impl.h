@@ -65,10 +65,10 @@ void Staq_put_after(struct staq *sq, struct staqnode *x, struct staqnode *node);
  * structure. This is NULL if the staq is empty (that is, if the
  * embedded staq node would itlself be NULL) */
 #define Staq_peekfront_type(staq, container_type, field) \
-    ((Staq_empty(staq)) ? NULL : container(Staq_peekfront(staq), container_type, field))
+    ((Staq_empty(staq)) ? NULL : get_container(Staq_peekfront(staq), container_type, field))
 
 #define Staq_peekback_type(staq, container_type, field) \
-    (Staq_empty(staq) ? NULL : container(Staq_peekback(staq), container_type, field))
+    (Staq_empty(staq) ? NULL : get_container(Staq_peekback(staq), container_type, field))
 
 /*
  * Wrappers around pushback, pushfront
@@ -100,7 +100,7 @@ void Staq_put_after(struct staq *sq, struct staqnode *x, struct staqnode *node);
  * staq node that has been removed from the list
  */
 #define Staq_popfront_type(staq, container_type, field) \
-    (Staq_empty(staq) ? NULL : container(Staq_popfront(staq), container_type, field))
+    (Staq_empty(staq) ? NULL : get_container(Staq_popfront(staq), container_type, field))
 
 /*
  * Wrapper around Staq_put_after. This lets the user pass pointers to

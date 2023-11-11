@@ -210,7 +210,7 @@ struct mystruct {
 
 void destructor(struct dlnode *node){
     assert(node);
-    struct mystruct *s = container(node, struct mystruct, link);
+    struct mystruct *s = get_container(node, struct mystruct, link);
     free(s);   /* of course, s must have been dynamically allocated here */
 }
 ```
@@ -238,8 +238,8 @@ struct testnode {
 
 enum comparatorResult compf(const struct avlnode *a_, const struct avlnode *b_)
 {
-    const struct testnode *a = container(a_, struct testnode, link);
-    const struct testnode *b = container(b_, struct testnode, link);
+    const struct testnode *a = get_container(a_, struct testnode, link);
+    const struct testnode *b = get_container(b_, struct testnode, link);
     assert(a);
     assert(b);
 

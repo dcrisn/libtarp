@@ -24,8 +24,8 @@ struct testnode {
 
 enum comparatorResult compf(const struct avlnode *a_, const struct avlnode *b_)
 {
-    const struct testnode *a = container(a_, struct testnode, link);
-    const struct testnode *b = container(b_, struct testnode, link);
+    const struct testnode *a = get_container(a_, struct testnode, link);
+    const struct testnode *b = get_container(b_, struct testnode, link);
     assert(a);
     assert(b);
 
@@ -38,7 +38,7 @@ enum comparatorResult compf(const struct avlnode *a_, const struct avlnode *b_)
 const char *testnode2string(const struct avlnode *data){
     assert(data);
 
-    struct testnode *node = container(data, struct testnode, link);
+    struct testnode *node = get_container(data, struct testnode, link);
     size_t len = 1024;
     char *buff = salloc(len, NULL);
     memset(buff, 0, len);
@@ -48,12 +48,12 @@ const char *testnode2string(const struct avlnode *data){
 
 void destructor(struct avlnode *node){
     assert(node);
-    salloc(0, container(node, struct testnode, link));
+    salloc(0, get_container(node, struct testnode, link));
 }
 
 void staq_dtor(struct staqnode *node){
     assert(node);
-    salloc(0, container(node, struct testnode, list));
+    salloc(0, get_container(node, struct testnode, list));
 }
 
 

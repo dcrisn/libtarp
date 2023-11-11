@@ -15,7 +15,7 @@ struct testnode {
 
 void destructor(struct staqnode *node){
     assert(node);
-    salloc(0, container(node, struct testnode, sqnode));
+    salloc(0, get_container(node, struct testnode, sqnode));
 }
 
 enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){

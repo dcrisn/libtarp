@@ -52,10 +52,10 @@ struct xheapnode {
 
 
 #define _Heap_top__(h, container_type, field) \
-    (Heap_empty(h) ? NULL : container(Heap_get_root(h), container_type, field))
+    (Heap_empty(h) ? NULL : get_container(Heap_get_root(h), container_type, field))
 
 #define _Heap_pop__(h, container_type, field) \
-    (Heap_empty(h) ? NULL : container(Heap_pop_root(h), container_type, field))
+    (Heap_empty(h) ? NULL : get_container(Heap_pop_root(h), container_type, field))
 
 #define _Heap_push__(h, container, field) \
     Heap_push_node(h, &((container)->field))
@@ -183,10 +183,10 @@ void NAME(                                                            \
 #endif
 
 #define _XHeap_top__(xh, container_type, field) \
-    (XHeap_empty(xh) ? NULL : container(XHeap_get_root(xh), container_type, field))
+    (XHeap_empty(xh) ? NULL : get_container(XHeap_get_root(xh), container_type, field))
 
 #define _XHeap_pop__(xh, container_type, field) \
-    (XHeap_empty(xh) ? NULL : container(XHeap_pop_root(xh), container_type, field))
+    (XHeap_empty(xh) ? NULL : get_container(XHeap_pop_root(xh), container_type, field))
 
 #define _XHeap_push__(xh, container, field) \
     XHeap_push_node(xh, &((container)->field))

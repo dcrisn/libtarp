@@ -75,7 +75,7 @@ struct hasht {
 
 #define Hasht_get_(hash_table, container_ptr, field) \
     Hasht_get_entry(hash_table, &((container_ptr)->field)) \
-      ? container((hash_table)->cached, typeof(*(container_ptr)), field) \
+      ? get_container((hash_table)->cached, typeof(*(container_ptr)), field) \
       : NULL
 
 

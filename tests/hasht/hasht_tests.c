@@ -22,7 +22,7 @@ struct testnode {
 
 void destructor(struct hashtnode *node){
     assert(node);
-    salloc(0, container(node, struct testnode, link));
+    salloc(0, get_container(node, struct testnode, link));
 }
 
 void getkey(const struct hashtnode *node, void **start, size_t *len){
@@ -30,7 +30,7 @@ void getkey(const struct hashtnode *node, void **start, size_t *len){
     assert(start);
     assert(len);
 
-    struct testnode *t = container(node, struct testnode, link);
+    struct testnode *t = get_container(node, struct testnode, link);
     //debug("called to get key %lu", t->key);
     *start = &t->key;
     *len = sizeof(t->key);

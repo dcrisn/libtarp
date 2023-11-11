@@ -182,7 +182,7 @@ define_bst_rotate_right(private, do_avl, struct avlnode) /* do_avl_rotate_{right
 define_bst_rotate_left(private, do_avl, struct avlnode)
 
 static inline void waypoint_staq_dtor(struct staqnode *node){
-    salloc(0, container(node, struct avl_waypoint, link));
+    salloc(0, get_container(node, struct avl_waypoint, link));
 }
 
 /*

@@ -15,7 +15,7 @@ struct testnode {
 };
 
 void destructor(struct dlnode *node){
-    salloc(0, container(node, struct testnode, link));
+    salloc(0, get_container(node, struct testnode, link));
 }
 
 /*

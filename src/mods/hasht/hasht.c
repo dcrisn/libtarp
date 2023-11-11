@@ -276,7 +276,7 @@ struct hasht *maybe_resize(struct hasht *ht, bool isdel){
  *  can perform a lookup and if successful immediately use the container
  *  macro on the value in the cache -- instead of having to look it up again
  *  (the existence check is necessary because it's illegal to call the
- *  container macro on a NULL pointer)
+ *  get_container macro on a NULL pointer)
  * 2) a run of lookups for the same value is reduced to constant time complexity
  * beyond the initial call.
  */

@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include "container_impl.h"
+#include "impl/container_impl.h"
 
 /*
  * Given a non-NULL pointer to an embedded structure, get a pointer to
@@ -26,7 +26,7 @@ extern "C" {
  *
  * void testf(struct staqnode *node){
  *    assert(node);
- *    struct mystruct *ms = container(node, struct mystruct, link);
+ *    struct mystruct *ms = get_container(node, struct mystruct, link);
  *    printf("myint is %d\n", ms->myint);
  * }
  *
@@ -34,9 +34,8 @@ extern "C" {
  * ms->myint = 1;
  * testf(&ms->link); // 1
  */
-#define container(embedded_structure_ptr, container_type, field) \
-    get_container(embedded_structure_ptr, container_type, field)
-
+#define get_container(node, container_type, field) \
+    get_container__(node, container_type, field)
 
 #ifdef __cplusplus
 }   /* extern "C" */
