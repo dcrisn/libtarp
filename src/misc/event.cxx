@@ -50,9 +50,11 @@ static void user_event_callback_shim(
 /*========================================
  *============ EventPump =================
  *=======================================*/
-EventPump::EventPump(void)
-    : m_callback_id(0), m_callbacks()
+EventPump::EventPump(const EventPump::construction_permit &permit)
+    : m_callback_id(0), m_callbacks(), m_callback_construction_permit()
 {
+    UNUSED(permit);
+
     m_raw_state = Evp_new();
 
     if (!m_raw_state){
@@ -64,7 +66,21 @@ EventPump::EventPump(void)
     }
 }
 
+std::shared_ptr<EventPump> tarp::make_event_pump(void){
+    EventPump::construction_permit p;
+    return make_shared<EventPump>(p);
+}
+
 EventPump::~EventPump(void){
+    /*
+     * If we don't unset the lambda reference (see the m_func member in
+     * CallbackCore.die()) for each callback object when the EventPump is
+     * destructed, then the circular reference between an explicitly-instantiated
+     * callback object that stores a lambda and the lambda that captures the
+     * callback object will result in a memory leak as they both keep each other
+     * alive. => IOW, we need to ensure this circular anchorage is broken. */
+    for (auto entry : m_callbacks) entry.second->die();
+
     Evp_destroy(&m_raw_state);
 }
 
@@ -88,7 +104,7 @@ void EventPump::track_callback(std::shared_ptr<tarp::Callback> callback){
     callback->set_id(m_callback_id);
 }
 
-void EventPump::remove_callback_if_tracked(size_t id){
+void EventPump::untrack_callback(size_t id){
     size_t num_erased = m_callbacks.erase(id);
     debug("UNTRACKED %zu callback(s) [id = %zu]", num_erased, id);
 }
@@ -103,45 +119,83 @@ int EventPump::set_timer_callback(
         std::chrono::microseconds interval,
         tarp::timer_callback cb)
 {
-    return activate_and_track(make_shared<tarp::TimerEventCallback>(
-                shared_from_this(), interval, cb));
+    auto p = make_shared<TimerEventCallback>(
+            m_callback_construction_permit,
+            shared_from_this(), interval, cb);
+    return activate_and_track(p);
 }
 
-int EventPump::set_fd_callback(int fd, uint32_t flags, tarp::fd_callback cb){
-    return activate_and_track(make_shared<tarp::FdEventCallback>(
-                shared_from_this(), fd, flags, cb));
+int EventPump::set_fd_event_callback(int fd, uint32_t flags, tarp::fd_callback cb){
+    auto p = make_shared<FdEventCallback>(
+            m_callback_construction_permit,
+            shared_from_this(), fd, flags, cb);
+    return activate_and_track(p);
 }
 
-int EventPump::set_uev_callback(unsigned event_type, tarp::uev_callback cb){
-    return activate_and_track(make_shared<tarp::UserEventCallback>(
-                shared_from_this(), event_type, cb));
+int EventPump::set_user_event_callback(unsigned event_type, tarp::uev_callback cb){
+    auto p = make_shared<UserEventCallback>(
+            m_callback_construction_permit,
+            shared_from_this(), event_type, cb);
+    return activate_and_track(p);
+}
+
+shared_ptr<TimerEventCallback> EventPump::make_explicit_timer_callback(
+            std::chrono::microseconds interval)
+{
+    auto p = make_shared<TimerEventCallback>(
+            m_callback_construction_permit,
+            shared_from_this(), interval, nullptr);
+    track_callback(p);
+    return p;
+}
+
+shared_ptr<FdEventCallback> EventPump::make_explicit_fd_event_callback(
+            int fd, uint32_t flags)
+{
+    auto p = make_shared<FdEventCallback>(
+            m_callback_construction_permit,
+            shared_from_this(), fd, flags, nullptr);
+    track_callback(p);
+    return p;
+}
+
+shared_ptr<UserEventCallback> EventPump::make_explicit_user_event_callback(
+            unsigned event_type)
+{
+    auto p = make_shared<UserEventCallback>(
+            m_callback_construction_permit,
+            shared_from_this(), event_type, nullptr);
+    track_callback(p);
+    return p;
 }
 
 struct evp_handle *EventPump::get_raw_evp_handle(void) {
     return m_raw_state;
 }
 
-struct evp_handle *Callback::get_raw_evp_handle(std::shared_ptr<tarp::EventPump> evp)
+struct evp_handle *Callback::get_raw_evp_handle(shared_ptr<EventPump> evp)
 {
     std::shared_ptr<tarp::RawEventPumpInterface> evpump = evp;
     return evpump ? evpump->get_raw_evp_handle() : nullptr;
 }
 
-void Callback::remove_callback_if_tracked(std::shared_ptr<tarp::EventPump> evp) const
+void Callback::untrack_callback(std::shared_ptr<tarp::EventPump> evp) const
 {
     std::shared_ptr<tarp::RawEventPumpInterface> evpump = evp;
-    if (evpump) evpump->remove_callback_if_tracked(get_id());
+    if (evpump) evpump->untrack_callback(get_id());
 }
 
 /*================================================
  * ============ TimerEventCallback ===============
  * ==============================================*/
 TimerEventCallback::TimerEventCallback(
+        const Callback::construction_permit &permit,
         std::shared_ptr<tarp::EventPump> evp,
         chrono::microseconds interval,
         tarp::timer_callback cb)
     : CallbackCore<tarp::timer_callback>(evp, cb)
 {
+    UNUSED(permit);
     set_interval(interval);
     initialize_raw_event_handle();
 }
@@ -154,8 +208,7 @@ void TimerEventCallback::set_interval(std::chrono::microseconds interval){
  * If still alive, deallocate everything; otherwise assume
  * already dead (.die() must have been called explicitly) */
 TimerEventCallback::~TimerEventCallback(void){
-    debug("called TimerEventCallback destructor");
-    if (!is_dead()) die();
+    die();
 }
 
 void TimerEventCallback::initialize_raw_event_handle(void){
@@ -205,17 +258,18 @@ void TimerEventCallback::call(void){
  * ============ FdEventCallback =================
  * ==============================================*/
 FdEventCallback::FdEventCallback(
+        const Callback::construction_permit &permit,
         std::shared_ptr<tarp::EventPump> evp,
         int fd, uint32_t flags,
         tarp::fd_callback cb)
     : CallbackCore<tarp::fd_callback>(evp, cb), m_fd(fd), m_flags(flags)
 {
+    UNUSED(permit);
     initialize_raw_event_handle();
 }
 
 FdEventCallback::~FdEventCallback(void){
-    debug("called FdEventCallback destructor");
-    if (!is_dead()) die();
+    die();
 }
 
 void FdEventCallback::initialize_raw_event_handle(void){
@@ -258,6 +312,7 @@ void FdEventCallback::call(void){
  * ============ UserEventCallback ================
  * ==============================================*/
 UserEventCallback::UserEventCallback(
+        const Callback::construction_permit &permit,
         std::shared_ptr<tarp::EventPump> evp,
         uint32_t event_type,
         tarp::uev_callback cb)
@@ -265,12 +320,12 @@ UserEventCallback::UserEventCallback(
         CallbackCore<tarp::uev_callback>(evp, cb),
         m_event_type(event_type), m_event_data(nullptr)
 {
+    UNUSED(permit);
     initialize_raw_event_handle();
 }
 
 UserEventCallback::~UserEventCallback(void){
-    debug("called UserEventCallback destructor");
-    if (!is_dead()) die();
+    die();
 }
 
 void UserEventCallback::initialize_raw_event_handle(void){
@@ -321,3 +376,4 @@ void UserEventCallback::call(void *data){
     m_event_data = data;
     call();
 }
+

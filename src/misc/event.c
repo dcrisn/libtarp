@@ -308,6 +308,8 @@ void Evp_run(struct evp_handle *handle){
     int rc = 0;
     double time;
 
+    double start = time_now_monotonic_dbs();
+
     for(;;){
         if (wake_on_first_timer(handle) != 0)     break;
         if (pump_os_events(handle) != 0)          break;
@@ -315,6 +317,8 @@ void Evp_run(struct evp_handle *handle){
         rc = dispatch_events(handle, &time);
         debug("Event pump loop: handled %zu events in %f ms", rc, time);
     }
+
+    debug("EventPump done after %f seconds", time_now_monotonic_dbs()-start);
 }
 
 /*

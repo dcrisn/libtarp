@@ -13,9 +13,7 @@ CallbackCore<FUNC_TYPE>::CallbackCore(
 }
 
 template<typename FUNC_TYPE>
-CallbackCore<FUNC_TYPE>::~CallbackCore(void){
-    m_func = nullptr;
-}
+CallbackCore<FUNC_TYPE>::~CallbackCore(void){}
 
 template <typename FUNC_TYPE>
 int CallbackCore<FUNC_TYPE>::activate(void){
@@ -75,14 +73,41 @@ void CallbackCore<FUNC_TYPE>::assert_func_set(void) const{
 
 template <typename FUNC_TYPE>
 void CallbackCore<FUNC_TYPE>::die(void){
-    debug("called CallbackCore reset");
+
+    if (is_dead()) return;  /* cannot die twice */
 
     deactivate();
     destroy_raw_event_handle();
     m_isdead = true;
-    m_func = nullptr;  /* release (lambda) function */
 
-    remove_callback_if_tracked(m_evp.lock());
+    /* this triggers the destructor of the Callback object if the EventPump
+      has the only/last shared pointer reference to it left. For EventPump-
+      managed callbacks, the EventPump has the *only* reference at all times.
+      For explicit callbacks, the EventPump has one reference, but normally
+      the user lambda shares ownership by capturing the callback object.
+
+      By keeping a shared pointer inside the event pump ('tracking the callback
+      object') that's removed when the lambda returns false ('untracking
+      the callback object') ensures correct destruction semantics as follows:
+       - the callback object does not get destructed before the lambda since the
+       event pump keeps it alive. Hence the m_func nullptr assignment below is
+       safe. Only the lambda is destructed (unless kept alive by something else).
+       - the circular reference between the callback object and the lambda
+       (assuming an explicit callback object) is broken here, so a memory
+       leak where the 2 keep each other alive is avoided.
+       - if the shared pointer inside the event pump removed by untrack_callback
+       is the very last reference to the callback object, its destructor is
+       invoked. If it is *not* the last reference (the reason being the user
+       has other references either to the callback object or the lambda that
+       keeps them alive), then the callback object destructor will be invoked
+       whenever the other references go out of scope. NOTE this is safe and
+       well defined, because by that point die() will have been called,
+       unregistering the callback object and breaking the circular dependency
+       described above. The Lambda is never called again. There should not be
+       any leaks or use-after-free's.
+    */
+    m_func = nullptr;                /* remove lambda reference */
+    untrack_callback(m_evp.lock());  /* remove EventPump Callback object anchor */
 }
 
 template <typename FUNC_TYPE>

@@ -76,6 +76,19 @@
  * instantiated directly. In that case the function can be passed as null
  * to the constructor  -- but it *must* be set via set_func before calling
  * activate().
+ *
+ * Construction permits
+ * ---------------------
+ * derived class constructors are semantically private. There are 2
+ * issues however with declaring them as such:
+ * 1) it makes it impossible to use std::make_shared without hacks;
+ * 2) the EventPump would need to either be a friend of the respective
+ *    concrete derived class, breaking its encapsulation, OR a friend
+ *    factory must be created as a proxy (which, while better, leads to
+ *    a bit of duplication/redundancy).
+ * A solution to both is for the constructors to stay public but expect
+ * as a parameter a 'key' object that can only be instantiated by
+ * the EventPump.
  */
 
 #include <functional>
@@ -132,9 +145,9 @@ class RawEventPumpInterface;
 class Callback {
     friend class tarp::EventPump;
 public:
-    /* Copy/Move semantics undefined for Callbacks;
-     * Callbacks can only be constructed from explicitly specified
-     * parameters -- not cloned, copied, or moved from other Callbacks. */
+    /* Copy/Move semantics undefined for Callbacks. Implicitly delete
+     * these constructors and assignment operators for all derived
+     * classes. */
     Callback(const Callback &)                = delete;
     Callback(const Callback &&)               = delete;
     Callback &operator=(const Callback&)      = delete;
@@ -150,12 +163,15 @@ public:
     virtual void call(void)                   = 0;
 
 protected:
+    /* See 'construction permits' notes at the top of the file */
+    struct construction_permit{};
+
     virtual void set_id(size_t id)            = 0;
     virtual size_t get_id(void) const         = 0;
     virtual void die(void)                    = 0;   // (2)
 
     struct evp_handle *get_raw_evp_handle(std::shared_ptr<tarp::EventPump> evp);
-    void remove_callback_if_tracked(std::shared_ptr<tarp::EventPump> evp) const;
+    void untrack_callback(std::shared_ptr<tarp::EventPump> evp) const;
 };
 
 /*
@@ -220,10 +236,12 @@ private:
 class TimerEventCallback : public CallbackCore<tarp::timer_callback> {
 public:
     TimerEventCallback(
+            const Callback::construction_permit &permit,
             std::shared_ptr<tarp::EventPump> evp,
             std::chrono::microseconds interval,
             tarp::timer_callback cb=nullptr);
 
+    TimerEventCallback(void) = delete;
     ~TimerEventCallback(void);
     void set_interval(std::chrono::microseconds interval);
     void call(void) override;
@@ -242,10 +260,12 @@ private:
 class FdEventCallback : public CallbackCore<tarp::fd_callback> {
 public:
     FdEventCallback(
+            const tarp::Callback::construction_permit &permit,
             std::shared_ptr<tarp::EventPump> evp,
             int fd, uint32_t flags,
             tarp::fd_callback cb);
 
+    FdEventCallback(void) = delete;
     ~FdEventCallback(void);
     void call(void) override;
 
@@ -262,11 +282,13 @@ private:
 
 class UserEventCallback : public CallbackCore<tarp::uev_callback> {
 public:
-    UserEventCallback(
-            std::shared_ptr<tarp::EventPump> evp,
-            unsigned event_type,
-            tarp::uev_callback cb);
+   UserEventCallback(
+           const tarp::Callback::construction_permit &permit,
+           std::shared_ptr<tarp::EventPump> evp,
+           unsigned event_type,
+           tarp::uev_callback cb);
 
+    UserEventCallback(void) = delete;
     ~UserEventCallback(void);
 
     void call(void) override;
@@ -283,7 +305,6 @@ private:
     void *m_event_data;
 };
 
-
 /*
  * This is to limit the coupling between Callbacks and
  * the EventPump. Specifically, they are friends of each other
@@ -293,20 +314,27 @@ class RawEventPumpInterface {
     friend class Callback;
 private:
     virtual struct evp_handle *get_raw_evp_handle(void) = 0;
-    virtual void track_callback(std::shared_ptr<tarp::Callback> cb) = 0;
-    virtual void remove_callback_if_tracked(size_t id) = 0;
+    virtual void untrack_callback(size_t id) = 0;
 };
+
+/*
+ * Ensure EventPumps are only created as std::shared_ptr's through
+ * std::make_shared. */
+std::shared_ptr<tarp::EventPump> make_event_pump(void);
 
 /*
  * Public instantiable EventPump; *not* to be used through its
  * RawEventPumpInterface -- which is only available to its Callback
- * friend for limited acess to protected/private state. */
+ * friend for limited acess to protected/private state.
+ *
+ * Should only be created as a std::shared_ptr through std::make_shared.
+ */
 class EventPump final :
     public RawEventPumpInterface,
     public std::enable_shared_from_this<tarp::EventPump>
 {
 public:
-    EventPump(void);
+    EventPump(void) = delete;
     ~EventPump(void);
 
     // not copyable/clonable or movable.
@@ -315,24 +343,45 @@ public:
     EventPump &operator=(const EventPump &)    = delete;
     EventPump &operator=(EventPump &&)         = delete;
 
+    class construction_permit {
+    private:
+        friend std::shared_ptr<tarp::EventPump> make_event_pump(void);
+        construction_permit(void) { };
+    };
+
+    EventPump(const EventPump::construction_permit &permit);
+
     void run(void);
-    int set_fd_callback(int fd, uint32_t flags, tarp::fd_callback cb);
-    int set_uev_callback(unsigned event_type, tarp::uev_callback cb);
+    int push_event(unsigned event_type, void *data=nullptr);
+
+    int set_fd_event_callback(int fd, uint32_t flags, tarp::fd_callback cb);
+    int set_user_event_callback(unsigned event_type, tarp::uev_callback cb);
     int set_timer_callback(std::chrono::microseconds interval,
             tarp::timer_callback cb);
 
-    int push_event(unsigned event_type, void *data=nullptr);
+    std::shared_ptr<tarp::TimerEventCallback> make_explicit_timer_callback(
+            std::chrono::microseconds interval);
+
+    std::shared_ptr<tarp::FdEventCallback> make_explicit_fd_event_callback(
+            int fd, uint32_t flags);
+
+    std::shared_ptr<tarp::UserEventCallback> make_explicit_user_event_callback(
+            unsigned event_type);
 
 private:
     struct evp_handle *get_raw_evp_handle(void) override;
-    void track_callback(std::shared_ptr<tarp::Callback> cb) override;
-    void remove_callback_if_tracked(size_t id) override;
+    void untrack_callback(size_t id) override;
+    void track_callback(std::shared_ptr<tarp::Callback> cb);
     int activate_and_track(std::shared_ptr<tarp::Callback> callback);
 
     struct evp_handle *m_raw_state;
     size_t m_callback_id;
     std::unordered_map<size_t, std::shared_ptr<tarp::Callback>> m_callbacks;
+    tarp::Callback::construction_permit m_callback_construction_permit;
 };
+
+
+
 
 
 #include "impl/event.txx"
