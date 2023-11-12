@@ -88,6 +88,11 @@ void EventPump::run(void){
     Evp_run(m_raw_state);
 }
 
+/*
+ * If used in a multithreaded context, each thread should have its own
+ * EventPump object. Otherwise, if an EventPump is shared between multiple
+ * threads, the user must serialize and synchronize calls. The only explicitly
+ * thread-safe method is this one -- push_event. */
 int EventPump::push_event(unsigned event_type, void *data){
     return Evp_push_uev(m_raw_state, event_type, data);
 }

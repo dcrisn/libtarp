@@ -137,9 +137,7 @@ void Evp_set_timer_interval_fromtimespec(struct timer_event *tev,
  * NOTE a timer is automatically unregistered on each expiration. When the
  * callback gets invoked, the timer will have already been unregistered.
  * IOW to get the effect of a periodic timer, the registered callback should
- * re-register itself by calling register_timer (
- * but NOTE: *must* call set_timer_interval* again first before each
- * re-registration).
+ * re-register itself (by calling set_timer_interval and then register_timer).
  */
 int Evp_register_timer(struct evp_handle *handle, struct timer_event *tev);
 void Evp_unregister_timer(struct evp_handle *handle, struct timer_event *tev);

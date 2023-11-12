@@ -6,89 +6,83 @@
  *
  * See tarp/event.h FMI.
  *
+ *
  * General API notes
  * ==================
  *
- * Callback initialization and lifetime
- * -------------------------------------
- * NOTE a callback object can only be initialized at construction time. It can
- * be activated/deactivated multiple times, but if destructed outright
- * (lambda returns false, see next point), then the callback is dead and can no
- * longer be (re)activated. Instead, a new one must be constructed.
  *
- * NOTE when constructed through the EventPump (more on this below), the
- * callback object is tracked by the event pump. The user can't and is not
- * meant to access it. Therefore, it is expected the user will use a
- * lambda as the callable to be invoked by the callback object so as
- * to capture any state that is needed (which does *not* include the
- * callback object itself).
+ * EventPump and Callback objects
+ * -------------------------------
  *
- * The lambda controls the lifetime of the callback object through its return
- * value: if it returns true, the callback continues to exist and operate as
- * normal (for example, if it is a timer callback, the interval is renewed);
- * if it returns false, this is taken as a signal to destruct the callback
- * object. When this happens, any internal state is deallocated and the event
- * pump 'forgets' the callback such that the relevant destructors are triggered.
- * At this point the callback is dead and a new one must be created if necessary.
+ * Callback objects can only be constructed through the EventPump interface
+ * (see EventPump class below). Their constructors are semantically private.
+ * This is enforced by each constructor requiring a special token that cannot
+ * be created by public clients (see 'construction permits' below).
+ * The same is true for the EventPump itself, which should and may only be
+ * created through make_event_pump().
  *
- * Abstract and concrete handles
- * -----------------------------
- * The eventpump uses the abstract Callback handle internally. This class
- * defines the interface common to all callback objects. Publicly, the user
- * should ideally not interact with a callback object directly at all and
- * just carry out the callback registration through the EventPump API.
+ * Callback creation comes in two flavors:
  *
- * NOTE the user *may* instantiate concrete classes directly (TimerEventCallback,
- * FdEventCallback, UserEventCallback). However, there's almost 0 reason
- * for this, since they all expose the same interface (as set by Callback).
+ *  - implicit: a lambda is bound to a callback object. The callback object
+ *  is not accessible to or meant to be accessed by the user and is only
+ *  tracked internally by the eventPump. The 'cb' argument to the EventPump
+ *  must be non-NULL. The EventPump immediately implicitly activates the
+ *  callback.
  *
- * The only exception is the TimerEventCallback where the advantage
- * of instantiating it directly is that the user is able to change the
- * interval from within the callback on every call. Even this special case
- * is normally exceedingly rare. The disadvantage of direct instantion
- * (and not going through the EventPump API) in all cases is that the user
- * must own the callback object and keep it in scope. The EventPump will not
- * track it. The internal state of the callback object is still destructed
- * when the lambda returns false (i.e. lambda 'dies'), but its actual
- * destructor that frees the object itself will not be called until the
- * user allows it to go out of scope.
+ *  - explicit: a lambda is bound to a callback object, but the object is
+ *  returned as a shared pointer. The user is responsible for binding the
+ *  lambda to the callback (see the set_func method) and activating it.
+ *  It's illegal to activate a callback without having bound a lambda first.
+ *  Since in this case a concrete callback object is returned to and is
+ *  available to the user, they may call methods specific to each type of
+ *  callback (e.g. set_interval for TimerEventCallbacks), activate and
+ *  de-activate the callback as needed, etc.
+ *  The callback object can be captured inside the lambda by copying
+ *  the shared pointer.
  *
- * NOTE
- * If not instantiated directly, any callback object should be created
- * through the EventPump (see the interface below). This should almost
- * always be the case. When doing this, the callback object is tracked and
- * owned implcitly by the EventPump. It is not accessible to (or meant to be
- * accessed by) the user. Their callback (normally a lambda) will just be
- * called as appropriate.
  *
- * The EventPump - Callback connection
- * ------------------------------------
- * Even when instantiated directly by the user, a callback object is
- * associated with an eventpump; this connection is set at construction
- * time and cannot be severed -- i.e. it is not possible to e.g. move
- * a callback from one event pump to another; if this is needed, a new
- * callback object should be created.
+ *  ### Lambda return value
  *
- * Initialization and activation
- * ----------------------------------
- * The function object specified to the relevant Callback object constructor
- * must be non-NULL. The only exception is the TimerEventCallback when
- * instantiated directly. In that case the function can be passed as null
- * to the constructor  -- but it *must* be set via set_func before calling
- * activate().
+ *  In both the implicit and explicit Callback cases the lambda must return
+ *  boolean true to continue as normal and boolean false to unregister and
+ *  destroy the callback. NOTE that internal state is destroyed when false is
+ *  returned but the actual Callback object destructor gets invoked at that
+ *  moment only if the user does not maintain other references either to the
+ *  lambda or the Callback object that would keep them alive. Otherwise the
+ *  destructor of the Callback object only gets called when these 'anchors' go
+ *  out of scope as well. Regardless of when the destructor is eventually
+ *  called, once false is returned, the Callback object is 'dead' and cannot
+ *  be used any more. Reinitialization is also not possible: once dead, a new
+ *  callback must be created.
+ *
+ * ### EventPump destruction
+ *
+ * A callback object is associated with the EventPump that was used to create
+ * it. In particular, NOTE the following:
+ * - a Callback object cannot be moved between EventPumps. New Callbacks must
+ *   be created if that is necessary.
+ * - When the EventPump is destructed, its associated callbacks are unusable.
+ *   In fact, the EventPump destructor renders all callbacks 'dead'. Whether
+ *   or not the Callback object gets freed at that instant depends on whether
+ *   the user has other references that are keeping the object alive,
+ *   preventing its destruction (see 'Lambda return value' above).
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
  *
  * Construction permits
  * ---------------------
- * derived class constructors are semantically private. There are 2
- * issues however with declaring them as such:
+ * Constructors of classes derived from tarp::Callback are semantically private.
+ * There are 2 issues however with explicitly declaring them 'private':
  * 1) it makes it impossible to use std::make_shared without hacks;
  * 2) the EventPump would need to either be a friend of the respective
  *    concrete derived class, breaking its encapsulation, OR a friend
  *    factory must be created as a proxy (which, while better, leads to
  *    a bit of duplication/redundancy).
  * A solution to both is for the constructors to stay public but expect
- * as a parameter a 'key' object that can only be instantiated by
- * the EventPump.
+ * as a parameter a key/token object that can only be instantiated by the
+ * EventPump. A similar approach is taken so that the EventPump itself can
+ * only be created through the make_event_pump function.
+ * Look for 'construction_permit' below fmi.
  */
 
 #include <functional>
@@ -121,8 +115,10 @@ class RawEventPumpInterface;
 
 /*
  * This class sets the interface for concrete callback objects;
+ *
  * subclasses must implement this, though they can expand on it by
  * adding their own methods.
+ *
  * NOTE this sets both the public interface (usable by the user and other,
  * uncoupled, functions/classes) and the private interface accessible to
  * friends (e.g. the EventPump). Notice that almost all internal state is
@@ -130,10 +126,9 @@ class RawEventPumpInterface;
  *
  * (1) activate/deactivate are used to (un)register a callback without
  * destroying it. This can be used to dynamically pause callbacks in a list
- * without destroying or creating new ones all the time. Of course, to gain
- * access to this interface, direct instantiation of the concrete classes
- * is required -- meaning this interface is inaccessible to the user when
- * using the simpler interface exposed by EventPump.
+ * without destroying or creating new ones all the time. To gain
+ * access to this interface, 'explicit' Callback objects must be created
+ * through the EventPump API (see the EventPump class fmi).
  *
  * (2) actually destroy the internal state of the callback. After this,
  * a callback can no longer be activated or .call()-ed. A new one must be
@@ -231,7 +226,7 @@ private:
  * end of the unit's range, the conversion can overflow the target
  * duration (e.g. chrono::seconds::max to chrono::microseconds).
  * Of course, the duration here is meant to store short, relative
- * intervals so under normal use this is a non-issue.
+ * intervals so under expected normal use this is a non-issue.
  */
 class TimerEventCallback : public CallbackCore<tarp::timer_callback> {
 public:
@@ -306,10 +301,11 @@ private:
 };
 
 /*
- * This is to limit the coupling between Callbacks and
- * the EventPump. Specifically, they are friends of each other
- * so as to gain access to private/protected data, but this is
- * only through a very restricted interface such as this one. */
+ * Private EventPump interface accessible to the Callback interface.
+ *
+ * This is to limit the coupling between Callbacks and the
+ * EventPump and restrict private access to very specific operations.
+ */
 class RawEventPumpInterface {
     friend class Callback;
 private:
@@ -323,11 +319,10 @@ private:
 std::shared_ptr<tarp::EventPump> make_event_pump(void);
 
 /*
- * Public instantiable EventPump; *not* to be used through its
- * RawEventPumpInterface -- which is only available to its Callback
- * friend for limited acess to protected/private state.
+ * Event pump for registering timer, file descriptor, and user-defined
+ * event-based callbacks.
  *
- * Should only be created as a std::shared_ptr through std::make_shared.
+ * The EventPump is only constructible through make_event_pump.
  */
 class EventPump final :
     public RawEventPumpInterface,

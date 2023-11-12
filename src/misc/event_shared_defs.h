@@ -29,16 +29,17 @@ struct os_event_api_handle;
  * Opaque Event Pump handle;
  *
  * The handle consists of various internal data structure heads. This is
- * mostly FIFOs. In the future possibly the API could be augmented e.g. for
- * user-defined events to enqueue them into a priority queue instead, optionally.
+ * mostly lists with FIFO semantics. In the future possibly the API could be
+ * augmented e.g. for user-defined events to enqueue them into a priority
+ * queue instead, optionally.
  *
  * (1) Timer queue. A *sorted* list of timers; insertions must ensure the list
  * remains sorted. The doubly-linked nodes allow for O(1) removal on cancellation
  * and when traversing the list for processing timer expirations. The main
- * event loop always goes to sleep for the duration given by MIN(timers).
+ * event loop always goes to sleep until the first timer expires.
  * On unblocking, the event pump goes in a specific order (see Evp_start fmi)
  * through the relevant queues and dispatches queued events.
- * This queue is populated by the user through e.g. Evp_register_timer_ms.
+ * The timer queue is populated by the user through e.g. Evp_register_timer_ms.
  *
  * (2) Event queue. A list of file descriptor events; this queue is populated
  * from the code that implements the interface with the OS-specic event API.
@@ -46,29 +47,36 @@ struct os_event_api_handle;
  * (3) a semaphore-like file descriptor. This is in the style of the self-pipe
  * trick. Used to unblock epoll. Since the main loop blocks in a call
  * to pump_os_events (which is ultimately epoll etc depending on the OS),
- * other threads publishing user-defined events or indeed timer expiries
- * need to break interrupt the blocking call. They can do so by writing
- * to this file descriptor. IOW this could easily be replaced by a pipe
- * if portability is a concern.
+ * indeed other threads publishing user-defined events need to be able to
+ * interrupt the blocking call. They can do so by writing to this file
+ * descriptor (see push_uev in event.c).
+ * IOW this could easily be replaced by a pipe if portability is a concern.
  *
  * (4) I mentioned above that the main loop goes to sleep until the first
- * timer expiry. This was a rough explanation. The loop blocks in a
+ * timer expiration. This was a rough explanation. The loop blocks in a
  * call to pump_os_events; this call will unblock (at the very latest)
  * when the timerfd expires because: 1) the timerfd is fd-based and the fd
  * is monitored by e.g. epoll (inside pump_os_events) and 2) the timer is armed
  * so as to expire at the same time as the user-specified timer with the
  * earliest expiration time.
+ * This ensures that (unless the call unblocks due to some other e.g. fd
+ * even occurring), the call unblocks as soon as a timer expires.
  *
  * (5) User event queue. User events are enqueued by any 'publisher' function
  * by calling Evp_push_uev. Once enqueued, the events only get dequeued when
- * processed. Since processing is always FIFO -style, a simple singly-linked
- * list suffices here.
+ * processed. Meaning the publisher cannot change or remove its event.
+ * Since processing is always FIFO -style, a simple singly-linked list suffices
+ * here.
  *
  * (6) The publisher(s) of user events could well be in separate threads
  * relative to the thread running the event pump. To ensure thread-safety,
  * Evp_push_uev will use this mutex to protect enqueue-ing actions to uevq.
  * Similarly, dispatch_events will use the mutex to protect dequeue-ing actions
- * from uevq.
+ * from uevq. Note that all state is kept inside the evp_handle. In a
+ * multithreaded context, multiple event pumps can coexist (each thread
+ * must have its own event pump) but the user must be careful of *sharing*
+ * an event pump between threads without proper serialization and
+ * synchronization measures.
  *
  * (7) This stores pointers to the user-defined event callback wrappers.
  * O(1) lookup can be had by using the event_type integer as a key in
