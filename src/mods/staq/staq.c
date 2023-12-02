@@ -120,7 +120,7 @@ bool Staq_remove(struct staq *sq, bool free_container){
 
     if (node){
         if (free_container){
-            THROWS(ERROR_MISCONFIGURED, sq->dtor==NULL, "missing destructor");
+            THROWS_ON(sq->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
             sq->dtor(node);
         }
         return true;

@@ -211,13 +211,13 @@ static inline bool elapsed(struct timespec *ts, struct timespec *reference){
  */
 static inline void lock_mutex(pthread_mutex_t *mtx){
     int rc;
-    THROWS(ERROR_RUNTIMEERROR, (rc = pthread_mutex_lock(mtx)) != 0,
+    THROWS_ON((rc = pthread_mutex_lock(mtx)) != 0, ERROR_RUNTIMEERROR,
             "pthread_mutex_lock error (%d)", rc);
 }
 
 static inline void unlock_mutex(pthread_mutex_t *mtx){
     int rc;
-    THROWS(ERROR_RUNTIMEERROR, (rc = pthread_mutex_unlock(mtx)) != 0,
+    THROWS_ON((rc = pthread_mutex_unlock(mtx)) != 0, ERROR_RUNTIMEERROR,
             "pthread_mutex_unlock error (%d)", rc);
 }
 

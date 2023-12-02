@@ -292,7 +292,7 @@ static void xheap_destroy__(struct xheap *h, struct xheapnode *node){
 
 void XHeap_clear(struct xheap *h, bool free_containers){
     if (free_containers){
-        THROWS(ERROR_MISCONFIGURED, h->dtor==NULL, "missing destructor");
+        THROWS_ON(h->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
 
         /* complete tree, so no risk of exceeding the recursion depth limit */
         xheap_destroy__(h, h->root);
@@ -367,7 +367,7 @@ void XHeap_remove_node(
     }
 
     if (free_container){
-        THROWS(ERROR_MISCONFIGURED, xh->dtor==NULL, "missing destructor");
+        THROWS_ON(xh->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         xh->dtor(node);
     }
 }

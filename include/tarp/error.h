@@ -7,6 +7,7 @@ extern "C" {
 #endif
 
 #include <stdio.h>
+#include <tarp/log.h>
 
 
 /*
@@ -59,28 +60,43 @@ void throw__(
         const char *condition,
         const char *extra);
 
-
 /*
- * Throw an exception if condition is true */
-#define THROW(exception, cond) \
-    do { \
-        if (cond) { \
-            throw__(exception, __FILE__, __func__, __LINE__, #cond, NULL); \
-        } \
-    }while(0)
+ * Throw an exception; here 'cond' is *not* checked, only printed */
+#define THROW__(cond, exception) \
+    throw__(exception, __FILE__, __func__, __LINE__, #cond, NULL)
 
 /*
  * Like THROW, but with an arbitrary number of extra arguments as for printf */
-#define THROWS(exception, cond, ...) \
-    do { \
-        if (cond) { \
-            char buff[1025] = {0}; \
-            snprintf(buff, 1025, __VA_ARGS__); \
-            throw__(exception, __FILE__, __func__, __LINE__, #cond, buff); \
-        } \
-    }while(0)
+#define THROWS__(cond, exception, ...)                                  \
+    do {                                                                \
+        char buff[1025] = {0};                                          \
+        snprintf(buff, 1025, __VA_ARGS__);                              \
+        throw__(exception, __FILE__, __func__, __LINE__, "", buff);     \
+    } while(0)
 
-#define ASSUME(cond, ...) do{ if (!cond) warn(__VA_ARGS__); } while(0)
+
+#define THROW(exception)       THROW__("", exception)
+#define THROWS(exception, ...) THROWS__("", exception, __VA_ARGS__)
+
+/*
+ * Throw an exception if condition is true */
+#define THROW_ON(cond, exception)             \
+    do {                                      \
+        if (cond) THROW__(cond, exception);   \
+    } while(0)
+
+/*
+ * Like THROW_ON, but with an arbitrary number of
+ * extra arguments as for printf */
+#define THROWS_ON(cond, exception, ...)                        \
+    do {                                                       \
+        if (cond) THROWS__(cond, exception, __VA_ARGS__);      \
+    } while(0)
+
+
+/*
+ * Print warning if condition is true */
+#define WARN_ON(cond, ...) do{ if(cond) warn(__VA_ARGS__); } while(0)
 
 
 #ifdef __cplusplus

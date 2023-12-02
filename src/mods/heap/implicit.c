@@ -233,7 +233,7 @@ void Heap_clear(struct heap *h, bool free_containers){
     assert(h);
 
     if (free_containers){
-        THROWS(ERROR_MISCONFIGURED, h->dtor==NULL, "missing destructor");
+        THROWS_ON(h->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         struct heapnode **s = Vect_begin(h->v), **e = Vect_end(h->v);
         for (; s != e; ++s){
             h->dtor(*s);
@@ -258,7 +258,7 @@ void Heap_remove_node(struct heap *h, struct heapnode *node, bool free_container
     }
 
     if (free_container){
-        THROWS(ERROR_MISCONFIGURED, h->dtor==NULL, "missing destructor");
+        THROWS_ON(h->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         h->dtor(node);
     }
 }
