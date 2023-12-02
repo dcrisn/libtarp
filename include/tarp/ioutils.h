@@ -58,6 +58,23 @@ int full_write(int dst, uint8_t *src, int nbytes);
  */
 int transfer(int src, int dst, uint8_t *buff, size_t buffsz);
 
+/*
+ * Wrapper around the poll() system call for waiting on a single descriptor.
+ *
+ * For monitoring multiple descriptors, call poll() directly: there is no
+ * advantage to having a wrapper.
+ *
+ * The timeout value must be in milliseconds and will be passed to poll() as is.
+ *
+ * <-- return
+ *     Whatever poll() returns*; errno is also set by poll().
+ *
+ *     *except on success; in that case, rather than returning the number of file
+ *      descriptors that are ready (which would be meaningless because there is
+ *      only ONE descriptor), the .revents mask associated with that descriptor
+ *      is returned instead.
+ */
+int pollfd(int fd, int events, int timeout);
 
 
 #ifdef __cplusplus

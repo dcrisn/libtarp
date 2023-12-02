@@ -1,9 +1,11 @@
 #include <time.h>
 #include <assert.h>
+#include <errno.h>
 
 #include <tarp/floats.h>
 #include <tarp/timeutils.h>
 #include <tarp/math.h>
+#include <tarp/log.h>
 
 // see man (2) clock_gettime
 #define TV_NSEC_MAX 999999999LU
@@ -108,7 +110,11 @@ enum comparatorResult timespec_cmp(const struct timespec *a, const struct timesp
  * NOTE: time_t is normally signed; this library is compiled with -frapv
  * to ensure defined signed wraparound.
  */
-void timespec_add(const struct timespec *a, const struct timespec *b, struct timespec *c){
+void timespec_add(
+        const struct timespec *a,
+        const struct timespec *b,
+        struct timespec *c)
+{
     assert(a); assert(b); assert(c);
 
     time_t secs = a->tv_sec + b->tv_sec; // may wrap around
@@ -120,3 +126,31 @@ void timespec_add(const struct timespec *a, const struct timespec *b, struct tim
     c->tv_nsec = nsecs;
 }
 
+struct timespec ms2timespec(uint32_t ms){
+    struct timespec ts = {0};
+    ts.tv_sec = ms / MSECS_PER_SEC;
+    ts.tv_nsec = (ms % MSECS_PER_SEC) * NSECS_PER_MSEC;
+    return ts;
+}
+
+int mssleep(uint32_t ms, bool uninterruptible){
+    struct timespec ts = time_now_monotonic();
+    struct timespec millis = ms2timespec(ms);
+    timespec_add(&ts, &millis, &ts);
+
+    int rc = 0;
+
+    // continue if interrupted
+    while ((rc=(clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == -1))
+            && uninterruptible && errno==EINTR){
+        errno = 0;
+    }
+
+    if (rc){  /* an error other than EINTR */
+        error("clock_nanosleep() error in %s() : '%s'",
+                __func__, strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}

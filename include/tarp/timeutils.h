@@ -42,7 +42,27 @@ enum comparatorResult timespec_cmp(const struct timespec *a, const struct timesp
 
 /* add 2 timespecs; note if unreasonable values are fed in as input, the
  * timespecs (the seconds member) may possibly overflow. */
-void timespec_add(const struct timespec *a, const struct timespec *b, struct timespec *c);
+void timespec_add(
+        const struct timespec *a,
+        const struct timespec *b,
+        struct timespec *c);
+
+/*
+ * Convert ms to a timespec and return it. */
+struct timespec ms2timespec(uint32_t ms);
+
+/*
+ * Sleep for ms milliseconds.
+ *
+ * If uninterruptible=True, then if the sleep is interrupted
+ * by EINTR, the sleep is resumed until complete.
+ *
+ * <-- return
+ * 0 on sucess (sleep completed); -1 on error (sleep not completed;
+ * errno is set by clock_nanosleep).
+ */
+int mssleep(uint32_t ms, bool uninterruptible);
+
 
 #ifdef __cplusplus
 }  /* extern "C" */
