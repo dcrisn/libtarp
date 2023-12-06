@@ -94,7 +94,7 @@ int main(int argc, char *argv[]){
     Evp_init_fdmon(&fdev, waker_read, FD_EVENT_READABLE, reader, NULL);
     Evp_register_fdmon(evp, &fdev);
 
-    Evp_run(evp);
+    Evp_run(evp, -1);
 }
 
 

@@ -304,21 +304,39 @@ static unsigned dispatch_events(
     return num_handled;
 }
 
-void Evp_run(struct evp_handle *handle){
+void dummy_timer_callback(struct timer_event *tev, void *priv){
+    UNUSED(tev);
+    UNUSED(priv);
+}
+
+void Evp_run(struct evp_handle *handle, int seconds){
     int rc = 0;
     double time;
+    bool with_timeout = (seconds > -1);
 
     double start = time_now_monotonic_dbs();
+
+    /* to terminate the run on specified seconds timeout */
+    struct timer_event timeout;
+    if (with_timeout){
+        Evp_init_timer_secs(&timeout, seconds, dummy_timer_callback, NULL);
+        Evp_register_timer(handle, &timeout);
+    }
 
     for(;;){
         if (wake_on_first_timer(handle) != 0)     break;
         if (pump_os_events(handle) != 0)          break;
 
         rc = dispatch_events(handle, &time);
+
         debug("Event pump loop: handled %zu events in %f ms", rc, time);
+
+        if (with_timeout && time_now_monotonic_dbs() - start >= seconds)
+            break;
     }
 
-    debug("EventPump done after %f seconds", time_now_monotonic_dbs()-start);
+    if (with_timeout) Evp_unregister_timer(handle, &timeout);
+    debug("EventPump done after %f seconds", time_now_monotonic_dbs() - start);
 }
 
 /*

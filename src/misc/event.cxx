@@ -85,7 +85,7 @@ EventPump::~EventPump(void){
 }
 
 void EventPump::run(void){
-    Evp_run(m_raw_state);
+    Evp_run(m_raw_state, -1);
 }
 
 /*

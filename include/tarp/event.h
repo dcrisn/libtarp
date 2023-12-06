@@ -6,6 +6,8 @@
 extern "C" {
 #endif
 
+#include <time.h>
+
 #include <tarp/dllist.h>
 
 #include "event_flags.h"
@@ -60,7 +62,6 @@ typedef void (*user_event_callback)(
         void *data,
         void *priv);
 
-
 /*
  * Opque Event pump handle. The user gets one through Evp_new()
  * and must destroy it when no longer needed by calling Evp_destroy.
@@ -83,8 +84,11 @@ void Evp_destroy(struct evp_handle **handle);
 /*
  * Start the event pump. From this point on, all registered callbacks
  * will be invoked as appropriate. New ones can be added and existing
- * ones can be removed on request at any time. */
-void Evp_run(struct evp_handle *handle);
+ * ones can be removed on request at any time.
+ *
+ * seconds is a timeout in seconds for how long the run should last.
+ * Pass -1 for an infinite loop. */
+void Evp_run(struct evp_handle *handle, int seconds);
 
 /*
  * Initialize the internal state of the timer callback and
@@ -132,7 +136,8 @@ void Evp_set_timer_interval_fromtimespec(struct timer_event *tev,
  * NOTE the timer tev must not currently be active. i.e. the timer must
  * not be registered consecutively with no intermediate de-registration.
  *
- * NOTE otoh it is safe to call unregister_timer on an *un*registered timer.
+ * NOTE otoh it is safe to call unregister_timer on a registered or
+ * unregistered timer.
  *
  * NOTE a timer is automatically unregistered on each expiration. When the
  * callback gets invoked, the timer will have already been unregistered.
