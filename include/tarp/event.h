@@ -139,6 +139,10 @@ void Evp_set_timer_interval_fromtimespec(struct timer_event *tev,
  * NOTE otoh it is safe to call unregister_timer on a registered or
  * unregistered timer.
  *
+ * NOTE it is also safe to unregister *other* timers (or other callbacks,
+ * such as fd-event based callbacks) from inside the current callback
+ * (whether the current callback is timer-based, fd event-based etc).
+ *
  * NOTE a timer is automatically unregistered on each expiration. When the
  * callback gets invoked, the timer will have already been unregistered.
  * IOW to get the effect of a periodic timer, the registered callback should
@@ -193,4 +197,3 @@ int Evp_push_uev(struct evp_handle *handle, unsigned event_type, void *data);
 
 
 #endif
-

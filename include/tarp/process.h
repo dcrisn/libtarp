@@ -110,12 +110,12 @@ int daemonize(void);
  * Otherwise if ms_timeout > -1, then this function will attempt to terminate
  * the subprocess forcibly if it's run for more than timeout_ms milliseconds.
  *
- * --> cb, @optional
+ * --> ioevent_cb, @optional
  *  callback to invoke whenever there is an event on instream (POLLOUT),
- *  outstream (POLLIN), errstream (POLLIN) or extra_fd (POLLIN|POLLOUT).
+ *  outstream (POLLIN), errstream (POLLIN).
  *  NOTE: this calback is only called if STREAM_ACTION_PIPE
- *  (or STREAM_ACTION_JOIN) was passed for any of instream, outstream or errstream
- *  as appropriate.
+ *  (or STREAM_ACTION_JOIN) was passed for any of instream, outstream or
+ *  errstream, as appropriate.
  *
  * --> priv
  * Pointer to anything the user wants passed to the callback when it gets
@@ -127,6 +127,10 @@ int daemonize(void);
  *  the subprocess was never forked, then status must be ignored.
  *  Otherwise it is one of PROC_NOSTATUS, PROC_KILLED, or a value >= 0.
  *  See top of file for an explanation on the semantics of these values.
+ *
+ * --> pid, @optional
+ *  if not NULL, the pid of the exited process (or -1 if no process was
+ *  ever forked) is stored in this variable.
  *
  * <-- return
  * 0 : success - the subprocess was forked, executed, and reaped. User should
@@ -144,14 +148,15 @@ int daemonize(void);
  */
 int sync_exec(
         const char *const cmdspec[],
-        struct string_pair envvars[],
+        const struct string_pair envvars[],
         bool clear_first,
         int instream,
         int outstream,
         int errstream,
         int ms_timeout,
         int *status,
-        void (*ioevent_cb)(enum stdStream stream, int fd, unsigned events, void *priv),
+        pid_t *pid,
+        process_ioevent_cb ioevent_cb,
         void *priv);
 
 /*
@@ -175,12 +180,13 @@ int sync_exec(
 int async_exec(
         struct evp_handle *event_pump,
         const char *const cmdspec[],
-        struct string_pair envvars[],
+        const struct string_pair envvars[],
         bool clear_first,
         int instream,
         int outstream,
         int errstream,
         int ms_timeout,
+        pid_t *pid,
         process_ioevent_cb ioevent_cb,
         process_completion_cb completion_cb,
         void *priv);
@@ -191,4 +197,205 @@ int async_exec(
 #endif
 
 
-#endif
+#ifdef __cplusplus
+
+#include <memory>
+#include <functional>
+#include <vector>
+#include <map>
+#include <optional>
+
+
+namespace tarp {
+
+class EventPump;
+
+extern "C" {
+    void cxx_process_io_callback(
+        enum stdStream stream, int fd, unsigned events, void *priv);
+
+    void cxx_process_completion_callback(
+            pid_t pid, int status, void *priv);
+}
+
+/*
+ * Process class that supports:
+ *  - synchronous as well as asynchronous spawning of a subprocess
+ *  - termination of spawned subprocess on request (for asyncronous processes)
+ *  - binding the standard streams of the process to specified descriptors,
+ *    to /dev/null/ or to implicitly-created pipes.
+ *  - capturing of stdout and/or stderr output to internal buffers, accessible
+ *    on process completion. Alternatively, a user callback can be invoked
+ *    to do the reading or writing every time there is a file descriptor event.
+ *  - automatic termination on specified timeout.
+ *
+ * NOTE:
+ * For information on the meaning of the constructor parameters as well
+ * as the synchronous and asynchronous semantics see sync_exec and
+ * async_exec above.
+ *
+ * (1) Constructor for asynchronous process. This may only be used by the
+ * event pump (the permit argument enforces this). Clients must instead use
+ * the corresponding EventPump method (see tarp/event.hxx). The return is
+ * a shared pointer to a Process instance.
+ *
+ * (2) Constructor for direct instantiation. NOTE Processes created via this
+ * constructor may *only* be run synchronosly.
+ *
+ * (3) run/spawn/execute the subprocess according to its construction and any
+ * subsequent configuration (e.g. set_environment). if asynchronous=true,
+ * the process is executed asynchronoulsy. The method returns immediately
+ * while the process may complete afterward (the user may be notified via
+ * the completion callback).
+ *
+ * Otherwise it is executed synchronously -- the method only returns once
+ * the process has completed execution.
+ *
+ * NOTE: Process created via the EventPump may be run both synchronously
+ * and asynchronoulsy. Processes created directly may only be run synchronously.
+ *
+ * NOTE: any (re)configuration of a running asynchronous process will not take
+ * effect until the process has completed (and may then be run again).
+ *
+ * NOTE: it is illegal to call .run() if the process is running. Ensure the
+ * process has terminated before calling .run() again.
+ *
+ * (4) kill a process immediately. Note this only makes sense for asynchronous
+ * processes since a synchronous process by definition will have exited
+ * by the time .run() returns.
+ *
+ * (5) get the pid of the process. Note for a synchronous process this
+ * is the pid of the process -- which has *already* exited.  For asynchronous
+ * processes the process may or may not have exited. Check 'running()'.
+ *
+ * (6) get the exit status of a process. This is optional in the sense that
+ * a process that has never been .run() or the call to .run returned an error
+ * will not have an exit status and the optional class will be empty.
+ *
+ * (7) true if the process is currently still running.
+ *
+ * (8) true if the process has exited and was terminated by a signal (for
+ * killed on timeout or by something else). False if the process has not
+ * exited (still running) or was not terminated by a signal.
+ *
+ * (9) configure the standard streams of the process so that they are bound
+ * to /dev/null. Specifically, set STREAM_ACTION_DEVNULL for all of them.
+ *
+ * (10) configure the standard streams of the process. See top of file fmi.
+ * (11) configure the environment of the process. See top of file fmi.
+ *
+ * (12) If the user specified NO ioevent_cb but specified STREAM_ACTION_PIPE
+ * for any stream, then the process will save the stdout and stder output(s)
+ * in their own streams (assuming the streams are separate).
+ * If STREAM_ACTION_JOIN is properly specified (see top of file fmi), then
+ * both stderr and stdout output are one and the same and will be stored in
+ * the stdout output buffer (assuming the subprocess program is not otherwise
+ * configured -- e.g. to redirect both stdout and stderr to stderr).
+ */
+class Process : public std::enable_shared_from_this<tarp::Process>
+{
+public:
+    using ioevent_cb    = std::function<void(enum stdStream stream, int fd, unsigned events)>;
+    using completion_cb = std::function<void(std::shared_ptr<tarp::Process>)>;
+
+    friend void cxx_process_io_callback(
+        enum stdStream stream, int fd, unsigned events, void *priv);
+
+    friend void cxx_process_completion_callback(
+            pid_t pid, int status, void *priv);
+
+    class construction_permit {
+    private:
+        friend class EventPump;
+        friend class Process;
+        construction_permit(void) { };
+    };
+
+    /* not copiable/clonable or movable. */
+    Process(const Process &)               = delete;
+    Process(const Process &&)              = delete;
+    Process &operator=(const Process &)    = delete;
+    Process &operator=(Process &&)         = delete;
+
+    /* (1) */
+    Process(
+            Process::construction_permit permit,
+            std::shared_ptr<tarp::EventPump> evp,
+            std::initializer_list<std::string> cmd_spec,
+            int ms_timeout = -1,
+            int instream  = STREAM_ACTION_PASS,
+            int outstream = STREAM_ACTION_PASS,
+            int errstream = STREAM_ACTION_PASS,
+            ioevent_cb ioevent_callback = nullptr,
+            completion_cb completion_callback = nullptr
+            );
+
+    /* (2) */
+    Process(
+            std::initializer_list<std::string> cmd_spec,
+            int ms_timeout = -1,
+            int instream  = STREAM_ACTION_PASS,
+            int outstream = STREAM_ACTION_PASS,
+            int errstream = STREAM_ACTION_PASS,
+            ioevent_cb ioevent_callback = nullptr
+            );
+
+    ~Process(void);
+
+    int run(bool asyncronous = false);   /* (3) */
+    void stop(void);                     /* (4) */
+    pid_t get_pid(void) const;           /* (5)  */
+    std::optional<int> get_exit_code(void) const;  /* (6) */
+    bool is_running(void) const;                   /* (7) */
+    bool was_killed(void) const;                   /* (8) */
+    void close_streams(void);                      /* (9) */
+
+    /* (10) */
+    void set_streams(
+            int instream = STREAM_ACTION_PASS,
+            int oustream = STREAM_ACTION_PASS,
+            int errstream = STREAM_ACTION_PASS);
+
+    /* (11) */
+    void set_environment(const std::map<std::string, std::string> &env);
+
+    /* (12) */
+    std::vector<uint8_t> &outbuff(void);
+    std::vector<uint8_t> &errbuff(void);
+
+private:
+    int sync_exec( const char **cmd, const struct string_pair *env,  int ms_timeout);
+    int async_exec(const char **cmd, const struct string_pair *env, int ms_timeout);
+    void complete(int status);
+    void clean_state(void);
+
+    std::shared_ptr<tarp::EventPump> m_evp;
+    std::vector<std::string> m_cmd_spec;
+    std::map<std::string, std::string> m_env_spec;
+    pid_t m_pid;
+    void *m_raw_pstate;
+
+    int m_stdin_fd;
+    int m_stdout_fd;
+    int m_stderr_fd;
+
+    bool m_running;
+    std::optional<int> m_exit_status;
+    int m_timeout;
+
+    /* User callback to invoke when the process has completed (exited/killed) */
+    completion_cb m_completion_cb;
+
+    /* User callback to call on any event on any of the streams. See notes
+     * above */
+    ioevent_cb m_ioevent_cb;
+
+    std::vector<uint8_t> m_outbuff;
+    std::vector<uint8_t> m_errbuff;
+};
+
+};   /* namespace tarp */
+
+#endif  /* __cplusplus */
+
+#endif   /* TARP_PROCESS_H */

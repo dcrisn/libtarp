@@ -9,21 +9,21 @@
     --------------------- Cohort - simple C test runner -----------------------
     ===========================================================================
 
-   This is a casual testing module and functionality is deliberately left basic. 
+   This is a casual testing module and functionality is deliberately left basic.
    Having a full-blown test framework that is complicated to use is often a
-   deterrent from testing one's code. This module aims to be convenient and 
+   deterrent from testing one's code. This module aims to be convenient and
    extremely simple to use, without any bells and whistles. The best way to use
    this is to put the tests in a file and compile and run it when building
    the program e.g. with make by way of sanity-testing it.
 
-   
+
    Features and functionality
    ---------------------------
 
-   In a nutshell, the module offers a test runner that will iterate over a linked 
-   list and execute each test registered there. A per-test as well as an overall 
+   In a nutshell, the module offers a test runner that will iterate over a linked
+   list and execute each test registered there. A per-test as well as an overall
    report is printed to stdout summarizing the tests that ran and which ones failed
-   /passed. 
+   /passed.
 
    * Each test should be in its own self-contained function. The function should return
      an e_status enum, with possible members being SUCCESS or FAILURE, and take no
@@ -72,22 +72,22 @@
    ============================================================================ /
    *****************************************************************************/
 
-/* 
+/*
  * Each test function should return an enum testStatus */
 enum testStatus {
     TEST_PASS=0,
     TEST_FAIL=1
 };
 
-/* 
+/*
  * Each test function must have this prototype:
  *  - take no arguments
  *  - return an enum testStatus
  */
 typedef enum testStatus (*testfunc)();
 
-/* 
- * Encapsulation for a test object. 
+/*
+ * Encapsulation for a test object.
  * Each test function is associated with a struct test
  * when inserted into the testlist.
  */
@@ -109,7 +109,7 @@ struct cohort{
 
 /* |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
 
-/* 
+/*
  * Initialize testlist.
  */
 struct cohort *Cohort_init(void);
@@ -120,11 +120,11 @@ struct cohort *Cohort_init(void);
 void Cohort_add(struct cohort* testlist, testfunc f, char test_name[]);
 
 /*
- * Return count of tests in the test list 
+ * Return count of tests in the test list
  */
 size_t Cohort_count(struct cohort *testlist);
 
-/* 
+/*
  * Run all tests in the testlist (cohort) and report the results.
  * Return an enum testStatus -- either SUCCESS or FAILURE.
  */
@@ -157,10 +157,8 @@ void Cohort_destroy(struct cohort *testlist);
     int num_passed = 0; \
     int passed = 0;
 
-/* test runner */
-#define run(f, expected, ...) \
+#define update_test_counter(passed, f)  \
     ++num_run;  \
-    passed = (f(__VA_ARGS__) == expected); \
     if (passed) ++num_passed; \
     printf("[ ] test %4i %9s | %s()%s\n", \
             num_run, \
@@ -168,7 +166,28 @@ void Cohort_destroy(struct cohort *testlist);
             tkn2str(f), \
             (passed) ? "" : " ~ called at line " tkn2str(__LINE__)\
             ); \
-    if (getenv("STOP_ON_FAIL") && !passed) exit(1);
+    if (getenv("STOP_ON_FAIL") && !passed) exit(1)
+
+/*
+ * test runner; forward variadic arguments to any function,
+ * then update tests state.
+ * */
+#ifndef __cplusplus
+
+#define run(f, expected, ...) \
+    passed = (f(__VA_ARGS__) == expected); \
+    update_test_counter(passed, f);
+
+#else   /* __cplusplus */
+
+#include <functional>
+/* user must call update_test_counter manually with the result */
+template <typename Func, typename ...Params>
+bool run(Func f, enum testStatus expected, Params&&... params)
+{
+    return ( f(std::forward<Params>(params)...) == expected);
+}
+#endif
 
 #define report_test_summary() \
     printf("\n Passed: %i / %i\n", num_passed, num_run); \

@@ -17,7 +17,7 @@
 /*
  * basic tests for for the C {sync,async}_exec API.
  *
- * Note the tests here are not comprehensive. They're don't test everything
+ * Note the tests here are not comprehensive. They don't test everything
  * and won't catch all possible bugs. Rather the point of them is to have
  * a base to build on and expand if bugs are found and to run the available
  * sanitizers on the test binary.
@@ -102,9 +102,10 @@ void delayed_exec(struct timer_event *tev, void *priv){
             STREAM_ACTION_JOIN,
             STREAM_ACTION_JOIN,
             timeout,
+            NULL,
             exec_output_cb,
             exec_completion_cb,
-            tup 
+            tup
             );
     if (rc == -1){
         debug("async_exec failure");
@@ -177,7 +178,7 @@ enum testStatus test_sync_exec(int exec_timeout, int expected_exit_status)
     int status = PROC_NOSTATUS;
     int rc = sync_exec(exec_command, environment_vars, true, STREAM_ACTION_DEVNULL,
             STREAM_ACTION_JOIN, STREAM_ACTION_JOIN,
-            exec_timeout, &status,
+            exec_timeout, &status, NULL,
             exec_output_cb, &pointers);
 
     if (rc == -1){
@@ -216,7 +217,7 @@ int main(int argc, char **argv){
     struct evp_handle *handle = Evp_new();
 
    /*==========================
-     * Test 1: 
+     * Test 1:
      * - run so that the script exits normally: timeout > the amount of time
      *   the script sleeps for.
      * - compare the prints from the script (environment variables printed to

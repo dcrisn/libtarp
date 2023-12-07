@@ -1,3 +1,6 @@
+#include <unistd.h>
+#include <sys/wait.h>
+
 #include <chrono>
 #include <memory>
 #include <stdexcept>
@@ -10,6 +13,7 @@
 
 #include <tarp/event.h>
 #include <tarp/event.hxx>
+#include <tarp/process.h>
 
 using namespace std;
 using namespace tarp;
@@ -84,8 +88,8 @@ EventPump::~EventPump(void){
     Evp_destroy(&m_raw_state);
 }
 
-void EventPump::run(void){
-    Evp_run(m_raw_state, -1);
+void EventPump::run(int seconds){
+    Evp_run(m_raw_state, seconds);
 }
 
 /*
@@ -380,5 +384,22 @@ void UserEventCallback::call(void){
 void UserEventCallback::call(void *data){
     m_event_data = data;
     call();
+}
+
+std::shared_ptr<tarp::Process> EventPump::make_process(
+        std::initializer_list<std::string> cmd_spec,
+        int ms_timeout,
+        int instream ,
+        int outstream,
+        int errstream,
+        Process::ioevent_cb ioevent_callback,
+        Process::completion_cb completion_callback)
+{
+    return make_shared<tarp::Process>(
+            Process::construction_permit(),
+            shared_from_this(),
+            cmd_spec, ms_timeout, instream, outstream, errstream,
+            ioevent_callback, completion_callback
+            );
 }
 

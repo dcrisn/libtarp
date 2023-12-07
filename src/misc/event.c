@@ -252,7 +252,17 @@ static unsigned dispatch_events(
 
     /* handle timer expirations */
     struct timespec now = time_now_monotonic();
-    Dll_foreach(&handle->timers, tev, struct timer_event, link){
+
+    /*
+     * NOTE: use this form of iterating instead of the more readable to
+     * avoid the problem described below.
+     * Dll_foreach saves the 'next' element -- but this may well have been
+     * removed and freed from inside the callback associated with the current
+     * element. This may be the case for example when a client has registered
+     * a few related callbacks where one of them can unregster all of them on
+     * a certain event. This is a perfectly acceptable scenario and using
+     * Dll_foreach in that case risks using already-freed memory! */
+    while ((tev = Dll_front(&handle->timers, struct timer_event, link))){
         if (!elapsed(&tev->tspec, &now)) break;
         Dll_popnode(&handle->timers, tev, link);
         assert(tev->cb);
@@ -262,7 +272,7 @@ static unsigned dispatch_events(
     }
 
     /* Handle OS events */
-    Dll_foreach(&handle->evq, fdev, struct fd_event, link){
+    while ((fdev = Dll_front(&handle->evq, struct fd_event, link))){
         Dll_popnode(&handle->evq, fdev, link);
 
         /* semaphore post or loop wait timer? reset to 0 and carry on; */

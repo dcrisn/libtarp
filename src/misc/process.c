@@ -34,7 +34,7 @@ enum pipeEnd{
  * used to refer to the file descriptor number of the standard
  * streams of a process. */
 enum stdStreamFdNo{
-    STD_IN = 0,
+    STD_IN  = 0,
     STD_OUT = 1,
     STD_ERR = 2
 };
@@ -44,7 +44,7 @@ enum stdStreamFdNo{
 //
 // Expects status to be set to PROC_NOSTATUS to start with if
 // no status has been obtained from waitpid.
-int maybe_decode_process_exit_status(int status){
+static int maybe_decode_process_exit_status(int status){
    // only try to dissect the status of the user-requested subprocess
    // if it has in fact been obtainen from waitpid.
     if (status == PROC_NOSTATUS)
@@ -127,7 +127,7 @@ int daemonize(void){
  * NOTE: envvars *must* have a {NULL, NULL} sentinel as the last entry.
  * If this is not the case, this function will read out of bounds.
  */
-static bool is_valid_envspec(struct string_pair envvars[]){
+static bool is_valid_envspec(const struct string_pair envvars[]){
     assert(envvars);
     for (unsigned i=0;;++i){
 
@@ -170,14 +170,14 @@ static bool is_valid_envspec(struct string_pair envvars[]){
  *     be checked.
  */
 static int populate_environment(
-        struct string_pair vars[],
+        const struct string_pair vars[],
         bool clear_first)
 {
     if (clear_first){
         if (clearenv()) return 1;
     }
 
-    if (!vars)                return 0;
+    if (!vars)                   return 0;
     if (!is_valid_envspec(vars)) return 2;
 
     int rc = 0;
@@ -201,7 +201,7 @@ static int populate_environment(
     } while(0)
 
 // point fd to /dev/null
-int attach_fd_to_dev_null(int fd){
+static int attach_fd_to_dev_null(int fd){
     int nulldev_fd = open("/dev/null", O_RDWR);
     if (nulldev_fd == -1){
         error("Failed to open /dev/null: '%s'", strerror(errno));
@@ -227,11 +227,12 @@ int attach_fd_to_dev_null(int fd){
  * see populate_environment.
  *
  * --> instream, outstream, errstream
- * Each of these must be either a member of the stdStreamFdAction enumeration,
- * or a positive file descriptor (>=0) to be bound to the respective process
- * stream (such that the subprocess can read from it for instream or write
- * to it for outstream and errstream).
- * see tarp/process.h fmi.
+ * Make the subprocess use these for its stdin, stdout, and stderr respectively.
+ * For each of these, the argument must be one of:
+ *  - PROC_STREAM_ASIS or PROC_STREAM_DEVNULL
+ *  - >0: otherwise it's expected the parameter is a valid file descriptor
+ *        meant to either be read from or written to, as appropriate, and
+ *        the respective stream will be attached to it.
  *
  * <-- return
  * -1 : fork failure; user can check errno as normal.
@@ -242,12 +243,11 @@ int attach_fd_to_dev_null(int fd){
  */
 static int fork_and_exec(
         const char *const cmd[],
-        struct string_pair envvars[],
+        const struct string_pair envvars[],
         bool clear_first,
         int instream,
         int outstream,
-        int errstream
-        )
+        int errstream)
 {
     int rc = 0;
 
@@ -491,14 +491,15 @@ static inline void close_fds_if_required(struct int_pair fds[3]){
 /* see tarp/process.h for an explanation on the error codes. */
 int sync_exec(
         const char *const cmdspec[],
-        struct string_pair envvars[],
+        const struct string_pair envvars[],
         bool clear_first,
-        int instream,
+        const int instream,
         int outstream,
         int errstream,
         int ms_timeout,
         int *status,
-        void (*ioevent_cb)(enum stdStream stream, int fd, unsigned events, void *priv),
+        pid_t *pid_,
+        process_ioevent_cb ioevent_cb,
         void *priv
         )
 {
@@ -515,6 +516,7 @@ int sync_exec(
 
     proc_pid = fork_and_exec(cmdspec, envvars, clear_first,
             desc[STD_IN].first, desc[STD_OUT].first, desc[STD_ERR].first);
+    if (pid_) *pid_ = proc_pid;  /* out param */
     if (proc_pid == -1){
         close_fds_if_required(desc);
         return -1;
@@ -616,7 +618,7 @@ struct async_process_state {
 
 // cyclic timer: periodicaly tries to reap process and ultimately stops
 // once process is reaped.
-void async_process_reaper(struct timer_event *tev, void *priv){
+static void async_process_reaper(struct timer_event *tev, void *priv){
     assert(tev);
     assert(priv);
 
@@ -634,9 +636,8 @@ void async_process_reaper(struct timer_event *tev, void *priv){
     }
 
     exit_status = maybe_decode_process_exit_status(exit_status);
-
-    if (state->completion_cb)
-        state->completion_cb(pid, exit_status, state->user_priv);
+    void *user_priv = state->user_priv;
+    process_completion_cb completion_cb = state->completion_cb;
 
     /* process done. Destroy all state. */
     if (state->fds[STD_IN].second != -1)
@@ -651,11 +652,24 @@ void async_process_reaper(struct timer_event *tev, void *priv){
     if (state->fds[STD_ERR].second != -1)
         Evp_unregister_fdmon(state->evp, &state->std_err);
 
-    /* unregister killer just in case it has not run yet */
+    /*
+     * Unregister reaper and killer just in case they are still
+     * scheduled;
+     * NOTE: this situation arises when the process is killed
+     * on request: the killer is called immediately, directly,
+     * and then so is the reaper.
+     * This is even though there may be scheduled timer callbacks
+     * for either or both. We free the state here so any scheduled
+     * callbacks would cause a use-after free. Therefore they must
+     * be unscheduled. */
     Evp_unregister_timer(state->evp, &state->killer);
+    Evp_unregister_timer(state->evp, &state->reaper);
 
     close_fds_if_required(state->fds);
     free(state);
+
+    if (completion_cb)
+        completion_cb(pid, exit_status, user_priv);
 }
 
 /*
@@ -664,7 +678,7 @@ void async_process_reaper(struct timer_event *tev, void *priv){
  * Dispatches to the user-supplied ioevent_cb. Note if the user does not provide
  * an ioevent_cb, then this wrapper does not get called.
  */
-void async_process_fd_event_cb_wrapper(struct fd_event *fdev, int fd, void *priv){
+static void async_process_fd_event_cb_wrapper(struct fd_event *fdev, int fd, void *priv){
     assert(priv);
     assert(fdev);
 
@@ -681,26 +695,42 @@ void async_process_fd_event_cb_wrapper(struct fd_event *fdev, int fd, void *priv
 
 // one-shot timer callback to kill a process on specified timeout.
 void async_process_killer(struct timer_event *tev, void *priv){
-    assert(tev); assert(priv);
+    assert(priv);
+
+    /* NOTE: this may potentially be null as in some circumstances
+     * this function will be called directly rather than by the
+     * event pump API. This is for example when a process is to be killed
+     * on request rather than wait for a/the scheduler kiler. NOTE this
+     * function is a one-shot timer callback and tev is not used here anyway.
+     * */
+    UNUSED(tev);
 
     struct async_process_state *state = (struct async_process_state *)priv;
 
     try_kill(state->pid, SIGKILL, false);
 
     /* reap *now* */
-    Evp_unregister_timer(state->evp, &state->reaper);
     async_process_reaper(&state->reaper, state);
 }
 
-int async_exec(
+/*
+ * NOTE:
+ * if process_state is not NULL, the pointer to the internal process
+ * state associated with the asynchronous process is set in it.
+ * This is useful internally if the process must be terminated prematurely
+ * e.g. on user request. See the .stop() method in process.cxx.
+ */
+int async_exec__(
         struct evp_handle *event_pump,
         const char *const cmdspec[],
-        struct string_pair envvars[],
+        const struct string_pair envvars[],
         bool clear_first,
         int instream,
         int outstream,
         int errstream,
         int ms_timeout,
+        pid_t *pid,
+        void **process_state,
         process_ioevent_cb ioevent_cb,
         process_completion_cb completion_cb,
         void *priv
@@ -719,12 +749,14 @@ int async_exec(
     state->ioevent_cb = ioevent_cb;
     state->evp = event_pump;
     state->user_priv = priv;
+    if (process_state) *process_state = state;
 
     if (set_process_std_stream_settings(state->fds, instream, outstream, errstream))
         goto cleanup;
 
     rc = fork_and_exec(cmdspec, envvars, clear_first, state->fds[STD_IN].first,
             state->fds[STD_OUT].first, state->fds[STD_ERR].first);
+    if (pid) *pid = rc;
     if (rc == -1) goto cleanup;
     state->pid = rc;
 
@@ -765,5 +797,25 @@ cleanup:
     close_fds_if_required(state->fds);
     salloc(0, state);
     return -1;
+}
+
+int async_exec(
+        struct evp_handle *event_pump,
+        const char *const cmdspec[],
+        const struct string_pair envvars[],
+        bool clear_first,
+        int instream,
+        int outstream,
+        int errstream,
+        int ms_timeout,
+        pid_t *pid,
+        process_ioevent_cb ioevent_cb,
+        process_completion_cb completion_cb,
+        void *priv
+        )
+{
+    return async_exec__(event_pump, cmdspec, envvars, clear_first,
+            instream, outstream, errstream, ms_timeout,
+            pid, NULL, ioevent_cb, completion_cb, priv);
 }
 
