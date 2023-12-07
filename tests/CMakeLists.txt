@@ -13,6 +13,11 @@ MACRO(SUBDIRLIST result curdir)
   SET(${result} ${dirlist})
 ENDMACRO()
 
+# create a symbolic link to the test scripts
+# inside the test output directory.
+SET(test_scripts_dir "${CMAKE_SOURCE_DIR}/tests/scripts/")
+file(CREATE_LINK "${test_scripts_dir}" "${output_dir}/scripts" SYMBOLIC)
+
 # Dummy target that causes all the specific test targets to run due to its
 # dependency on them. This makes available a 'tests' target the user can call
 # explicitly.
