@@ -17,7 +17,49 @@
 #include <tarp/timeutils.h>
 #include <tarp/process.h>
 #include <tarp/types.h>
-#include <tarp/timeutils.h>
+#include <tarp/event.h>
+
+#define ASYNC_PROCESS_REAPER_CHECK_INTERVAL_MS 100
+#define NUM_STREAMS 3
+
+/*
+ * index in a 2-item array that stores the
+ * results of a call to pipe(). */
+enum pipeEnd{
+    READ_END  = 0,
+    WRITE_END = 1
+};
+
+/*
+ * used to refer to the file descriptor number of the standard
+ * streams of a process. */
+enum stdStreamFdNo{
+    STD_IN = 0,
+    STD_OUT = 1,
+    STD_ERR = 2
+};
+
+// returns an integer corresponding to the exit status code of the
+// process, or otherwise PROC_KILLED or PROC_NOSTATUS.
+//
+// Expects status to be set to PROC_NOSTATUS to start with if
+// no status has been obtained from waitpid.
+int maybe_decode_process_exit_status(int status){
+   // only try to dissect the status of the user-requested subprocess
+   // if it has in fact been obtainen from waitpid.
+    if (status == PROC_NOSTATUS)
+        return status;
+
+    if (WIFEXITED(status)){ /* 'normal' termination */
+        status = WEXITSTATUS(status);
+    } else if (WIFSIGNALED(status)){
+        /* terminated by signal -- either by the killer subprocess
+         * or something else */
+        status = PROC_KILLED;
+    }
+
+    return status;
+}
 
 /*
  * (1) child gets 0 and should break out of the switch and continue on.
@@ -185,20 +227,18 @@ int attach_fd_to_dev_null(int fd){
  * see populate_environment.
  *
  * --> instream, outstream, errstream
- * Make the subprocess use these for its stdin, stdout, and stderr respectively.
- * For each of these, if the argument is:
- *  - -1: nothing is done. It's a NOP.
- *  - -2: the respective stream is pointer to /dev/null i.e. the respective
- *        stream is effectively closed.
- *  - >0: otherwise it's expected the parameter is a valid file descriptor
- *        meant to either be read from or written to, as appropriate, and
- *        the respective stream will be attached to it.
+ * Each of these must be either a member of the stdStreamFdAction enumeration,
+ * or a positive file descriptor (>=0) to be bound to the respective process
+ * stream (such that the subprocess can read from it for instream or write
+ * to it for outstream and errstream).
+ * see tarp/process.h fmi.
  *
  * <-- return
  * -1 : fork failure; user can check errno as normal.
  * >0 : the pid of the subprocess forked.
  * NOTE: in case fork succeeds but exec fails, the forked subprocess will exit
- * with the errno set by exec.
+ * with the errno set by exec. The exist status code of the subprocess
+ * therefore in that case will be execv's errno value.
  */
 static int fork_and_exec(
         const char *const cmd[],
@@ -212,25 +252,26 @@ static int fork_and_exec(
     int rc = 0;
 
     pid_t child_pid = fork();
+
     switch(child_pid){
     case -1:
         return -1;
     case 0:
-        if (instream == -2){
+        if (instream == STREAM_ACTION_DEVNULL){
             attach_fd_to_dev_null(STDIN_FILENO);
-        } else if (instream != -1){
+        } else if (instream != STREAM_ACTION_PASS){
             DUPLICATE(instream, STDIN_FILENO, "failed to dup stdin");
         }
 
-        if (outstream == -2){
+        if (outstream == STREAM_ACTION_DEVNULL){
             attach_fd_to_dev_null(STDOUT_FILENO);
-        } else if (outstream != -1){
+        } else if (outstream != STREAM_ACTION_PASS){
             DUPLICATE(outstream, STDOUT_FILENO, "failed to dup stdout");
         }
 
-        if (errstream == -2){
+        if (errstream == STREAM_ACTION_DEVNULL){
             attach_fd_to_dev_null(STDERR_FILENO);
-        } else if (errstream != -1){
+        } else if (errstream != STREAM_ACTION_PASS){
             DUPLICATE(errstream, STDERR_FILENO, "failed to dup stderr");
         }
 
@@ -238,7 +279,7 @@ static int fork_and_exec(
             error("Error when populating environment");
         }
 
-        debug("calling execv with %s with %s", cmd[0], cmd[1]);
+        //debug("calling execv with %s with %s", cmd[0], cmd[1]);
         execv(cmd[0], (char *const *)&cmd[1]);
         error("Failed to exec '%s': '%s'", cmd[0], strerror(errno));
         exit(errno);
@@ -259,7 +300,8 @@ static void try_kill(pid_t tgpid, int sig, bool reap){
      * (i.e. if it is a zombie), the signal is still 'delivered' in the
      * sense that kill will not return an error since it has been invoked
      * on an existing process. However, obviously you can't kill a dead
-     * process. And when wait() is eventually called, the status is the
+     * process and therefore the signal has no effect.
+     * When wait() is eventually called, the status is the
      * initial one that the process initially exited with --- not the most
      * recent one as would be caused by this kill invocation.
      * This is in fact precisely what we want. */
@@ -277,10 +319,13 @@ static void try_kill(pid_t tgpid, int sig, bool reap){
 }
 
 /*
- * Fork a subprocess that sleps for ms milliseconds then sends
+ * Fork a subprocess that sleeps for ms milliseconds then sends
  * a SIGKILL to the target pid on wakeup.
  *
  * This is a helper for being able to terminate a subprocess on a timeout.
+ * NOTE: this is only necessary and only used for syncronous process
+ * executions. For async, simpy register the killer as a timer event callback
+ * instead (see async_exec below).
  *
  * <-- return
  * The pid of the killer process; the parent must reap the killer as well
@@ -299,9 +344,151 @@ static inline pid_t fork_killer(pid_t target, uint32_t ms){
     }
 }
 
+// effectively an assert for sanity
+static inline void validate_stdstream_action(enum stdStreamFdAction action){
+    switch(action){
+    case STREAM_ACTION_PASS:
+    case STREAM_ACTION_DEVNULL:
+    case STREAM_ACTION_PIPE:
+    case STREAM_ACTION_JOIN:
+        break;
+    default:
+        THROWS(ERROR_INVALIDVALUE, "invailid stdStreamFdAction constant (%d)", action);
+    }
+}
+
+/*
+ * Configure the settings for each standard process stream according to the
+ * specification.
+ *
+ * Expects a pointer to a 3-item array of int_pairs (where the pairs correspond
+ * to stdin [0], stdout [1], and stderr [2]) and a file descriptor or
+ * an action flag (enum stdStreamFdAction) for each stream.
+ * It will then populate the array accordingly.
+ *
+ * The int_pairs are populated such that .first is the descriptor to be
+ * fed to the subprocess to bind it to the respective stream and .second,
+ * if set, is the pipe end that the current process can read from
+ * (stdout/stderr of subprocess) or write to (stdin of subprocess) it.
+ *
+ * <-- return
+ * -1 on pipe() failure; 0 on sucess.
+ */
+static int set_process_std_stream_settings(
+        struct int_pair descriptors[3],
+        int stdin_action, /* either valid fd OR stdStreamFdAction */
+        int stdout_action,
+        int stderr_action
+        )
+{
+    assert(descriptors);
+
+    validate_stdstream_action(stdin_action);
+    validate_stdstream_action(stdout_action);
+    validate_stdstream_action(stderr_action);
+
+    /* both stdout and stderr must specify STREAM_ACTION_JOIN if either of them
+     * has specified it. */
+    if (stdout_action == STREAM_ACTION_JOIN || stderr_action == STREAM_ACTION_JOIN)
+        THROWS_ON(stdout_action != stderr_action, ERROR_INVALIDVALUE,
+                "inconsistent stream action specification (STREAM_ACTION_JOIN "
+                "for stdout and stderr");
+
+    const size_t num_streams = 3;
+    int pipefd[2];
+
+    /* initialize. */
+    for (unsigned i = 0; i < num_streams; ++i){
+        descriptors[i].first = STREAM_ACTION_PASS;
+        descriptors[i].second = STREAM_ACTION_PASS;
+    }
+
+    switch(stdin_action){
+    case STREAM_ACTION_PASS:
+        break;
+    case STREAM_ACTION_DEVNULL:
+        descriptors[STD_IN].first = STREAM_ACTION_DEVNULL;
+        break;
+    case STREAM_ACTION_JOIN: /* invalid for stdin; just assume ACTION_PIPE was meant */
+    case STREAM_ACTION_PIPE:
+        if (pipe(pipefd)) return -1;
+        descriptors[STD_IN].first = pipefd[READ_END];
+        descriptors[STD_IN].second = pipefd[WRITE_END];
+        break;
+    default:
+        assert(false);
+    }
+
+    switch(stdout_action){
+    case STREAM_ACTION_PASS:
+        break;
+    case STREAM_ACTION_DEVNULL:
+        descriptors[STD_OUT].first = STREAM_ACTION_DEVNULL;
+        break;
+    case STREAM_ACTION_JOIN:
+    case STREAM_ACTION_PIPE:
+        if (pipe(pipefd)) return -1;
+        descriptors[STD_OUT].first = pipefd[WRITE_END];
+        descriptors[STD_OUT].second = pipefd[READ_END];
+        break;
+    default:
+        assert(false);
+    }
+
+    switch(stderr_action){
+    case STREAM_ACTION_PASS:
+        break;
+    case STREAM_ACTION_DEVNULL:
+        descriptors[STD_ERR].first = STREAM_ACTION_DEVNULL;
+        break;
+    case STREAM_ACTION_JOIN: /* use same as stdout */
+        descriptors[STD_ERR].first = pipefd[WRITE_END];
+        descriptors[STD_ERR].second = pipefd[READ_END];
+        break;
+    case STREAM_ACTION_PIPE:
+        if (pipe(pipefd)) return -1;
+        descriptors[STD_ERR].first = pipefd[WRITE_END];
+        descriptors[STD_ERR].second = pipefd[READ_END];
+        break;
+    default:
+        assert(false);
+    }
+
+    return 0;
+}
+
+// helper to ensure the standard stream fds are closed if they
+// were opened by this library (which is the case if pipes were implicitly
+// created).
+//
+// NOTE: if a pipe was created for a given stream, then both .first and ,second
+// (see below) are file descriptors (>=0).
+//
+static inline void close_fds_if_required(struct int_pair fds[3]){
+    assert(fds);
+
+    int first, second;
+    first = fds[STD_IN].first; second = fds[STD_IN].second;
+    if (first != STREAM_ACTION_PASS && second != STREAM_ACTION_PASS){
+        close(first); close(second);
+    }
+
+    first = fds[STD_OUT].first; second = fds[STD_OUT].second;
+    if (first != STREAM_ACTION_PASS && second != STREAM_ACTION_PASS){
+        close(first); close(second);
+    }
+
+    // if STREAM_ACTION_JOIN was used, then same as stdout, so already closed
+    if (fds[STD_ERR].first == first && fds[STD_ERR].second == second) return;
+
+    first = fds[STD_ERR].first; second = fds[STD_ERR].second;
+    if (first != STREAM_ACTION_PASS && second != STREAM_ACTION_PASS){
+        close(first); close(second);
+    }
+}
+
 #define POLL_MS_TIMEOUT          1
-#define EXIT_STATUS_PLACEHOLDER -1
-#define RC_SIGNAL_TERMINATION   -2
+/* see tarp/process.h for an explanation on the error codes. */
 int sync_exec(
         const char *const cmdspec[],
         struct string_pair envvars[],
@@ -309,50 +496,45 @@ int sync_exec(
         int instream,
         int outstream,
         int errstream,
-        int extra_fd,  /* used for e.g. read-end of pipe */
         int ms_timeout,
         int *status,
-        void (*cb)(int fd, unsigned events, void *priv),
+        void (*ioevent_cb)(enum stdStream stream, int fd, unsigned events, void *priv),
         void *priv
         )
 {
-
+    assert(cmdspec);
     pid_t pid, proc_pid, killer_pid;
-    int exit_status = EXIT_STATUS_PLACEHOLDER;
+    int exit_status = PROC_NOSTATUS;
     bool use_killer = (ms_timeout > -1);
 
-    proc_pid = fork_and_exec(cmdspec, envvars, clear_first, instream, outstream, errstream);
-    if (proc_pid == -1) return -1;
+    struct int_pair desc[NUM_STREAMS];
+    if (set_process_std_stream_settings(desc, instream, outstream, errstream)){
+        close_fds_if_required(desc);
+        return 2;
+    }
+
+    proc_pid = fork_and_exec(cmdspec, envvars, clear_first,
+            desc[STD_IN].first, desc[STD_OUT].first, desc[STD_ERR].first);
+    if (proc_pid == -1){
+        close_fds_if_required(desc);
+        return -1;
+    }
 
     if (use_killer){
         if ((killer_pid = fork_killer(proc_pid, ms_timeout)) == -1){
             error("Failed to fork killer; killing process now.");
             try_kill(proc_pid, SIGKILL, true);
+            close_fds_if_required(desc);
             return 1;
         }
     }
 
-    struct pollfd fds[4] = {
-        {
-          .fd       = instream,
-          .events   = POLLOUT,
-          .revents  = 0
-        },
-        {
-          .fd      = outstream,
-          .events  = POLLIN,
-          .revents = 0
-        },
-        {
-          .fd      = errstream,
-          .events  = POLLIN,
-          .revents = 0
-        },
-        {
-           .fd      = extra_fd,
-           .events  = POLLIN | POLLOUT,
-           .revents = 0
-        }
+    /* NOTE: if second is -1, then the respective entry is simply ignored by
+     * poll */
+    struct pollfd fds[NUM_STREAMS] = {
+        {.fd = desc[STD_IN].second, .events = POLLOUT, .revents = 0},
+        {.fd = desc[STD_OUT].second, .events = POLLIN, .revents = 0},
+        {.fd = desc[STD_ERR].second, .events = POLLIN, .revents = 0},
     };
 
     /* set to true when reaped so as not to attempt to do it
@@ -362,7 +544,7 @@ int sync_exec(
 
     /* stop loop because of waitpid error; NOTE: call waitpid for
      * both children first and only break after.
-     * (1), (2): if waitpid returns a value != 0, then stop either
+     * (1), (2): if waitpid returns a value != 0, then must stop either
      * because there has been an error or because the expected
      * process has been reaped. */
     bool must_stop   = false;
@@ -385,8 +567,14 @@ int sync_exec(
         int events = poll(fds, ARRLEN(fds), POLL_MS_TIMEOUT);
         if (!events) continue;
 
-        for (int i = 0; i < (ssize_t)ARRLEN(fds); ++i){
-            if (cb && fds[i].revents > 0) cb(fds[i].fd, fds[i].revents, priv);
+        for (size_t i = 0; i < NUM_STREAMS; ++i){
+            if (ioevent_cb && fds[i].revents > 0){
+                /* if STREAM_ACTION_JOIN was used, only call callback
+                 * once for stdout and stderr combined, else the 2nd
+                 * invocation would block */
+                if (i == STD_ERR && fds[STD_ERR].fd == fds[STD_OUT].fd) continue;
+                ioevent_cb(i, fds[i].fd, fds[i].revents, priv);
+            }
         }
     }
 
@@ -400,19 +588,182 @@ int sync_exec(
         waitpid(proc_pid, &exit_status, WNOHANG);
     }
 
-    // only try to dissect the status of the user-requested subprocess
-    // if it could be obtained.
-    if (exit_status != EXIT_STATUS_PLACEHOLDER){
-        if (WIFEXITED(exit_status)){ /* 'normal' termination */
-            exit_status = WEXITSTATUS(exit_status);
-        } else if (WIFSIGNALED(exit_status)){
-            /* terminated by signal -- either by the killer subprocess
-             * or something else */
-            exit_status = RC_SIGNAL_TERMINATION;
+    exit_status = maybe_decode_process_exit_status(exit_status);
+    if (status) *status = exit_status;
+    close_fds_if_required(desc);
+    return 0;
+}
+
+/*
+ * All state of an asynchronous process -- mainly relating to callbacks
+ * registered with the event pump, descriptors opened for the standard
+ * process streams (if pipes have been implicitly created) etc.
+ * The state is allocated dynamically and is freed when the process is
+ * eventually reaped. */
+struct async_process_state {
+    struct timer_event killer;
+    struct timer_event reaper;
+    struct fd_event std_in;
+    struct fd_event std_out;
+    struct fd_event std_err;
+    struct int_pair fds[3];
+    pid_t pid;
+    struct evp_handle *evp;
+    process_ioevent_cb    ioevent_cb;
+    process_completion_cb completion_cb;
+    void *user_priv;
+};
+
+// cyclic timer: periodicaly tries to reap process and ultimately stops
+// once process is reaped.
+void async_process_reaper(struct timer_event *tev, void *priv){
+    assert(tev);
+    assert(priv);
+
+    int pid;
+    int exit_status = PROC_NOSTATUS;
+
+    struct async_process_state *state = priv;
+
+    /* if not reaped, try again later */
+    if (!(pid = waitpid(state->pid, &exit_status, WNOHANG))){
+        Evp_set_timer_interval_ms(&state->reaper,
+                ASYNC_PROCESS_REAPER_CHECK_INTERVAL_MS);
+        Evp_register_timer(state->evp, &state->reaper);
+        return;
+    }
+
+    exit_status = maybe_decode_process_exit_status(exit_status);
+
+    if (state->completion_cb)
+        state->completion_cb(pid, exit_status, state->user_priv);
+
+    /* process done. Destroy all state. */
+    if (state->fds[STD_IN].second != -1)
+        Evp_unregister_fdmon(state->evp, &state->std_in);
+
+    if (state->fds[STD_OUT].second != -1)
+        Evp_unregister_fdmon(state->evp, &state->std_out);
+
+    // NOTE: this will have been set to -1 by async_exec if STREAM_ACTION_JOIN
+    // was used for both stdout to stderr. This avoids a double-close in
+    // close_fds_if_required and such
+    if (state->fds[STD_ERR].second != -1)
+        Evp_unregister_fdmon(state->evp, &state->std_err);
+
+    /* unregister killer just in case it has not run yet */
+    Evp_unregister_timer(state->evp, &state->killer);
+
+    close_fds_if_required(state->fds);
+    free(state);
+}
+
+/*
+ * Gets called for any event on implicitly-created pipes for the process's
+ * standard streams.
+ * Dispatches to the user-supplied ioevent_cb. Note if the user does not provide
+ * an ioevent_cb, then this wrapper does not get called.
+ */
+void async_process_fd_event_cb_wrapper(struct fd_event *fdev, int fd, void *priv){
+    assert(priv);
+    assert(fdev);
+
+    struct async_process_state *state = priv;
+    assert(state->ioevent_cb);
+    if (fd == state->fds[STD_IN].second){
+        state->ioevent_cb(STDIN, fd, FD_EVENT_WRITABLE, state->user_priv);
+    } else if (fd == state->fds[STD_OUT].second){
+        state->ioevent_cb(STDOUT, fd, FD_EVENT_READABLE, state->user_priv);
+    } else if (fd == state->fds[STD_ERR].second){
+        state->ioevent_cb(STDERR, fd, FD_EVENT_READABLE, state->user_priv);
+    }
+}
+
+// one-shot timer callback to kill a process on specified timeout.
+void async_process_killer(struct timer_event *tev, void *priv){
+    assert(tev); assert(priv);
+
+    struct async_process_state *state = (struct async_process_state *)priv;
+
+    try_kill(state->pid, SIGKILL, false);
+
+    /* reap *now* */
+    Evp_unregister_timer(state->evp, &state->reaper);
+    async_process_reaper(&state->reaper, state);
+}
+
+int async_exec(
+        struct evp_handle *event_pump,
+        const char *const cmdspec[],
+        struct string_pair envvars[],
+        bool clear_first,
+        int instream,
+        int outstream,
+        int errstream,
+        int ms_timeout,
+        process_ioevent_cb ioevent_cb,
+        process_completion_cb completion_cb,
+        void *priv
+        )
+{
+    assert(event_pump);
+    assert(cmdspec);
+
+    int rc;
+    bool use_killer = (ms_timeout > -1);
+
+    struct async_process_state *state =
+        salloc(sizeof(struct async_process_state), NULL);
+
+    state->completion_cb = completion_cb;
+    state->ioevent_cb = ioevent_cb;
+    state->evp = event_pump;
+    state->user_priv = priv;
+
+    if (set_process_std_stream_settings(state->fds, instream, outstream, errstream))
+        goto cleanup;
+
+    rc = fork_and_exec(cmdspec, envvars, clear_first, state->fds[STD_IN].first,
+            state->fds[STD_OUT].first, state->fds[STD_ERR].first);
+    if (rc == -1) goto cleanup;
+    state->pid = rc;
+
+    if (state->fds[STD_IN].second != STREAM_ACTION_PASS){
+        Evp_init_fdmon(&state->std_in, state->fds[STD_IN].second,
+                FD_EVENT_WRITABLE, async_process_fd_event_cb_wrapper, state);
+        Evp_register_fdmon(state->evp, &state->std_in);
+    }
+
+    if (state->fds[STD_OUT].second != STREAM_ACTION_PASS){
+        Evp_init_fdmon(&state->std_out, state->fds[STD_OUT].second,
+                FD_EVENT_READABLE, async_process_fd_event_cb_wrapper, state);
+        Evp_register_fdmon(state->evp, &state->std_out);
+    }
+
+    if (state->fds[STD_ERR].second != STREAM_ACTION_PASS){
+        if (state->fds[STD_ERR].second != state->fds[STD_OUT].second){
+            Evp_init_fdmon(&state->std_err, state->fds[STD_ERR].second,
+                    FD_EVENT_READABLE, async_process_fd_event_cb_wrapper, state);
+            Evp_register_fdmon(state->evp, &state->std_err);
+        } else {  /* to simplify reaper cleanup logic */
+            state->fds[STD_ERR] = (struct int_pair){-1,-1};
         }
     }
 
-    if (status) *status = exit_status;
+    Evp_init_timer_ms(&state->reaper, ASYNC_PROCESS_REAPER_CHECK_INTERVAL_MS,
+            async_process_reaper, state);
+    Evp_register_timer(state->evp, &state->reaper);
+
+    if (use_killer){
+        Evp_init_timer_ms(&state->killer, ms_timeout, async_process_killer, state);
+        Evp_register_timer(state->evp, &state->killer);
+    }
+
     return 0;
+
+cleanup:
+    close_fds_if_required(state->fds);
+    salloc(0, state);
+    return -1;
 }
 

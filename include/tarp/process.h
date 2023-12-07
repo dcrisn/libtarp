@@ -1,7 +1,83 @@
 #ifndef TARP_PROCESS_H
 #define TARP_PROCESS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+#include <sys/types.h>
+
 #include <tarp/types.h>
+#include <tarp/event.h>
+
+struct evp_handle;
+
+enum stdStream {
+    STDIN = 0,
+    STDOUT = 1,
+    STDERR = 2
+};
+
+/*
+ * Flags that can be passed to sync_exec and async_exec (instead of a file
+ * descriptor) when specifying the standard input, output and error
+ * configuration for the subprocess.
+ *
+ * (1) Like python 'pass'. I.e. do nothing, NOP. Leave stream as is.
+ *
+ * (2) Effectively close the stream but with well-defined semantics.
+ * (I.e. NOTE actually calling close() on the descriptors beloning to stdin,
+ * stdout is not a good idea.)
+ *
+ * (3) implicitly create a pipe for this stream, poll the descriptor (read-end
+ * for stdin, write-end for stdout/stderr), and invoke the user callback on
+ * events (write-end of stdin pipe is writable, read-end of stdout and stderr
+ * pipe(s) is readable). The callback can
+ * demultiplex between the streams by the stdStream enumeration value.
+ *
+ * (4) Create a pipe like (3). This may only be specified for both stdout
+ * AND stderr together at the same time (IOW it is a fatal error to specify
+ * this for one but not the other). This makes it so the same pipe is used
+ * for both stdout and stderr -- IOW the child process sends its stderr and
+ * stdout to (and this process reads them from) the same stream.
+ */
+enum stdStreamFdAction {
+    STREAM_ACTION_PASS = -1,      /* (1) */
+    STREAM_ACTION_DEVNULL = -2,   /* (2) */
+    STREAM_ACTION_PIPE = -3,      /* (3) */
+    STREAM_ACTION_JOIN = -4,      /* (4) */
+};
+
+/*
+ * The exit status of a process as returned to the caller is one of the
+ * following:
+ *
+ * - PROC_NOSTATUS
+ *   an exit status code could not be obtained. Something weird
+ *   went on with the execution of this process (possibly an internal bug
+ *   in this library)
+ *
+ * - PROC_KILLED
+ *   process was killed. This is either because a timeout was
+ *   specified by the user and the timeout killer killed the process. Or
+ *   something else killed it (e.g. perhaps the process received a SIGSEGV
+ *   from the kernel, as an example).
+ *
+ *  - >=0
+ *  The process exited normally in the sense that the library got back an
+ *  exit status code from it. This value is whatever the process passed to
+ *  exit()/exit_() -- or, if exec() failed (i.e. the subprocess forked but
+ *  the user-specified command could not be executed), it is set to the errno
+ *  value set by execv.
+ */
+#define PROC_NOSTATUS  -1
+#define PROC_KILLED    -2
+
+typedef void (*process_ioevent_cb)(
+        enum stdStream stream, int fd, unsigned events, void *priv);
+
+typedef void (*process_completion_cb)(pid_t pid, int status, void *priv);
 
 /*
  * Turn the calling process into a daemon.
@@ -19,7 +95,7 @@ int daemonize(void);
  * Run a subprocess synchronously.
  *
  * This function creates a subprocess according to cmdspec, sets its
- * environment according to envvars, sets its standard streams according
+ * environment according to envvars, configures its standard streams according
  * to instream, outstream, and errstream, and lets it run for ms_timeout
  * milliseconds before terminating it.
  *
@@ -27,35 +103,19 @@ int daemonize(void);
  * outstream, and errstream.
  *
  * if ms_timeout == -1, then the subprocess is never terminated by this
- * function. That is, no 'killer subprocess' is spawned (see fork_and_exec
+ * function. That is, no 'killer' subprocess is spawned (see fork_and_exec
  * fmi) and this function only returns when the subprocess exits by itself
  * (or an error occurs when creating it or wait()-ing on it).
  *
  * Otherwise if ms_timeout > -1, then this function will attempt to terminate
  * the subprocess forcibly if it's run for more than timeout_ms milliseconds.
- * If instream, errstream, and/or outstream are valid descriptors > -1, then
- * all of them are polled and if cb is non-NULL, it is invoked for any of them
- * any time there is a POLLIN event (for outstream and errstream) or POLLOUT
- * event (instream). priv is an arbitrary pointer specified by the user to
- * be passed to cb whenever it is invoked.
- * NOTE: instream, errstream, outstream do not necessarily need to be the same
- * value.
- *
- * --> extra_fd
- *  This is an extra file descriptor that can be specified so that this
- *  function adds it to poll() and calls the cb for it (in addition to
- *  instream, errstream, outstream, depending on how they are specified).
- *  This is particularly useful in a scenario such as the following: the
- *  write end of a pipe is passed as outstream and/or errstream and the
- *  read-end is passed as extra_fd and a pointer to it is also passed as
- *  the priv pointer. This way when the callback gets invoked, it can
- *  easily determine that it has been invoked for the descriptor that
- *  represents the read-end of the pipe and then read from the pipe as
- *  appropriate.
  *
  * --> cb, @optional
  *  callback to invoke whenever there is an event on instream (POLLOUT),
  *  outstream (POLLIN), errstream (POLLIN) or extra_fd (POLLIN|POLLOUT).
+ *  NOTE: this calback is only called if STREAM_ACTION_PIPE
+ *  (or STREAM_ACTION_JOIN) was passed for any of instream, outstream or errstream
+ *  as appropriate.
  *
  * --> priv
  * Pointer to anything the user wants passed to the callback when it gets
@@ -65,15 +125,8 @@ int daemonize(void);
  *  if not NULL, the exit status of the subprocess will be stored in this
  *  variable. NOTE: if this function returns an error code that indicates
  *  the subprocess was never forked, then status must be ignored.
- *  Otherwise:
- *   - if status == -1, the exit statsus of the process could not be determined.
- *     Something went fundamentally wrong and the process couldn't be wait()ed
- *     on.
- *   - if status == -2, then the process was terminated by a signal (which
- *     may have been the killer subprocess -- i.e. due to the user-requested
- *     process having timed out -- or may have been something else).
- *   - if status >= 0, then the subprocess terminated normally. 'status' in this
- *     case contains the error code the process exited with.
+ *  Otherwise it is one of PROC_NOSTATUS, PROC_KILLED, or a value >= 0.
+ *  See top of file for an explanation on the semantics of these values.
  *
  * <-- return
  * 0 : success - the subprocess was forked, executed, and reaped. User should
@@ -87,6 +140,7 @@ int daemonize(void);
  *     immediately. status must be ignored. The function call is considered
  *     to have failed.
  *
+ * 2 : failed to create pipes (errno can be checked for the error set by pipe()).
  */
 int sync_exec(
         const char *const cmdspec[],
@@ -95,10 +149,46 @@ int sync_exec(
         int instream,
         int outstream,
         int errstream,
-        int extra_fd,  /* used for e.g. read-end of pipe */
         int ms_timeout,
         int *status,
-        void (*cb)(int fd, unsigned events, void *priv),
+        void (*ioevent_cb)(enum stdStream stream, int fd, unsigned events, void *priv),
         void *priv);
+
+/*
+ * Execute a process and wait for its completion asynchronoulsy.
+ *
+ * This is much like sync_exec (see that for details on the parameters)
+ * with the difference that this is integrated to be used with the
+ * event pump api (see tarp/event.h).
+ * The call does not block and synchronously wait for a process to complete
+ * the way sync_exec does. Instead, if the user is interested in the exit
+ * status, they must provide a process_completion_cb that is called right after
+ * the process has been reaped. NOTE: the pid passed to the callback is
+ * informative only and *was* the pid of the now-exited process.
+ * The user's process does not exist anymore by this stage and is therefore no
+ * longer associated with pid.
+ *
+ * Both ioevent_cb and completion_cb are optional.
+ *
+ * priv is passed as-is to *both* ioevent_cb and completion_cb.
+ */
+int async_exec(
+        struct evp_handle *event_pump,
+        const char *const cmdspec[],
+        struct string_pair envvars[],
+        bool clear_first,
+        int instream,
+        int outstream,
+        int errstream,
+        int ms_timeout,
+        process_ioevent_cb ioevent_cb,
+        process_completion_cb completion_cb,
+        void *priv);
+
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 #endif
