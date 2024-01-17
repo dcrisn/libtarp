@@ -86,7 +86,7 @@ endif()
 
 # set language standard
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 # throw an error if standard not implemented instead of trying to compile
 # with older standard.

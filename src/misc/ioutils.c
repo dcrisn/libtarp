@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <errno.h>
+#include <poll.h>
 
 #include <tarp/error.h>
 #include <tarp/ioutils.h>
@@ -52,4 +53,23 @@ int transfer(int src, int dst, uint8_t *buff, size_t buffsz){
     return ERRORCODE_SUCCESS;
 }
 
+int pollfd(int fd, int events, int timeout){
+    if (fd < 0) return fd;
+
+	short evmask = events ? events : POLLIN | POLLOUT;
+	const int num_fd = 1;
+	int ret = 0;
+
+	struct pollfd pollfd = {
+		.fd      = fd,
+		.events  = evmask,
+		.revents = 0
+	};
+
+	if ((ret=poll(&pollfd, num_fd, timeout)) > 0){
+		return pollfd.revents; /* success */
+	}
+
+	return ret;
+}
 

@@ -31,8 +31,8 @@ struct vector *shrink__(struct vector *v);
 
 #define define_vector_pushb(SHORTNAME, TYPE)                               \
     int Vect_pushb##SHORTNAME(vector *v, TYPE value){                      \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
-        THROW(ERROR_INVALIDVALUE, sizeof(TYPE) != v->itemsz);              \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
+        THROW_ON(sizeof(TYPE) != v->itemsz, ERROR_INVALIDVALUE);           \
                                                                            \
         if (must_grow__(v)){                                               \
             if (!grow__(v)) return ERROR_OUTOFBOUNDS;                      \
@@ -46,9 +46,9 @@ struct vector *shrink__(struct vector *v);
 
 #define define_vector_popb(SHORTNAME, TYPE)                                \
     TYPE Vect_popb##SHORTNAME(vector *v){                                  \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
-        THROW(ERROR_INVALIDVALUE, sizeof(TYPE) != v->itemsz);              \
-        THROW(ERROR_EMPTY, v->occupied == 0);                              \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
+        THROW_ON(sizeof(TYPE) != v->itemsz, ERROR_INVALIDVALUE);           \
+        THROW_ON(v->occupied == 0, ERROR_EMPTY);                           \
         if (must_shrink__(v)) shrink__(v);                                 \
         --v->occupied;                                                     \
         TYPE value;                                                        \
@@ -59,32 +59,32 @@ struct vector *shrink__(struct vector *v);
 
 #define define_vector_get(SHORTNAME, TYPE)                                 \
     TYPE Vect_get##SHORTNAME(const vector *v, size_t pos){                 \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
-        THROW(ERROR_OUTOFBOUNDS, pos >= v->occupied);                      \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
+        THROW_ON(pos >= v->occupied, ERROR_OUTOFBOUNDS);                   \
         TYPE *ptr = get_pointer_at_position(v->bytes, TYPE, pos);          \
         return *ptr;                                                       \
     }
 
 #define define_vector_set(SHORTNAME, TYPE)                                 \
     void Vect_set##SHORTNAME(vector *v, size_t pos, TYPE value){           \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
-        THROW(ERROR_OUTOFBOUNDS, pos >= v->occupied);                      \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
+        THROW_ON(pos >= v->occupied, ERROR_OUTOFBOUNDS);                   \
         TYPE *ptr = get_pointer_at_position(v->bytes, TYPE, pos);          \
         *ptr = value;                                                      \
     }
 
 #define define_vector_front(SHORTNAME, TYPE)                               \
         TYPE Vect_front##SHORTNAME(const vector *v){                       \
-            THROW(ERROR_BADPOINTER, v == NULL);                            \
-            THROW(ERROR_EMPTY, v->occupied == 0);                          \
+            THROW_ON(v == NULL, ERROR_BADPOINTER);                         \
+            THROW_ON(v->occupied == 0, ERROR_EMPTY);                       \
             TYPE *ptr = get_pointer_at_position(v->bytes, TYPE, 0);        \
             return *ptr;                                                   \
         }
 
 #define define_vector_back(SHORTNAME, TYPE)                                \
         TYPE Vect_back##SHORTNAME(const vector *v){                        \
-            THROW(ERROR_BADPOINTER, v == NULL);                            \
-            THROW(ERROR_EMPTY, v->occupied == 0);                          \
+            THROW_ON(v == NULL, ERROR_BADPOINTER);                         \
+            THROW_ON(v->occupied == 0, ERROR_EMPTY);                       \
             TYPE *ptr = get_pointer_at_position(                           \
                     v->bytes, TYPE, (v->occupied-1));                      \
             return *ptr;                                                   \
@@ -92,14 +92,14 @@ struct vector *shrink__(struct vector *v);
 
 #define define_vector_begin(SHORTNAME, TYPE)                               \
         TYPE *Vect_begin##SHORTNAME(const vector *v){                      \
-            THROW(ERROR_BADPOINTER, v == NULL);                            \
+            THROW_ON(v == NULL, ERROR_BADPOINTER);                         \
             TYPE *ptr = get_pointer_at_position(v->bytes, TYPE, 0);        \
             return ptr;                                                    \
         }
 
 #define define_vector_end(SHORTNAME, TYPE)                                 \
         TYPE *Vect_end##SHORTNAME(const vector *v){                        \
-            THROW(ERROR_BADPOINTER, v == NULL);                            \
+            THROW_ON(v == NULL, ERROR_BADPOINTER);                         \
             TYPE *ptr = get_pointer_at_position(                           \
                     v->bytes, TYPE, v->occupied);                          \
             return ptr;                                                    \
@@ -107,8 +107,8 @@ struct vector *shrink__(struct vector *v);
 
 #define define_vector_insert(SHORTNAME, TYPE)                              \
     int Vect_insert##SHORTNAME(vector *v, size_t pos, TYPE value){         \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
-        THROW(ERROR_OUTOFBOUNDS, pos > v->occupied);                       \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
+        THROW_ON(pos > v->occupied, ERROR_OUTOFBOUNDS);                    \
                                                                            \
         int rc = ERRORCODE_SUCCESS;                                        \
                                                                            \
@@ -128,8 +128,8 @@ struct vector *shrink__(struct vector *v);
 
 #define define_vector_remove(SHORTNAME, TYPE)                              \
     void Vect_remove##SHORTNAME(vector *v, size_t pos){                    \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
-        THROW(ERROR_OUTOFBOUNDS, pos >= v->occupied);                      \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
+        THROW_ON(pos >= v->occupied, ERROR_OUTOFBOUNDS);                   \
         if (v->occupied==0) return;                                        \
                                                                            \
         TYPE *posptr = get_pointer_at_position(v->bytes, TYPE, pos);       \
@@ -141,7 +141,7 @@ struct vector *shrink__(struct vector *v);
 
 #define define_vector_resize(SHORTNAME, TYPE)                              \
     void Vect_resize##SHORTNAME(vector *v, size_t count, TYPE fill){       \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
         if (count == v->occupied) return;                                  \
         if (count > v->occupied){                                          \
             size_t stop = count - v->occupied;                             \
@@ -159,8 +159,8 @@ struct vector *shrink__(struct vector *v);
 // like std::vector at but returns a pointer
 #define define_vector_getptr(SHORTNAME, TYPE)                              \
     TYPE *Vect_getptr##SHORTNAME(const vector *v, size_t pos){             \
-        THROW(ERROR_BADPOINTER, v == NULL);                                \
-        THROW(ERROR_OUTOFBOUNDS, pos >= v->occupied);                      \
+        THROW_ON(v == NULL, ERROR_BADPOINTER);                             \
+        THROW_ON(pos >= v->occupied, ERROR_OUTOFBOUNDS);                   \
         return get_pointer_at_position(v->bytes, TYPE, pos);               \
     }
 

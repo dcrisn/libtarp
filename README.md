@@ -1,6 +1,25 @@
 # libtarp
 Miscellaneous utility functions, macros, and data structures in C and C++
 
+**Contents/scope**:
+
+ - `C` data structures -- mostly intrusive, including `AVL` tree, bitarray,
+    implicit (array-based) and explicit (pointer-based) min and max binary
+    heaps, a vector (dynamically resizable array), hash table, stack, queue,
+    doubly-linked list etc. See `src/mods` and the corresponding headers.
+
+ - Miscellaneous helpers and utility functions for `C` and `c++` -- see
+   `src/misc`, `src/hash` and the corresponding headers.
+
+ - API for timer-based, file descriptor-based and user-event-based callbacks.
+   See `event.h` for the `C` API and `event.hxx` for the `C++` API.
+
+ - API for spawning synchronous and asynchronous processes with ability to
+   configure the standard streams of the process, capture their output, have
+   a callback be called on stream I/O events, and configure the environment.
+   See `process.h` for both the `C` (function-based) and `C++` (class) APIs.
+
+
 ## Building
 
 **make**:

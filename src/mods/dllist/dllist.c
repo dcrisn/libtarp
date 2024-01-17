@@ -22,7 +22,7 @@ void Dll_clear(struct dllist *list, bool free_containers){
     if (list->count == 0) return;
 
     if (free_containers){
-        THROWS(ERROR_MISCONFIGURED, list->dtor==NULL, "missing destructor"); 
+        THROWS_ON(list->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         struct dlnode *i;
         Dll_foreach_node(list, i){
             list->dtor(i);
@@ -192,7 +192,7 @@ void Dll_remove_node(struct dllist *list, struct dlnode *node, bool free_contain
     }
 
     if (free_container){
-        THROWS(ERROR_MISCONFIGURED, list->dtor==NULL, "missing destructor"); 
+        THROWS_ON(list->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         list->dtor(node);
     }
 }
@@ -332,7 +332,7 @@ static inline size_t count_list_nodes(struct dllist *list){
 struct dllist *Dll_split_list(struct dllist *list, struct dlnode *node){
     assert(list);
     assert(node);
-    
+
     size_t orig_len = list->count;
     struct dllist *b = Dll_new(list->dtor);
 

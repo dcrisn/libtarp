@@ -138,7 +138,7 @@ static inline void update_cache(struct hasht *ht, struct hashtnode *node){
 static inline void destroy_chains(struct hasht *ht){
     assert(ht);
 
-    THROWS(ERROR_MISCONFIGURED, ht->dtor==NULL, "missing destructor");
+    THROWS_ON(ht->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
     struct hashtnode *htn, *tmp;
 
     for (size_t i = 0; i < ht->num_buckets; ++i){
@@ -197,7 +197,7 @@ struct hasht *Hasht_new(
         hashtnode_destructor dtor,
         unsigned lf)
 {
-    THROWS(ERROR_MISCONFIGURED, keyfunc==NULL, "hasht key getter not provided");
+    THROWS_ON(keyfunc==NULL, ERROR_MISCONFIGURED, "hasht key getter not provided");
     hashfunc = hashfunc ? hashfunc : HASHT_DEFAULT_HASHFUNC;
     lf = (lf>0) ? lf : HASHT_DEFAULT_LOAD_FACTOR;
 
@@ -335,7 +335,7 @@ bool Hasht_remove_entry(
     if (cache_hit(ht, node)) clear_cache(ht);
 
     if (free_container){
-        THROWS(ERROR_MISCONFIGURED, ht->dtor==NULL, "missing destructor");
+        THROWS_ON(ht->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         ht->dtor(i);
     }
 

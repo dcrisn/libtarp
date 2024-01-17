@@ -196,7 +196,7 @@ void Avl_clear(struct avltree *tree, bool free_containers){
     assert(tree);
 
     if (free_containers){
-        THROWS(ERROR_MISCONFIGURED, tree->dtor==NULL, "missing destructor");
+        THROWS_ON(tree->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         avl_cut_down(tree, tree->root);
     }
 
@@ -879,7 +879,7 @@ bool Avl_delete_node(
 
     salloc(0, cur_ptr);
     if (free_container){
-        THROWS(ERROR_MISCONFIGURED, tree->dtor==NULL, "missing destructor");
+        THROWS_ON(tree->dtor==NULL, ERROR_MISCONFIGURED, "missing destructor");
         tree->dtor(node_tofree);
     }
 

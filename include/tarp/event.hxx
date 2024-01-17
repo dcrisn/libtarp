@@ -93,6 +93,7 @@
 
 #include <tarp/error.h>
 #include <tarp/log.h>
+#include <tarp/process.h>
 
 #include "event_flags.h"
 
@@ -111,6 +112,7 @@ namespace tarp {
 
 class EventPump;
 class RawEventPumpInterface;
+class Process;
 
 
 /*
@@ -159,7 +161,7 @@ public:
 
 protected:
     /* See 'construction permits' notes at the top of the file */
-    struct construction_permit{};
+    class construction_permit{};
 
     virtual void set_id(size_t id)            = 0;
     virtual size_t get_id(void) const         = 0;
@@ -308,6 +310,7 @@ private:
  */
 class RawEventPumpInterface {
     friend class Callback;
+    friend class Process;
 private:
     virtual struct evp_handle *get_raw_evp_handle(void) = 0;
     virtual void untrack_callback(size_t id) = 0;
@@ -321,6 +324,11 @@ std::shared_ptr<tarp::EventPump> make_event_pump(void);
 /*
  * Event pump for registering timer, file descriptor, and user-defined
  * event-based callbacks.
+ *
+ * (1) The event pump also supports spawning processes (see proces.h fmi)
+ * asynchronously. Much like callbacks, a process is also bound to its
+ * event pump and cannot be moved around (create a new process instead
+ * as needed).
  *
  * The EventPump is only constructible through make_event_pump.
  */
@@ -346,7 +354,7 @@ public:
 
     EventPump(const EventPump::construction_permit &permit);
 
-    void run(void);
+    void run(int seconds = -1);
     int push_event(unsigned event_type, void *data=nullptr);
 
     int set_fd_event_callback(int fd, uint32_t flags, tarp::fd_callback cb);
@@ -363,6 +371,17 @@ public:
     std::shared_ptr<tarp::UserEventCallback> make_explicit_user_event_callback(
             unsigned event_type);
 
+    /* (1) */
+    std::shared_ptr<tarp::Process> make_process(
+            std::initializer_list<std::string> cmd_spec,
+            int ms_timeout = -1,
+            int instream  = STREAM_ACTION_PASS,
+            int outstream = STREAM_ACTION_PASS,
+            int errstream = STREAM_ACTION_PASS,
+            Process::ioevent_cb ioevent_callback       = nullptr,
+            Process::completion_cb completion_callback = nullptr
+            );
+
 private:
     struct evp_handle *get_raw_evp_handle(void) override;
     void untrack_callback(size_t id) override;
@@ -374,8 +393,6 @@ private:
     std::unordered_map<size_t, std::shared_ptr<tarp::Callback>> m_callbacks;
     tarp::Callback::construction_permit m_callback_construction_permit;
 };
-
-
 
 
 

@@ -211,13 +211,13 @@ static inline bool elapsed(struct timespec *ts, struct timespec *reference){
  */
 static inline void lock_mutex(pthread_mutex_t *mtx){
     int rc;
-    THROWS(ERROR_RUNTIMEERROR, (rc = pthread_mutex_lock(mtx)) != 0,
+    THROWS_ON((rc = pthread_mutex_lock(mtx)) != 0, ERROR_RUNTIMEERROR,
             "pthread_mutex_lock error (%d)", rc);
 }
 
 static inline void unlock_mutex(pthread_mutex_t *mtx){
     int rc;
-    THROWS(ERROR_RUNTIMEERROR, (rc = pthread_mutex_unlock(mtx)) != 0,
+    THROWS_ON((rc = pthread_mutex_unlock(mtx)) != 0, ERROR_RUNTIMEERROR,
             "pthread_mutex_unlock error (%d)", rc);
 }
 
@@ -252,7 +252,17 @@ static unsigned dispatch_events(
 
     /* handle timer expirations */
     struct timespec now = time_now_monotonic();
-    Dll_foreach(&handle->timers, tev, struct timer_event, link){
+
+    /*
+     * NOTE: use this form of iterating instead of the more readable to
+     * avoid the problem described below.
+     * Dll_foreach saves the 'next' element -- but this may well have been
+     * removed and freed from inside the callback associated with the current
+     * element. This may be the case for example when a client has registered
+     * a few related callbacks where one of them can unregster all of them on
+     * a certain event. This is a perfectly acceptable scenario and using
+     * Dll_foreach in that case risks using already-freed memory! */
+    while ((tev = Dll_front(&handle->timers, struct timer_event, link))){
         if (!elapsed(&tev->tspec, &now)) break;
         Dll_popnode(&handle->timers, tev, link);
         assert(tev->cb);
@@ -262,7 +272,7 @@ static unsigned dispatch_events(
     }
 
     /* Handle OS events */
-    Dll_foreach(&handle->evq, fdev, struct fd_event, link){
+    while ((fdev = Dll_front(&handle->evq, struct fd_event, link))){
         Dll_popnode(&handle->evq, fdev, link);
 
         /* semaphore post or loop wait timer? reset to 0 and carry on; */
@@ -304,21 +314,39 @@ static unsigned dispatch_events(
     return num_handled;
 }
 
-void Evp_run(struct evp_handle *handle){
+void dummy_timer_callback(struct timer_event *tev, void *priv){
+    UNUSED(tev);
+    UNUSED(priv);
+}
+
+void Evp_run(struct evp_handle *handle, int seconds){
     int rc = 0;
     double time;
+    bool with_timeout = (seconds > -1);
 
     double start = time_now_monotonic_dbs();
+
+    /* to terminate the run on specified seconds timeout */
+    struct timer_event timeout;
+    if (with_timeout){
+        Evp_init_timer_secs(&timeout, seconds, dummy_timer_callback, NULL);
+        Evp_register_timer(handle, &timeout);
+    }
 
     for(;;){
         if (wake_on_first_timer(handle) != 0)     break;
         if (pump_os_events(handle) != 0)          break;
 
         rc = dispatch_events(handle, &time);
+
         debug("Event pump loop: handled %zu events in %f ms", rc, time);
+
+        if (with_timeout && time_now_monotonic_dbs() - start >= seconds)
+            break;
     }
 
-    debug("EventPump done after %f seconds", time_now_monotonic_dbs()-start);
+    if (with_timeout) Evp_unregister_timer(handle, &timeout);
+    debug("EventPump done after %f seconds", time_now_monotonic_dbs() - start);
 }
 
 /*
