@@ -31,6 +31,7 @@ enum ErrorCode{
     ERROR_BADALLOC=1,
     ERROR_RUNTIMEERROR,
     ERROR_INTERNALERROR,
+    ERROR_BADLOGIC,
     ERROR_NOSPACE,
     ERROR_OUTOFBOUNDS,
     ERROR_BADPOINTER,
@@ -92,6 +93,8 @@ void throw__(
     do {                                                       \
         if (cond) THROWS__(cond, exception, __VA_ARGS__);      \
     } while(0)
+
+#define check_pointer(ptr) THROW_ON(!ptr, ERROR_BADPOINTER)
 
 
 /*

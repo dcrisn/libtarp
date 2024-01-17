@@ -429,6 +429,7 @@ void Dll_upend(struct dllist *list){
 
     if (list->count < 2) return;
     assert(list->front);
+    if (!list->front) return;
 
     struct dlnode *a, *b, *c;
     a = b = c = list->front;

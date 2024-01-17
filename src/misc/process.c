@@ -504,7 +504,7 @@ int sync_exec(
         )
 {
     assert(cmdspec);
-    pid_t pid, proc_pid, killer_pid;
+    pid_t pid, proc_pid, killer_pid = -1;
     int exit_status = PROC_NOSTATUS;
     bool use_killer = (ms_timeout > -1);
 
@@ -619,13 +619,13 @@ struct async_process_state {
 // cyclic timer: periodicaly tries to reap process and ultimately stops
 // once process is reaped.
 static void async_process_reaper(struct timer_event *tev, void *priv){
-    assert(tev);
+    UNUSED(tev);
+
     assert(priv);
+    struct async_process_state *state = priv;
 
     int pid;
     int exit_status = PROC_NOSTATUS;
-
-    struct async_process_state *state = priv;
 
     /* if not reaped, try again later */
     if (!(pid = waitpid(state->pid, &exit_status, WNOHANG))){
@@ -679,10 +679,11 @@ static void async_process_reaper(struct timer_event *tev, void *priv){
  * an ioevent_cb, then this wrapper does not get called.
  */
 static void async_process_fd_event_cb_wrapper(struct fd_event *fdev, int fd, void *priv){
-    assert(priv);
-    assert(fdev);
+    UNUSED(fdev);
 
+    assert(priv);
     struct async_process_state *state = priv;
+
     assert(state->ioevent_cb);
     if (fd == state->fds[STD_IN].second){
         state->ioevent_cb(STDIN, fd, FD_EVENT_WRITABLE, state->user_priv);

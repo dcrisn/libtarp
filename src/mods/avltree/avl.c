@@ -719,6 +719,7 @@ static bool avl_try_insert(
     avl_trace_path_to_node(tree, path, NULL, node);
     struct avl_waypoint *parent = Staq_top(path, struct avl_waypoint, link); /* (1) */
     assert(parent);
+    if (!parent) return false;
 
     if (parent->dir == 0){ /* node already exists */
         //debug("duplicate");
@@ -771,9 +772,11 @@ struct avlnode *Avl_find_or_insert_node(
     if (!inserted){
         struct avl_waypoint *duplicate = Staq_top(&path, struct avl_waypoint, link);
         assert(duplicate);
-        entry = duplicate->ptr;
-        assert(entry);
-        update_cache(tree, entry);
+        assert(duplicate->ptr);
+        if (duplicate && duplicate->ptr){
+            entry = duplicate->ptr;
+            update_cache(tree, entry);
+        }
     }
 
     Staq_clear(&path, true);
@@ -858,7 +861,9 @@ bool Avl_delete_node(
             struct avl_waypoint *suc_parent_ptr = \
                         Staq_top(&replacement_path, struct avl_waypoint, link);
             assert(suc_parent_ptr && suc_parent_ptr->ptr);
-            suc_parent_ptr->ptr->left = suc->right;
+            if(suc_parent_ptr && suc_parent_ptr->ptr){
+                suc_parent_ptr->ptr->left = suc->right;
+            }
 
             Staq_join(&replacement_path, &path);
             Staq_swap(&path, &replacement_path);
