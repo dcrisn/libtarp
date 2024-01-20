@@ -22,7 +22,8 @@ using namespace tarp;
  * ========== Shims for use with the C api ==============
  * =====================================================*/
 static void timer_event_callback_shim(struct timer_event *tev, void *priv){
-    assert(priv); assert(tev); assert(priv);
+    assert(priv); assert(priv);
+    UNUSED(tev);
 
     // NOTE this is safe because if the callback had been destructed,
     // we would've unregistered the event in the destructor; hence
@@ -32,8 +33,9 @@ static void timer_event_callback_shim(struct timer_event *tev, void *priv){
 }
 
 static void fd_event_callback_shim(struct fd_event *fdev, int fd, void *priv){
-    assert(priv); assert(fdev); assert(priv);
+    assert(priv); assert(priv);
     UNUSED(fd);
+    UNUSED(fdev);
 
     auto *cb = static_cast<tarp::FdEventCallback*>(priv);
     cb->call();
@@ -43,8 +45,9 @@ static void user_event_callback_shim(
         struct user_event_watch *uev, unsigned event_type,
         void *data, void *priv)
 {
-    assert(priv); assert(uev); assert(priv);
+    assert(priv); assert(priv);
     UNUSED(event_type);
+    UNUSED(uev);
 
     auto *cb = static_cast<tarp::UserEventCallback*>(priv);
     cb->call(data);

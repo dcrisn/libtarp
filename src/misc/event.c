@@ -163,8 +163,7 @@ static inline void pick_shortest_wait_time(
     }
 
     struct timer_event *tev = Dll_front(timerq, struct timer_event, link);
-    assert(tev);
-    *tspec = tev->tspec;   /* already an absolute timepoint */
+    if (tev && tspec) *tspec = tev->tspec;   /* already an absolute timepoint */
 }
 
 /*

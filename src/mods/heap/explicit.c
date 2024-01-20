@@ -20,10 +20,10 @@
 /*
  * Node should never be its own neighbor */
 static inline void assert_no_direct_cycle(const struct xheapnode *node){
-    assert(node);
-    assert(node->p != node);
-    assert(node->l != node);
-    assert(node->r != node);
+    THROW_ON(!node, ERROR_BADPOINTER);
+    THROW_ON(node->p == node, ERROR_BADLOGIC);
+    THROW_ON(node->l == node, ERROR_BADLOGIC);
+    THROW_ON(node->r == node, ERROR_BADLOGIC);
 }
 
 //
@@ -331,6 +331,7 @@ void XHeap_push_node(struct xheap *xh, struct xheapnode *node){
     struct xheapnode *p = find_nth_node(xh, (xh->count>>1));
 
     assert(p);
+    if (!p) return;
 
     node->p = p;
     node->r = node->l = NULL;

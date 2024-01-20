@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <endian.h>
 
 #include <tarp/math.h>
