@@ -34,15 +34,17 @@
 static int waker_read;
 static int waker_write;
 
-void reader(struct fd_event *fdev, int fd, void *priv){
+void reader(struct fd_event *fdev, int fd, uint32_t events, void *priv){
     UNUSED(priv);  /* could be used to pass any user data */
+    UNUSED(events);
 
     assert(fdev);
     assert(fd);
     assert(waker_read);
 
     uint8_t buf[1024];
-    read(fd, buf, ARRLEN(buf));
+    int bytes = read(fd, buf, ARRLEN(buf));
+    UNUSED(bytes);
 
     info("called reader at %f", time_now_monotonic_dbs());
 }
@@ -54,7 +56,8 @@ void writer(struct timer_event *tev, void *priv){
     info("called writer at %f", time_now_monotonic_dbs());
 
     char buf[8] = {1, 2, 3, 4};
-    write(waker_write, buf, ARRLEN(buf));
+    int num_written = write(waker_write, buf, ARRLEN(buf));
+    UNUSED(num_written);
 
     Evp_set_timer_interval_ms(tev, 1000);
     Evp_register_timer(priv, tev);
@@ -77,7 +80,8 @@ int main(int argc, char *argv[]){
 
     // set up a pipe for example purposes; error checking ommitted
     int pipefds[2];
-    pipe(pipefds);
+    int rc = pipe(pipefds);
+    UNUSED(rc);
     waker_read = pipefds[0];
     waker_write = pipefds[1];
     info("waker_read: %i waker_write: %i", waker_read, waker_write);

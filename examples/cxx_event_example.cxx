@@ -1,3 +1,4 @@
+#include <tarp/common.h>
 #include <unistd.h>
 
 #include <iostream>
@@ -48,12 +49,15 @@ int main(int argc, char *argv[]){
 #if 1
     // fd-event reader and timer-based writer callbacks managed by EventPump
     int fds[2];
-    pipe(fds);
+    int rc= pipe(fds);
+    UNUSED(rc);
 
     auto writer = [fd=fds[1], n=0](void) mutable{
         debug("Timed writer callback called, n=%d", n);
         uint8_t buff[8] = "21en121";
-        write(fd, buff, 8);
+        int ret = write(fd, buff, 8);
+        UNUSED(ret);
+
 
         if (++n == 20){
             info("writer canceling");
@@ -64,10 +68,12 @@ int main(int argc, char *argv[]){
     };
 
 
-    auto reader = [n=0](int fd) mutable{
+    auto reader = [n=0](int fd, uint32_t events) mutable{
+        UNUSED(events);
         debug("reader called, n=%d", n);
         uint8_t buff[8];
-        read(fd, buff, 8);
+        int ret = read(fd, buff, 8);
+        UNUSED(ret);
 
         if (++n == 15){
             info("reader canceling");

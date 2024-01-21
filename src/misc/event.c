@@ -283,7 +283,8 @@ static unsigned dispatch_events(
 
         /* else 'normal' fd event; dispatch by invoking callback */
         assert(fdev->cb);
-        fdev->cb(fdev, fdev->fd, fdev->priv);
+        fdev->cb(fdev, fdev->fd, fdev->revents, fdev->priv);
+        fdev->revents = 0;  /* clear revents; assumed to have been handled */
         num_handled++;
     }
 

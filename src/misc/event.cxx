@@ -32,13 +32,16 @@ static void timer_event_callback_shim(struct timer_event *tev, void *priv){
     cb->call();
 }
 
-static void fd_event_callback_shim(struct fd_event *fdev, int fd, void *priv){
+static void fd_event_callback_shim(
+        struct fd_event *fdev, int fd,
+        uint32_t revents, void *priv)
+{
     assert(priv); assert(priv);
     UNUSED(fd);
     UNUSED(fdev);
 
     auto *cb = static_cast<tarp::FdEventCallback*>(priv);
-    cb->call();
+    cb->call(revents);
 }
 
 static void user_event_callback_shim(
@@ -274,7 +277,8 @@ FdEventCallback::FdEventCallback(
         std::shared_ptr<tarp::EventPump> evp,
         int fd, uint32_t flags,
         tarp::fd_callback cb)
-    : CallbackCore<tarp::fd_callback>(evp, cb), m_fd(fd), m_flags(flags)
+    : CallbackCore<tarp::fd_callback>(evp, cb), m_fd(fd), m_flags(flags),
+      m_revents(0)
 {
     UNUSED(permit);
     initialize_raw_event_handle();
@@ -317,7 +321,13 @@ int FdEventCallback::deregister_event_monitor(struct evp_handle *raw_evp_handle)
 
 void FdEventCallback::call(void){
     assert_func_set();
-    if (!m_func(m_fd)) die();
+    if (!m_func(m_fd, m_revents)) die();
+}
+
+void FdEventCallback::call(uint32_t events){
+    m_revents = events;
+    call();
+    m_revents = 0;
 }
 
 /*================================================

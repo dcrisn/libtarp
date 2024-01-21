@@ -37,8 +37,11 @@ struct user_event_watch;
  * destroyed, freed etc before disassociation. IOW, de-register the
  * callback before freeing/destroying this structure.
  *
- * fd - (for fd_event_callbacs) the file descriptor for which an event
+ * fd - (for fd_event_callbacks) the file descriptor for which an event
  * has been generated i.e. for which the callback has been invoked.
+ *
+ * events - (for fd_event_callbacks) the event(s) that have caused the
+ * callback to be invoked. Expected to be handled by the calllback.
  *
  * priv - a pointer (potentially NULL) to some arbitrary data. The user can
  * pass this in at registration time, change it inside the callback etc. It
@@ -54,7 +57,11 @@ struct user_event_watch;
  *  (e.g. in the callback or otherwise) to avoid memory leaks.
  */
 typedef void (*timer_callback)(struct timer_event *tev, void *priv);
-typedef void (*fd_event_callback)(struct fd_event *fdev, int fd, void *priv);
+typedef void (*fd_event_callback)(
+        struct fd_event *fdev,
+        int fd,
+        uint32_t events,
+        void *priv);
 
 typedef void (*user_event_callback)(
         struct user_event_watch *uev,

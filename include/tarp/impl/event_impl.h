@@ -17,7 +17,8 @@ struct fd_event {
     struct dlnode link;
     bool registered;
     int fd;
-    uint32_t evmask;
+    uint32_t evmask;   /* events of interest */
+    uint32_t revents;  /* events that have occured (returned by OS) */
     fd_event_callback cb;
     void *priv;
 };

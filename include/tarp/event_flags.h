@@ -22,7 +22,8 @@
  */
 #define FD_EVENT_READABLE            1
 #define FD_EVENT_WRITABLE            2
-#define FD_EVENT_EDGE_TRIGGERED      4
-#define FD_NONBLOCKING               8
+#define FD_EVENT_ERROR               4
+#define FD_EVENT_EDGE_TRIGGERED      8
+#define FD_NONBLOCKING               16
 
 #endif

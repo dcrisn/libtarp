@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -678,19 +679,31 @@ static void async_process_reaper(struct timer_event *tev, void *priv){
  * Dispatches to the user-supplied ioevent_cb. Note if the user does not provide
  * an ioevent_cb, then this wrapper does not get called.
  */
-static void async_process_fd_event_cb_wrapper(struct fd_event *fdev, int fd, void *priv){
+static void async_process_fd_event_cb_wrapper(
+        struct fd_event *fdev, int fd, uint32_t events, void *priv)
+{
     UNUSED(fdev);
 
     assert(priv);
     struct async_process_state *state = priv;
 
     assert(state->ioevent_cb);
+
+    uint32_t pending_events = 0;
+    if (events & FD_EVENT_ERROR) pending_events = FD_EVENT_ERROR;
+
     if (fd == state->fds[STD_IN].second){
-        state->ioevent_cb(STDIN, fd, FD_EVENT_WRITABLE, state->user_priv);
+        state->ioevent_cb(STDIN, fd,
+                pending_events | FD_EVENT_WRITABLE,
+                state->user_priv);
     } else if (fd == state->fds[STD_OUT].second){
-        state->ioevent_cb(STDOUT, fd, FD_EVENT_READABLE, state->user_priv);
+        state->ioevent_cb(STDOUT, fd,
+                pending_events | FD_EVENT_READABLE,
+                state->user_priv);
     } else if (fd == state->fds[STD_ERR].second){
-        state->ioevent_cb(STDERR, fd, FD_EVENT_READABLE, state->user_priv);
+        state->ioevent_cb(STDERR, fd,
+                pending_events | FD_EVENT_READABLE,
+                state->user_priv);
     }
 }
 

@@ -106,7 +106,7 @@ extern "C" {
 
 namespace tarp {
     using timer_callback = std::function<bool(void)>;
-    using fd_callback    = std::function<bool(int fd)>;
+    using fd_callback    = std::function<bool(int fd, uint32_t events)>;
     using uev_callback   = std::function<bool(unsigned event_type, void *data)>;
 
 
@@ -265,6 +265,7 @@ public:
     FdEventCallback(void) = delete;
     ~FdEventCallback(void);
     void call(void) override;
+    void call(uint32_t events);
 
 private:
     void initialize_raw_event_handle(void) override;
@@ -275,6 +276,7 @@ private:
     struct fd_event *m_raw_fdev_handle;
     int m_fd;
     uint32_t m_flags;
+    uint32_t m_revents;
 };
 
 class UserEventCallback : public CallbackCore<tarp::uev_callback> {

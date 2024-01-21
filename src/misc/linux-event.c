@@ -1,6 +1,7 @@
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <tarp/error.h>
+#include <tarp/event_flags.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -102,9 +103,19 @@ int pump_os_events(struct evp_handle *handle){
 
     struct fd_event *fdev;
     struct epoll_event *ev = buff;
+    uint32_t revents;
 
     for (int i = 0; i < rc; ++i, ev+=i){
         fdev = ev->data.ptr;
+
+        revents = 0;
+        if (ev->events & EPOLLIN)     revents |= FD_EVENT_READABLE;
+        if (ev->events & EPOLLRDHUP)  revents |= FD_EVENT_READABLE;
+        if (ev->events & EPOLLOUT)    revents |= FD_EVENT_WRITABLE;
+        if (ev->events & EPOLLERR)    revents |= FD_EVENT_ERROR;
+        if (ev->events & EPOLLHUP)    revents |= FD_EVENT_ERROR;
+
+        fdev->revents = revents;
         Dll_pushback(&handle->evq, fdev, link);
     }
 

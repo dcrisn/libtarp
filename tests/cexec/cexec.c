@@ -65,7 +65,8 @@ static inline void exec_output_cb(enum stdStream stream,
         struct string_qwrap *sw = salloc(sizeof(struct string_qwrap), NULL);
         sw->s = s;
 
-        read(fd, s, MAX_STRING_SIZE-1);
+        int bytes_read = read(fd, s, MAX_STRING_SIZE-1);
+        UNUSED(bytes_read);
 
         Staq_enq(q, sw, link);
     }
