@@ -74,6 +74,8 @@ void *salloc(size_t size, void *ptr);
 enum comparatorResult    {LT = -1, EQ = 0, GT = 1};
 typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 
+
+#ifndef __cplusplus
 /*
  * Predicate helpers that evaluate to boolean true when the result of
  * comparing a and b using the given comparator is LT, GT, or EQ. */
@@ -82,6 +84,8 @@ typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 #define eq(a, b, cmp) (cmp(a, b) == 0)
 #define lte(a, b, cmp) (cmp(a, b) <= 0)
 #define gte(a, b, cmp) (cmp(a, b) >= 0)
+
+#endif  /* ifndef __cplusplus */
 
 /*
  * Given a start pointer 'base' to type TYPE, get a pointer OFFSET positions
