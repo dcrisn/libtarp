@@ -5,6 +5,7 @@
 #include <memory>
 #include <cstring>
 #include <stdexcept>
+#include <cassert>
 
 namespace tarp{
 
@@ -26,7 +27,7 @@ public:
     ByteBuffer &operator=(const ByteBuffer &rhs);
 
     template <typename T>
-    const T *get(bool advance = true);
+    const T *get(bool advance = true) const;
 
     uint8_t get_byte(bool advance = true);
 
@@ -37,7 +38,9 @@ public:
     bool room4(void) const;
 
     template <typename T>
-    void push(T *elem);
+    void push(const T &elem);
+
+    void push(const std::vector<uint8_t> &v);
 
     void skip(size_t nbytes);
     void unwind(size_t nbytes);
@@ -53,7 +56,7 @@ private:
     void swap(ByteBuffer &other);
 
     std::vector<std::uint8_t> m_buff;
-    std::size_t m_buff_offset = 0;
+    mutable std::size_t m_buff_offset = 0;
 };
 
 template <typename T>
@@ -62,9 +65,9 @@ bool ByteBuffer::room4(void) const{
 }
 
 template <typename T>
-const T *ByteBuffer::get(bool advance){
+const T *ByteBuffer::get(bool advance) const{
     if (!room4<T>()) return nullptr;
-    T *ret = static_cast<T*>(get_offset_ptr());
+    const T *ret = static_cast<const T*>(get_offset_ptr());
 
     if (advance) m_buff_offset += sizeof(T);
 
@@ -81,13 +84,8 @@ std::shared_ptr<T> ByteBuffer::get_copy(bool advance){
 }
 
 template <typename T>
-void ByteBuffer::push(T *elem){
-    assert(elem);
-    if (!elem){
-        throw std::invalid_argument("insane attempt to push nullptr");
-    }
-
-    uint8_t *p = static_cast<uint8_t *>(elem);
+void ByteBuffer::push(const T &elem){
+    const uint8_t *p = reinterpret_cast<const uint8_t *>(&elem);
     m_buff.insert(m_buff.end(), p, p+sizeof(T));
 }
 

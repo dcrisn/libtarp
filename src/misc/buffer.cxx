@@ -47,6 +47,10 @@ ByteBuffer &ByteBuffer::operator=(ByteBuffer &&rhs){
     return *this;
 }
 
+void ByteBuffer::push(const std::vector<uint8_t> &v){
+    m_buff.insert(m_buff.end(), v.begin(), v.end());
+}
+
 /*
  * NOTE: this always returns a pointer, even if it's out
  * of bounds. An out-of-bounds check must be performed
