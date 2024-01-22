@@ -15,6 +15,7 @@ public:
     ByteBuffer(void) = default;
     ByteBuffer(const std::vector<uint8_t> &bytes);
     ByteBuffer(const uint8_t *bytes, std::size_t len);
+    ByteBuffer(int fd, ssize_t num_bytes = -1);
 
     /*
      * NOTE: when copying or moving from a rhs ByteBuffer,
@@ -41,6 +42,8 @@ public:
     void push(const T &elem);
 
     void push(const std::vector<uint8_t> &v);
+
+    void from_fd(int fd, size_t num_bytes = -1);
 
     void skip(size_t nbytes);
     void unwind(size_t nbytes);
