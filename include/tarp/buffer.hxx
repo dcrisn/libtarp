@@ -25,9 +25,6 @@ public:
     ByteBuffer(const ByteBuffer &buff);
     ByteBuffer &operator=(const ByteBuffer &rhs);
 
-    // TODO: add move constructor and assignment (make it work with std::move)
-    // TODO: add copy constructor and assignment
-
     template <typename T>
     const T *get(bool advance = true);
 
