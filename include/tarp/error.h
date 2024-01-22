@@ -106,4 +106,23 @@ void throw__(
 } /* extern "C" */
 #endif
 
+
+#ifdef __cplusplus
+#include <stdexcept>
+
+namespace tarp{
+
+class NotImplemented : public std::logic_error
+{
+public:
+    NotImplemented() : std::logic_error("Not yet implemented") { };
+};
+
+} /* namespace tarp */
+
+#endif
+
+
+
+
 #endif
