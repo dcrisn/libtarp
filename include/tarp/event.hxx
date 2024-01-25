@@ -146,7 +146,7 @@ public:
      * these constructors and assignment operators for all derived
      * classes. */
     Callback(const Callback &)                = delete;
-    Callback(const Callback &&)               = delete;
+    Callback(Callback &&)                     = delete;
     Callback &operator=(const Callback&)      = delete;
     Callback &operator=(Callback &&)          = delete;
 
@@ -344,7 +344,7 @@ public:
 
     // not copyable/clonable or movable.
     EventPump(const EventPump &)               = delete;
-    EventPump(const EventPump &&)              = delete;
+    EventPump(EventPump &&)                    = delete;
     EventPump &operator=(const EventPump &)    = delete;
     EventPump &operator=(EventPump &&)         = delete;
 
