@@ -9,7 +9,16 @@
 
 namespace tarp{
 
-
+/*
+ * (1) This gives back a raw writable pointer through which calling
+ * code can modify the underlying bytes in the buffer. NOTE this
+ * relies on the user writing within bounds. It's therefore unsafe
+ * and should be avoided wherever possible. NOTE the pointer returned
+ * is only valid while nothing else is pushed or removed from the buffer.
+ * If any other operation is invoked on the buffer, a new pointer must
+ * be obtained, since the memory location of the underlying bytes
+ * might have changed!
+ */
 class ByteBuffer{
 public:
     ByteBuffer(void) = default;
@@ -30,6 +39,10 @@ public:
     template <typename T>
     const T *get(bool advance = true) const;
 
+    /* (1) */
+    template <typename T>
+    T *get_writable(bool advance = true);
+
     uint8_t get_byte(bool advance = true);
 
     template <typename T>
@@ -42,6 +55,7 @@ public:
     void push(const T &elem);
 
     void push(const std::vector<uint8_t> &v);
+    void push(const uint8_t *start, size_t len);
 
     void from_fd(int fd, size_t num_bytes = -1);
 
@@ -70,11 +84,18 @@ bool ByteBuffer::room4(void) const{
 template <typename T>
 const T *ByteBuffer::get(bool advance) const{
     if (!room4<T>()) return nullptr;
-    const T *ret = static_cast<const T*>(get_offset_ptr());
+    const T *ret = static_cast<const T *>(get_offset_ptr());
 
     if (advance) m_buff_offset += sizeof(T);
 
     return ret;
+}
+
+template <typename T>
+T *ByteBuffer::get_writable(bool advance) {
+    auto const_this = const_cast<const ByteBuffer *>(this);
+    const T *ptr = const_this->get<T>();
+    return const_cast<T*>(ptr);
 }
 
 template <typename T>

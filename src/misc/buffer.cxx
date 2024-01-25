@@ -57,6 +57,12 @@ void ByteBuffer::push(const std::vector<uint8_t> &v){
     m_buff.insert(m_buff.end(), v.begin(), v.end());
 }
 
+void ByteBuffer::push(const uint8_t *start, size_t len){
+    assert(start);
+    if (!start) return;
+    m_buff.insert(m_buff.end(), start, start+len);
+}
+
 void ByteBuffer::from_fd(int fd, size_t num_bytes){
     if (fd < 0) return;
 
