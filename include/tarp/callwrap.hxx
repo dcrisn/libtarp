@@ -32,9 +32,8 @@ public:
         std::apply(m_callable, m_vargs);
     }
 
-    template <typename ...params>
-    auto operator()(params&&... args){
-        return m_callable(std::forward<params>(args)...);
+    auto operator()(vargs... args){
+        return m_callable(std::forward<vargs>(args)...);
     }
 
 private:
@@ -43,7 +42,6 @@ private:
 };
 
 #else
-
 template <typename CALLABLE, typename ...vargs>
 class CallWrapper{
 public:
@@ -84,7 +82,7 @@ auto wrap(CALLABLE &&f, vargs&&... args){
 template <typename CLASS, typename MEMBF, typename ...vargs>
 auto wrapmf(MEMBF f, CLASS *obj, vargs&&...args){
     auto l = [=](auto&&... lambda_params){
-        (obj->*f)(std::forward<vargs>(lambda_params)...);
+        return (obj->*f)(std::forward<vargs>(lambda_params)...);
     };
 
     CallWrapper<decltype(l), vargs...> cw(std::move(l), std::forward<vargs>(args)...);
