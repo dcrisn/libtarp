@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <string>
 
+namespace tarp{
+
 template <typename T = size_t>
 class CounterMap {
 public:
@@ -31,6 +33,10 @@ T CounterMap<T>::get(const std::string &key){
 
 template <typename T>
 void CounterMap<T>::bump(const std::string &key, size_t increment){
+    /*
+     * NOTE: if there is no such entry m_map[key], one is created with
+     * a given key and with a value-initialized value (i.e.
+     * zero-initialization for built-in types) */
     m_map[key] += increment;
 }
 
@@ -62,4 +68,5 @@ void CounterMap<T>::forget_counter(const std::string &key){
     }
 }
 
+} /* namespace tarp */
 
