@@ -4,6 +4,10 @@
 #include <math.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Some helpers for working with floating point numbers.
  * Do be very aware of the following issues:
@@ -57,5 +61,8 @@ double roundto(double d, int precision);
  */
 int dbcmp(double a, double b, double epsilon);
 
+#ifdef __cplusplus
+}  /* extern "C" */
+#endif
 
 #endif
