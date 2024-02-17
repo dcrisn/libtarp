@@ -7,7 +7,6 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdlib.h>
-#include <iostream>
 
 /*
  * Reliably write nbytes from the src buffer to the dst descriptor.
@@ -89,6 +88,7 @@ int pollfd(int fd, int events, int timeout);
 #include <stdexcept>
 #include <memory>
 #include <string>
+#include <iostream>
 
 /*
  * In c++ 20 there is python like string - format capability.
