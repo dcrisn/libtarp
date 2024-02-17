@@ -79,14 +79,11 @@ auto wrap(CALLABLE &&f, vargs&&... args){
     return cw;
 }
 
-template <typename CLASS, typename MEMBF, typename ...vargs>
-auto wrapmf(MEMBF f, CLASS *obj, vargs&&...args){
-    auto l = [=](auto&&... lambda_params){
-        return (obj->*f)(std::forward<vargs>(lambda_params)...);
+template <typename CLASS, typename MEMBF>
+auto wrapmf(MEMBF f, CLASS *obj){
+    return [=](auto&&... lambda_params){
+        return (obj->*f)(std::forward<decltype(lambda_params)>(lambda_params)...);
     };
-
-    CallWrapper<decltype(l), vargs...> cw(std::move(l), std::forward<vargs>(args)...);
-    return cw;
 }
 
 }  /* namespace tarp */
