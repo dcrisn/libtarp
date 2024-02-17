@@ -7,6 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <iostream>
 
 /*
  * Reliably write nbytes from the src buffer to the dst descriptor.
@@ -114,6 +115,12 @@ std::string sfmt(const std::string &fmt, Args ... vargs )
     /* -1 to leave out the terminating Null */
     return std::string(buff.get(), buff.get() + buffsz - 1 );
 }
+
+template<typename ...Args>
+void println(Args&&... args) {
+    (std::cout << ... << std::forward<Args>(args)) << '\n';
+}
+
 #endif
 
 
