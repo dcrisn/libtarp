@@ -1,5 +1,4 @@
-#ifndef MOCOHORT_H
-#define MOCOHORT_H
+#pragma once
 
 #include <stdlib.h>
 
@@ -152,14 +151,18 @@ void Cohort_destroy(struct cohort *testlist);
  * 2) STOP_ON_FAIL: stop as soon as one test fails. Do not continue past that.
  */
 
+#define NUM_TESTS_RUN      num_run
+#define NUM_TESTS_PASSED   num_passed
+#define TEST_PASSED        passed
+
 #define prepare_test_variables() \
-    int num_run = 0; \
-    int num_passed = 0; \
-    int passed = 0;
+    int NUM_TESTS_RUN = 0; \
+    int NUM_TESTS_PASSED = 0; \
+    int TEST_PASSED = 0;
 
 #define update_test_counter(passed, f)  \
-    ++num_run;  \
-    if (passed) ++num_passed; \
+    ++NUM_TESTS_RUN;  \
+    if (passed) ++NUM_TESTS_PASSED; \
     printf("[ ] test %4i %9s | %s()%s\n", \
             num_run, \
             (passed) ? "Passed" : "FAILED !!", \
@@ -175,8 +178,8 @@ void Cohort_destroy(struct cohort *testlist);
 #ifndef __cplusplus
 
 #define run(f, expected, ...) \
-    passed = (f(__VA_ARGS__) == expected); \
-    update_test_counter(passed, f);
+    TEST_PASSED = (f(__VA_ARGS__) == expected); \
+    update_test_counter(TEST_PASSED, f);
 
 #else   /* __cplusplus */
 
@@ -190,8 +193,8 @@ bool run(Func f, enum testStatus expected, Params&&... params)
 #endif
 
 #define report_test_summary() \
-    printf("\n Passed: %i / %i\n", num_passed, num_run); \
-    if (num_passed != num_run) exit(1)
+    printf("\n Passed: %i / %i\n", NUM_TESTS_PASSED, NUM_TESTS_RUN); \
+    if (NUM_TESTS_PASSED != NUM_TESTS_RUN) exit(1)
 
 #define cond_test_debug_print(status, ...) \
     do { \
@@ -204,4 +207,3 @@ bool run(Func f, enum testStatus expected, Params&&... params)
     } while (0)
 
 
-#endif /* MOCOHORT_H */
