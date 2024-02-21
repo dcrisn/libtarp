@@ -13,6 +13,8 @@ static uint32_t tests_run = 0;
 static uint32_t tests_passed = 0;
 static bool passed = false;
 
+static struct iniparse_ctx *ctx;
+
 #define run_test(f, ...) \
     tests_run++; \
     passed = f(__VA_ARGS__); \
@@ -81,13 +83,13 @@ bool test_list_header(char *str, bool expected, char *expected_name){
 bool test_list_end(char *str, bool expected){
     char rwstr[MAX_LINE_LEN] = {0};
     strncpy(rwstr, str, MAX_LINE_LEN-1);
-    return (is_list_end(rwstr) == expected);
+    return (is_list_end(ctx, rwstr) == expected);
 }
 
 bool test_list_start(char *str, bool expected){
     char rwstr[MAX_LINE_LEN] = {0};
     strncpy(rwstr, str, MAX_LINE_LEN-1);
-    return (is_list_start(rwstr) == expected);
+    return (is_list_start(ctx, rwstr) == expected);
 }
 
 bool test_list_entry(char *str, bool expected, bool islast, char *expv){
@@ -112,6 +114,7 @@ bool test_list_entry(char *str, bool expected, bool islast, char *expv){
 int main(int argc, char **argv){
     UNUSED(argc);
     UNUSED(argv);
+    ctx = iniParse_init(false, false, ".", true);
 
     printf(" ~~~~ Running iniParse C tests ~~~~ \n");
 

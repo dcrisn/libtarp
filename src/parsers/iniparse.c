@@ -11,45 +11,66 @@
 #include <tarp/iniparse.h>
 #include "iniparse_helpers.h"
 
-/*
- * By default each key-value entry must appear following a section
- * declaration. Setting this to true makes it legal (where it would
- * otherwise produce an error) to have 'global' key-value entries
- * (or lists) i.e. entries that precede any section declarations.
- */
-bool ALLOW_GLOBAL_RECORDS=0;
 
-/*
- * By default an empty list (list without elements) produces an error.
- * Setting this to true will make such list occurences in an .ini file
- * legal. This is still discouraged practice though as empty lists
- * are useless.
- */
-bool ALLOW_EMPTY_LISTS=0;
+struct iniparse_ctx{
+    /*
+     * Whether parsing errors are fatal -- the program should exit --
+     * or whether to simply return an error code to the user instead. */
+    bool fatal_errors;
+    /*
+     * By default each key-value entry must appear following a section
+     * declaration. Setting this to true makes it legal (where it would
+     * otherwise produce an error) to have 'global' key-value entries
+     * (or lists) i.e. entries that precede any section declarations.
+     */
+    bool allow_global_records;
 
-/*
- * Set the namespace delimiter in section titles e.g.
- * section.subsection.subsubsection; '.' is the default.
- * Note this is only significant for the lua or C++ wrappers as
- * there the parser returns a table/map where namespace nesting
- * is represented by table/map nesting. In C code however the
- * parser simply calls a user-registered callback and section names
- * are returned as whole strings. It's up to the user whether
- * they want to split it up into a namespace hierarchy or not.
- */
-const char *SECTION_NS_SEP = ".";
+    /*
+     * By default an empty list (list without elements) produces an error.
+     * Setting this to true will make such list occurences in an .ini file
+     * legal. This is still discouraged practice though as empty lists
+     * are useless.
+     */
+    bool allow_empty_lists;
 
-/*
- * By default, lists are opened and closed using square brackets
- * ('[', ']'). The user can however customize this by setting
- * LIST_BRACKET to something else, such as curly braces ('{'. '}').
- * The symbol chosen MUST NOT appear anywhere else in that list.
- *
- * LIST_BRACKET MUST be a 2-char string, with LIST_BRACKET[0]
- * being the opening bracket and LIST_BRACKET[1] being the closing
- * bracket.
- */
-const char *LIST_BRACKET = "[]";
+    /*
+     * Set the namespace delimiter in section titles e.g.
+     * section.subsection.subsubsection; '.' is the default.
+     * Note this is only significant for the lua or C++ wrappers as
+     * there the parser returns a table/map where namespace nesting
+     * is represented by table/map nesting. In C code however the
+     * parser simply calls a user-registered callback and section names
+     * are returned as whole strings. It's up to the user whether
+     * they want to split it up into a namespace hierarchy or not.
+     */
+    const char *section_ns_sep;
+
+    /*
+     * By default, lists are opened and closed using square brackets
+     * ('[', ']'). The user can however customize this by setting
+     * LIST_BRACKET to something else, such as curly braces ('{'. '}').
+     * The symbol chosen MUST NOT appear anywhere else in that list.
+     *
+     * LIST_BRACKET MUST be a 2-char string, with LIST_BRACKET[0]
+     * being the opening bracket and LIST_BRACKET[1] being the closing
+     * bracket.
+     */
+    const char *list_bracket;
+};
+
+static void initialize_iniparse_ctx_defaults(struct iniparse_ctx *ctx){
+    assert(ctx);
+    ctx->allow_global_records   = false;
+    ctx->allow_empty_lists      = false;
+    ctx->section_ns_sep         = ".";
+    ctx->list_bracket           = "[]";
+}
+
+static struct iniparse_ctx *get_initialized_iniparse_ctx(void){
+    struct iniparse_ctx *ctx = salloc(sizeof(struct iniparse_ctx), NULL);
+    initialize_iniparse_ctx_defaults(ctx);
+    return ctx;
+}
 
 /*
  * Map of cinic error number to error string;
@@ -89,7 +110,8 @@ const char *Cinic_err2str(enum iniParseError errnum){
  * If the transition from the previous list state to the next one is as
  * expected, return CINIC_SUCCESS. Otherwise return an error number.
  */
-enum iniParseError iniParse_get_list_error(enum iniParseListState prev, enum iniParseListState next)
+enum iniParseError iniParse_get_list_error(struct iniparse_ctx *ctx,
+        enum iniParseListState prev, enum iniParseListState next)
 {
     say("Assessing list state transition from  prev=%i to next=%i\n", prev, next);
     switch(prev){
@@ -117,7 +139,7 @@ enum iniParseError iniParse_get_list_error(enum iniParseListState prev, enum ini
                 return INIPARSE_NESTED;
             }else if (next == LIST_OPEN){
                 return INIPARSE_REDUNDANT_BRACKET;
-            }else if (next == NOLIST && !ALLOW_EMPTY_LISTS){
+            }else if (next == NOLIST && !ctx->allow_empty_lists){
                 return INIPARSE_EMPTY_LIST;
             }else return INIPARSE_MALFORMED_LIST;
             break;
@@ -436,8 +458,11 @@ bool is_record_line(char *line, char k[], char v[], size_t buffsz){
  * A list token is one of: <list head>, '=', <opening/closing bracket>,
  * <list item (regular or final)>.
  */
-char *get_list_token(char *line, char buff[], size_t buffsz){
+char *get_list_token(struct iniparse_ctx *ctx, char *line, char buff[], size_t buffsz)
+{
     assert(line);
+    assert(ctx);
+
     line = strip_lws(line);
     strip_comment(line);
     strip_tws(line);
@@ -454,7 +479,7 @@ char *get_list_token(char *line, char buff[], size_t buffsz){
     line = strip_lws(line);
 
     /* equals sign, opening bracket, or comma */
-    if (*line == '=' || *line == *LIST_BRACKET || *line == ','){
+    if (*line == '=' || *line == *(ctx->list_bracket) || *line == ','){
         end = line;
         cp_to_buff(buff, start, buffsz, (end-start) + 1);
     }
@@ -464,7 +489,7 @@ char *get_list_token(char *line, char buff[], size_t buffsz){
         cp_to_buff(buff, start, buffsz, (end - start) + 1);
     }
     /* closing bracket ... */
-    else if(*line == LIST_BRACKET[1]){
+    else if(*line == ctx->list_bracket[1]){
         if (is_allowed(*start, false)){ /* preceded by list item */
             end = line-1;
         }else end = line;  /* without preceding item */
@@ -534,12 +559,12 @@ bool is_list_head(char *line, char k[], size_t buffsz){
  *  - line must not be NULL
  *  - line must be STRIPPED of comment, and leading and trailing whitespace
  */
-bool is_list_end(char *line){
+bool is_list_end(struct iniparse_ctx *ctx, char *line){
     assert(line);
     say(" ~~ is_list_end ? : '%s'\n", line);
 
     /* only char must be closing bracket */
-    if (strlen(line) != 1 || *line != LIST_BRACKET[1]){
+    if (strlen(line) != 1 || *line != ctx->list_bracket[1]){
         return false;
     }
 
@@ -553,12 +578,14 @@ bool is_list_end(char *line){
  *  - line must not be NULL
  *  - line must be STRIPPED of comment, and leading and trailing whitespace
  */
-bool is_list_start(char *line){
+bool is_list_start(struct iniparse_ctx *ctx, char *line){
     assert(line);
+    assert(ctx);
+
     say(" ~~ is_list_start ? : '%s'\n", line);
 
     /* only char must be opening bracket */
-    if (strlen(line) != 1 || *line != *LIST_BRACKET){
+    if (strlen(line) != 1 || *line != ctx->list_bracket[0]){
         return false;
     }
 
@@ -653,7 +680,7 @@ bool is_list_entry(char *line, char v[], size_t buffsz, bool *islast){
  *  - cb and path must not be NULL
  *  - path must specify the absolute path to an .ini config file
  */
-int iniParse_parse(const char *path, config_cb cb){
+int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
     assert(path && cb);
 
     int rc = 0;
@@ -707,7 +734,7 @@ int iniParse_parse(const char *path, config_cb cb){
         /*  key-value line */
         else if (is_record_line(buff, key, val, MAX_LINE_LEN)){
             say(" ~ line %u is a record line\n", ln);
-            if (! *section && !ALLOW_GLOBAL_RECORDS){
+            if (! *section && !ctx->allow_global_records){
                 cinic_exit_print(INIPARSE_NOSECTION, ln);
             }else if (list){
                 cinic_exit_print(INIPARSE_NESTED, ln);
@@ -722,12 +749,13 @@ int iniParse_parse(const char *path, config_cb cb){
             char *next_token = buff; /* initialize */
             enum iniParseError cerr;
 
-            while ((next_token = get_list_token(next_token, curr_token_buff, MAX_LINE_LEN))){
+            while ((next_token = get_list_token(ctx, next_token, curr_token_buff, MAX_LINE_LEN)))
+            {
                 say("---> current token = '%s'\n", curr_token_buff);
 
                 /* list head */
                 if(is_list_head(curr_token_buff, key, MAX_LINE_LEN)){
-                    if ( (cerr = iniParse_get_list_error(list, LIST_HEAD)) ){
+                    if ( (cerr = iniParse_get_list_error(ctx, list, LIST_HEAD)) ){
                         cinic_exit_print(cerr, ln);
                     }
                     list = LIST_HEAD;
@@ -736,8 +764,8 @@ int iniParse_parse(const char *path, config_cb cb){
                 }
 
                 /* opening bracket */
-                else if (is_list_start(curr_token_buff)){
-                    if ( (cerr = iniParse_get_list_error(list, LIST_OPEN)) ){
+                else if (is_list_start(ctx, curr_token_buff)){
+                    if ( (cerr = iniParse_get_list_error(ctx, list, LIST_OPEN)) ){
                         cinic_exit_print(cerr, ln);
                     }
                     list = LIST_OPEN;
@@ -746,15 +774,16 @@ int iniParse_parse(const char *path, config_cb cb){
 
                 /* list entry */
                 else if(is_list_entry(curr_token_buff, val, MAX_LINE_LEN, &islast)){
-                    if ( (cerr = iniParse_get_list_error(list, islast ? LIST_LAST : LIST_ONGOING)) ){
+                    if ( (cerr = iniParse_get_list_error(ctx, list, islast ? LIST_LAST : LIST_ONGOING)) )
+                    {
                         cinic_exit_print(cerr, ln);
                     }
                     list = islast ? LIST_LAST : LIST_ONGOING; /* reset :  */
                 }
 
                 /* list end */
-                else if(is_list_end(curr_token_buff)){
-                    if ( (cerr = iniParse_get_list_error(list, NOLIST)) ){
+                else if(is_list_end(ctx, curr_token_buff)){
+                    if ( (cerr = iniParse_get_list_error(ctx, list, NOLIST)) ){
                         cinic_exit_print(cerr, ln);
                     }
                     list = NOLIST;
@@ -787,17 +816,25 @@ int iniParse_parse(const char *path, config_cb cb){
  * could be modified manually, including:
  *  - LIST_BRACKET
  */
-void Cinic_init(bool allow_globals,
-                bool allow_empty_lists,
-                const char *section_delim
-                )
+struct iniparse_ctx *iniParse_init(
+        bool allow_globals, 
+        bool allow_empty_lists,
+        const char *section_delim,
+        bool exit_on_error
+        )
 {
-    ALLOW_GLOBAL_RECORDS = allow_globals;
-    ALLOW_EMPTY_LISTS = allow_empty_lists;
+    struct iniparse_ctx *ctx = get_initialized_iniparse_ctx();
+    ctx->allow_global_records = allow_globals;
+    ctx->allow_empty_lists = allow_empty_lists;
+    ctx->fatal_errors = exit_on_error;
+    if (section_delim) ctx->section_ns_sep = section_delim;
 
     if (strlen(section_delim) > 1){
         fprintf(stderr, "Invalid section delimiter specified: '%s' -- must be a single char\n", section_delim);
         exit(EXIT_FAILURE);
     }
-    SECTION_NS_SEP = section_delim;
+
+    ctx->section_ns_sep = section_delim;
+
+    return ctx;
 }

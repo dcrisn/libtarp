@@ -11,6 +11,8 @@
 extern "C"{
 #endif
 
+struct iniparse_ctx;
+
 /*
  * Used to communicate the state of a list. The parser is line-oriented
  * and it does NOT parse the whole file in one go or ahead of time.
@@ -75,12 +77,49 @@ enum iniParseError{
  */
 typedef
 int (* config_cb)(
-        uint32_t ln,                
-        enum iniParseListState list, 
-        const char *section,   
+        uint32_t ln,
+        enum iniParseListState list,
+        const char *section,
         const char *k,
         const char *v
         );
+
+/*
+ * Initialize the ini parser state.
+ *
+ * --> ctx
+ * ctx is an opaque handle to the parser and must be non-NULL.
+ * Multiple parsers can be used at the same time as they each
+ * maintain their state entirely in the opaque handle;
+ * Once initialized, the parser must always be called with
+ * the corresponding handle.
+ *
+ * --> allow_globals
+ * Consider key-value pairs that appear before any section title legal
+ *
+ * --> allow_empty_lists
+ * Consider lists without any list items to be legal
+ *
+ * --> section_delim
+ * A character that represents section nesting e.g. a.b.c;
+ * see SECTION_NS_SEP in iniparse.c
+ *
+ * --> exit_on_error
+ * If true, the parser will print an error message and exit on
+ * any parsing errors encountered (invalid configuration file being parsed).
+ * Otherwise if false, an error code will be returned to the called instead.
+ */
+struct iniparse_ctx *iniParse_init(
+        bool allow_globals,
+        bool allow_empty_lists,
+        const char *section_delim,
+        bool exit_on_error
+        );
+
+/*
+ * After this call the user can reuse ctx or
+ * call free() on it if appropriate */
+void iniParse_destroy(struct iniparse_ctx *ctx);
 
 /*
  * Parse the .ini config file specified by path.
@@ -96,28 +135,12 @@ int (* config_cb)(
  * --> path
  * path to .ini config file
  */
-int iniparse_parse(
-        const char *path, 
+int iniParse_parse(
+        struct iniparse_ctx *ctx,
+        const char *path,
         config_cb cb
         );
 
-/*
- * Initialize various internal iniParse variables.
- *
- * These allow customization of the parser as described
- * in the comments.
- */
-void iniparse_init(
-        /* consider key-value pairs that appear before any section title legal */
-        bool allow_globals, 
-
-        /* consider lists without any list items to be legal */
-        bool allow_empty_lists,
-
-        /* char that represents section nesting e.g. a.b.c; see SECTION_NS_SEP
-         * in iniparse.c */
-        const char *section_delim 
-        );
 
 #ifdef __cplusplus
 }  /* extern "C" */
