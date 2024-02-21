@@ -113,7 +113,7 @@ int main(int argc, char **argv){
     UNUSED(argc);
     UNUSED(argv);
 
-    printf(" ~~~~ Running C tests ~~~~ \n");
+    printf(" ~~~~ Running iniParse C tests ~~~~ \n");
 
     printf("[ ] Parsing empty lines ... \n");
     run_test(test_empty_line, " ;", false);
