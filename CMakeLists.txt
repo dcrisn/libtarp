@@ -109,7 +109,10 @@ file(GLOB_RECURSE library_c_sources "src/*.c")
 file(GLOB_RECURSE library_cxx_sources "src/*.cxx")
 
 SET(libtarp_public_headers include)
-SET(libtarp_private_headers ${libtarp_public_headers})
+SET(libtarp_private_headers
+    ${libtarp_public_headers}
+    src/
+    )
 
 add_library(tarp SHARED
     ${library_c_sources}
