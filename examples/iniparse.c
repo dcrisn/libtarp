@@ -17,8 +17,6 @@ int mycb(
 }
 
 int main(int argc, char **argv){
-    UNUSED(argc); UNUSED(argv);
-
     if (argc != 2){
         fprintf(stderr, " FATAL : sole argument must be path to a config file to parse\n");
         exit(EXIT_FAILURE);
@@ -27,7 +25,5 @@ int main(int argc, char **argv){
     struct iniparse_ctx *ctx;
     ctx = iniParse_init(true, false, ".", true);
     char *path = argv[1];
-    UNUSED(path);
-    UNUSED(ctx);
     return iniParse_parse(ctx, path, mycb);
 }
