@@ -154,7 +154,7 @@ target_link_libraries(md5hash
 ## Build artifact installation rules  #
 #######################################
 #
-INSTALL(DIRECTORY ${libtarp_public_headers} DESTINATION usr)
+INSTALL(DIRECTORY ${libtarp_public_headers}/ DESTINATION include/)
 
 set_target_properties(tarp md5hash
     PROPERTIES
@@ -164,9 +164,9 @@ set_target_properties(tarp md5hash
 )
 
 INSTALL(TARGETS tarp md5hash
-    LIBRARY DESTINATION usr/lib
-    ARCHIVE DESTINATION usr/lib
-    RUNTIME DESTINATION usr/bin
+    LIBRARY DESTINATION lib/
+    ARCHIVE DESTINATION lib/
+    RUNTIME DESTINATION bin/
     )
 
 
