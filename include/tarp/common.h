@@ -6,13 +6,13 @@
 extern "C" {
 #endif
 
+#include <assert.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stddef.h>
-#include <stdbool.h>
 #include <string.h>
-#include <assert.h>
-#include <stdint.h>
 
 
 void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
@@ -20,7 +20,7 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 /*
  * Get length of array (note: NOT array decayed to pointer!)
  */
-#define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
+#define ARRLEN(arr)            (sizeof(arr) / sizeof(arr[0]))
 
 #define membersz(type, member) sizeof(((type *)0)->member)
 
@@ -32,7 +32,7 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 /*
  * Stringify token x to allow concatenation with string literals */
 #define tostring__(x) #x
-#define tkn2str(x) tostring__(x)
+#define tkn2str(x)    tostring__(x)
 
 /*
  * Suppress warning about variable being declared but unused.
@@ -44,7 +44,22 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  *  Casting to void will always work; using the unused attribute works
  *  with gcc and clang.
  */
-#define UNUSED(x) do { (void)(x); } while (0)
+#define UNUSED(x) \
+  do {            \
+    (void)(x);    \
+  } while (0)
+
+/*
+ * Useful for namespacing enums i.e. prefixing all enum members
+ * with PREFIX. Meant to be wrapped in another macro that passes
+ * a hardcoded PREFIX value implicitly, e.g.
+ * #define PREFIX GROND
+ * #define enum_ns(member) enum_namespace(PREFIX, member)
+ * such that the calls actually being used in code are enum_ns(member).
+ */
+#define _do_add_enum_member_prefix(PREFIX, member) PREFIX##_##member
+#define enum_namespace(PREFIX, member) \
+  _do_add_enum_member_prefix(PREFIX, member)
 
 /*
  * Safe allocation: exits the program if calloc/malloc/realloc return NULL;
@@ -56,10 +71,13 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  */
 void *salloc(size_t size, void *ptr);
 
-#define nl(n) do { for (int i = n; i > 0; --i) puts(""); } while(0);
-#define match(a, b) (strcmp(a, b) == 0 )
-#define matchn(a, b, n) (strncmp(a, b, n) == 0 )
-#define bool2str(val) ((val) ? "True":"False")
+#define nl(n)                             \
+  do {                                    \
+    for (int i = n; i > 0; --i) puts(""); \
+  } while (0);
+#define match(a, b)     (strcmp(a, b) == 0)
+#define matchn(a, b, n) (strncmp(a, b, n) == 0)
+#define bool2str(val)   ((val) ? "True" : "False")
 
 /*
  * Prototype for a function that when called with two non-NULL
@@ -71,7 +89,7 @@ void *salloc(size_t size, void *ptr);
  *
  * IOW it returns one of the constant members of the comparatorResult
  * enumeration. */
-enum comparatorResult    {LT = -1, EQ = 0, GT = 1};
+enum comparatorResult { LT = -1, EQ = 0, GT = 1 };
 typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 
 
@@ -79,18 +97,18 @@ typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 /*
  * Predicate helpers that evaluate to boolean true when the result of
  * comparing a and b using the given comparator is LT, GT, or EQ. */
-#define lt(a, b, cmp) (cmp(a, b) < 0)
-#define gt(a, b, cmp) (cmp(a, b) > 0)
-#define eq(a, b, cmp) (cmp(a, b) == 0)
+#define lt(a, b, cmp)  (cmp(a, b) < 0)
+#define gt(a, b, cmp)  (cmp(a, b) > 0)
+#define eq(a, b, cmp)  (cmp(a, b) == 0)
 #define lte(a, b, cmp) (cmp(a, b) <= 0)
 #define gte(a, b, cmp) (cmp(a, b) >= 0)
 
-#endif  /* ifndef __cplusplus */
+#endif /* ifndef __cplusplus */
 
 /*
  * Given a start pointer 'base' to type TYPE, get a pointer OFFSET positions
  * from it . */
-#define get_pointer_at_position(base, type, offset) (((type *)base)+offset)
+#define get_pointer_at_position(base, type, offset) (((type *)base) + offset)
 
 /*
  * Macro that expands to 'static' when called with argument type=private,
@@ -106,9 +124,23 @@ typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 #define vis_public
 #define vis(type) vis_##type
 
+#ifdef __cplusplus
+
+/*
+ * Concise way to declare delete the copy and move constructors and
+ * assignment operators for a class.
+ */
+#define DISALLOW_COPY_AND_MOVE(CLASSNAME)           \
+  CLASSNAME(const CLASSNAME &)            = delete; \
+  CLASSNAME(CLASSNAME &&)                 = delete; \
+  CLASSNAME &operator=(const CLASSNAME &) = delete; \
+  CLASSNAME &operator=(CLASSNAME &&)      = delete;
+
+
+#endif
 
 #ifdef __cplusplus
-}   /* extern "C" */
+} /* extern "C" */
 #endif
 
 #endif
