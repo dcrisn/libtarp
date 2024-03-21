@@ -14,9 +14,11 @@ EmptyLineBeforeAccessModifier: LogicalBlock
 AlignAfterOpenBracket: Align
 AlignArrayOfStructures: Left
 
-AlignConsecutiveAssignments: AcrossEmptyLines
+#AlignConsecutiveAssignments: AcrossEmptyLines
+#AlignConsecutiveDeclarations: AcrossEmptyLines
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
 AlignConsecutiveBitFields: AcrossEmptyLines
-AlignConsecutiveDeclarations: AcrossEmptyLines
 AlignConsecutiveMacros: AcrossEmptyLines
 
 AllowShortCaseLabelsOnASingleLine: true
