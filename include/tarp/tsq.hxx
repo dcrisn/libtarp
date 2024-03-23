@@ -5,8 +5,6 @@
 
 #include <tarp/common.h>
 
-#define LOCK() std::unique_lock<std::mutex> lock
-
 namespace tarp {
 
 /*
@@ -23,28 +21,28 @@ public:
     tsq(void) = default;
 
     std::size_t size(void) const {
-        LOCK();
+        LOCK(m_mtx);
         return m_queue.size();
     }
 
     bool empty(void) const {
-        LOCK();
+        LOCK(m_mtx);
         return m_queue.empty();
     };
 
     void push_back(const T &i) {
-        LOCK();
+        LOCK(m_mtx);
         m_queue.push_back(i);
     }
 
     void push_back(T &&i) {
-        LOCK();
+        LOCK(m_mtx);
         m_queue.emplace_back(i);
     }
 
     template<template<typename> class SEQ>
     void push_back_many(const SEQ<T> &seq) {
-        LOCK();
+        LOCK(m_mtx);
         for (const auto &i : seq) {
             m_queue.push_back(i);
         }
@@ -58,12 +56,12 @@ public:
      * be subject to potential race conditions.
      */
     const T &back(void) const {
-        LOCK();
+        LOCK(m_mtx);
         return m_queue.back();
     }
 
     T pop_back(void) {
-        LOCK();
+        LOCK(m_mtx);
         T t = m_queue.back();
         m_queue.pop_back();
         return t;
@@ -76,7 +74,7 @@ public:
      */
     template<template<typename> class SEQ>
     void pop_back_many(SEQ<T> &seq, int n = -1) {
-        LOCK();
+        LOCK(m_mtx);
         std::size_t num = (n == -1 || n > m_queue.size()) ? m_queue.size() : n;
         for (size_t i = 0; i < num; ++i) {
             seq.emplace_back(m_queue.back());
@@ -85,30 +83,30 @@ public:
     }
 
     void push_front(const T &i) {
-        LOCK();
+        LOCK(m_mtx);
         m_queue.push_front(i);
     }
 
     void push_front(T &&i) {
-        LOCK();
+        LOCK(m_mtx);
         m_queue.emplace_front(i);
     }
 
     template<template<typename> class SEQ>
     void push_front_many(const SEQ<T> &seq) {
-        LOCK();
+        LOCK(m_mtx);
         for (const auto &i : seq) {
             m_queue.push_front(i);
         }
     }
 
     const T &front(void) const {
-        LOCK();
+        LOCK(m_mtx);
         return m_queue.front();
     }
 
     T pop_front(void) {
-        LOCK();
+        LOCK(m_mtx);
         T t = m_queue.front();
         m_queue.pop_front();
         return t;
@@ -121,7 +119,7 @@ public:
      */
     template<template<typename> class SEQ>
     void pop_front_many(SEQ<T> &seq, int n = -1) {
-        LOCK();
+        LOCK(m_mtx);
         std::size_t num = (n == -1 || n > m_queue.size()) ? m_queue.size() : n;
         for (size_t i = 0; i < num; ++i) {
             seq.emplace_back(m_queue.front());
@@ -133,7 +131,5 @@ private:
     std::deque<T>      m_queue;
     mutable std::mutex m_mtx;
 };
-
-#undef LOCK
 
 }  // namespace tarp
