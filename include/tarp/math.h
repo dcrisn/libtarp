@@ -13,6 +13,9 @@ extern "C" {
 #define positive(n) (n >= 0)
 #define negative(n) (n < 0)
 
+#define even(n) (!(n & 1))
+#define odd(n)  (n & 1)
+
 /*
  * FreeBSD source code  */
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -67,9 +70,63 @@ void dump_primes(size_t limit);
  */
 #define define_sqrt(NAME, UNSIGNED_TYPE)    define_sqrt__(NAME, UNSIGNED_TYPE)
 
-
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
+
+
+#ifdef __cplusplus
+namespace tarp::math {
+
+/*
+ * Integer exponentiation. Returns base^exp.
+ *
+ * The algorith is 'exponentiation by squaring' and is based on
+ * the following recurrence:
+ *       { x * (x^2)^((n-1)/2), if n is odd.
+ * x^n = |
+ *       { x * (x^2)^(n/2),      if n is even.
+ *
+ * See https://en.wikipedia.org/wiki/Exponentiation_by_squaring
+ *
+ * For reference, the recursive version is given for refence. This
+ * is compiled out however -- this particular implementation does
+ * not use tail recursion and the iterative version is therefore
+ * likely faster.
+ */
+#if 0
+template<typename T = uint32_t>
+T intpow(unsigned base, unsigned exp) {
+    if (exp == 0) return 1;
+
+    T b = base * base;
+
+    if (even(exp)) {
+        return intpow(b, exp >> 1);
+    }
+
+    if (odd(exp)) {
+        return base * intpow(b, (exp-1) >> 1 );
+    }
+}
+#endif
+
+template<typename T = uint32_t>
+T intpow(T base, unsigned exp) {
+    T res = 1;
+    while(true){
+        if (odd(exp)) res *= base;
+        exp >>= 1;
+        if (exp == 0) break;
+        base *= base;
+    }
+    return res;
+}
+
+
+
+} /* namespace tarp */
+#endif /* __cplusplus */
+
 
 #endif
