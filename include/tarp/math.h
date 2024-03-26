@@ -81,7 +81,7 @@ namespace tarp::math {
 /*
  * Integer exponentiation. Returns base^exp.
  *
- * The algorith is 'exponentiation by squaring' and is based on
+ * The algorithm is 'exponentiation by squaring' and is based on
  * the following recurrence:
  *       { x * (x^2)^((n-1)/2), if n is odd.
  * x^n = |
