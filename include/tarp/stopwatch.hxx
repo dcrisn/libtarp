@@ -9,9 +9,9 @@ namespace tarp {
  * in time to a specified resolution (milliseconds by default).
  */
 template<typename resolution = std::chrono::milliseconds>
-class Timer {
+class StopWatch {
 public:
-    Timer() : m_start_time(), m_stop_time() {};
+    StopWatch() : m_start_time(), m_stop_time() {};
 
     void start(void) { m_start_time = clock_type::now(); }
 
