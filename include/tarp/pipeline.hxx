@@ -154,7 +154,7 @@ private:
     bool m_trim_output;
     PipelineStage<OUT> *m_next_stage;
     std::queue<OUT> m_output;
-    tarp::signal<OUT> m_new_output_signal;
+    tarp::signal<void(OUT)> m_new_output_signal;
 };
 
 // TODO:
