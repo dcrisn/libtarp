@@ -91,7 +91,7 @@ namespace tarp {
  * IOW the interval is fixed hence the guard is 'periodic':
  *  => end timepoint = start timepoint + n*interval, where n=1,2,3, ...
  *
- * 2. ExpTimeGuar
+ * 2. ExpTimeGuard
  * This advances its end timepoint by exponentially-increasing intervals.
  *  => end timepoint = start timepoint + (base^n * interval), where
  * n=0,1,2,3,...
@@ -182,11 +182,9 @@ protected:
     std::chrono::steady_clock::duration get_base_interval() const;
 
 private:
-    bool maxed_out(void) const;
-
-    const bool m_start_low;
-    const T m_base_interval;
-    const int m_max_intervals;
+    bool m_start_low;
+    T m_base_interval;
+    int m_max_intervals;
 
     bool m_enabled;
     mutable bool m_up;
@@ -201,12 +199,6 @@ TimeGuard<T>::TimeGuard(const T &interval, bool start_low, int max_intervals)
     , m_base_interval(interval)
     , m_max_intervals(max_intervals) {
     initialize();
-}
-
-template<typename T>
-bool TimeGuard<T>::maxed_out() const {
-    // no intervals left
-    return (m_max_intervals > 0 && m_intervals_left == 0);
 }
 
 template<typename T>
@@ -230,7 +222,9 @@ void TimeGuard<T>::initialize() {
 // is not a concern.
 template<typename T>
 void TimeGuard<T>::shift(unsigned int num_intervals) {
-    if (maxed_out() or disabled()) return;
+    if (disabled()) {
+        return;
+    }
 
     if (m_intervals_left > 0) {
         if (m_intervals_left < num_intervals) {
@@ -244,7 +238,6 @@ void TimeGuard<T>::shift(unsigned int num_intervals) {
 
     auto last_timepoint = m_next_timepoint;
     for (unsigned int i = 0; i < num_intervals; ++i) {
-        crit("advancing");
         advance();
     }
     m_next_interval = m_next_timepoint - last_timepoint;
@@ -359,7 +352,6 @@ void ExpTimeGuard<T>::initialize() {
 
 template<typename T>
 void ExpTimeGuard<T>::advance() {
-    crit("called right advance, base is %u", m_base);
     auto tp = this->get_next_timepoint();
 
     if (m_base == 2) {
@@ -371,6 +363,7 @@ void ExpTimeGuard<T>::advance() {
 
     this->set_end_timepoint(tp);
 }
+
 
 
 }  // namespace tarp
