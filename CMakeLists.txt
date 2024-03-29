@@ -11,6 +11,7 @@ set(LIBTARP_MAJOR_VERSION 0)
 set(LIBTARP_MINOR_VERSION 0)
 set(LIBTARP_PATCH_NUMBER 1)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(DEBUG "Build debug binaries" OFF)
 option(USE_SANITIZERS "Use program sanitizers" OFF)
