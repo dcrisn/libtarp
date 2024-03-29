@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include <tarp/thread_entity.hxx>
 
 using namespace std;
@@ -59,10 +57,6 @@ void ThreadEntity::stop(void) {
     auto current_state = m_state;
     set_state(STOPPED);
 
-    if (current_state == STOPPED) {
-        return;
-    }
-
     /* need to get the thread unstuck from waiting at the
      * condition variable first */
     if (current_state == PAUSED) {
@@ -113,7 +107,7 @@ bool ThreadEntity::run() {
 
 void ThreadEntity::loop(void) {
     std::unique_lock<std::mutex> l(m_mtx, std::defer_lock);
-    
+
     auto wait_checker = [this]{
         return m_state != PAUSED;
     };
