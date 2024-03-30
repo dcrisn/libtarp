@@ -11,9 +11,6 @@
 
 namespace tarp {
 
-// template<typename>
-// class signal;
-
 template<typename callback_signature,
          typename signal_output = tarp::func_return_type<callback_signature>,
          template<typename output, typename input> typename reducer =
