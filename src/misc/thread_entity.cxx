@@ -21,7 +21,27 @@ void ThreadEntity::cleanup() {
 
 void ThreadEntity::do_task(void) {
     using namespace std::chrono_literals;
-    std::this_thread::sleep_for(1s);
+    wait_for(1s);
+}
+
+void ThreadEntity::wait_until(std::chrono::steady_clock::time_point tp) {
+    LOCK(m_mtx);
+
+    m_keep_waiting = true;
+
+    m_wait_cond.wait_until(lock, tp, [this] {
+        return !m_keep_waiting;
+    });
+}
+
+void ThreadEntity::wait_for(std::chrono::microseconds duration) {
+    LOCK(m_mtx);
+
+    m_keep_waiting = true;
+
+    m_wait_cond.wait_for(lock, duration, [this] {
+        return !m_keep_waiting;
+    });
 }
 
 bool ThreadEntity::is_paused(void) const {
@@ -52,24 +72,23 @@ void ThreadEntity::spawn(void) {
     std::swap(t, m_thread);
 }
 
+/*
+ */
 void ThreadEntity::stop(void) {
     std::unique_lock<std::mutex> l(m_mtx);
-    auto current_state = m_state;
     set_state(STOPPED);
+    m_keep_waiting = false;
 
-    /* need to get the thread unstuck from waiting at the
-     * condition variable first */
-    if (current_state == PAUSED) {
-        l.unlock();
-        m_flag.notify_all();
-    }
+    /* if thread is either PAUSED or waiting in do_task, then get it
+     * unstuck immediately */
+    l.unlock();
+    m_wait_cond.notify_all();
 
     /* no lock here or we would deadlock with the loop()
      * method; also NOTE .join() should not be called from
      * multiple threads. It is expected that only one thread
      * will call stop() for a thread entity. */
     if (m_thread.joinable()) {
-        if (l.owns_lock()) l.unlock();
         m_thread.join();
     }
 }
@@ -98,42 +117,72 @@ bool ThreadEntity::run() {
     case PAUSED:
         set_state(RUNNING);
         l.unlock();
-        m_flag.notify_all();
+        m_wait_cond.notify_all();
         return true;
     }
 
     return false;
 }
 
+/*
+ * Loop forever (or until stopped) and run do_task or pause, depending on the
+ * state.
+ *
+ * (1)
+ * We need to lock when checking the current state (i.e. for the switch
+ * statement) to avoid race conditions. For example, consider two separate
+ * threads requesting different states e.g. PAUSED and STOPPED. These must
+ * be serialized.
+ *
+ * (2)
+ * do_task runs with the mutex unlocked since it contains client-specific logic
+ * that should not change the state of this base class. There are some other
+ * reasons the mutex should not be locked.
+ * - if do_task tried to lock the mutex (e.g. by calling pause(), stop() etc)
+ *   there would be a deadlock.
+ * - if do_task performs some long-running action then different threads would
+ *   have to wait until do_task returns before they can get the mutex.
+ *   Specifically, any calls to stop() would hang until do_task returned,
+ *   which might be unacceptable (e.g. imagine do_task sleeps for 10 minutes).
+ *
+ * (3)
+ * A similar rationale applies to prepare_resume and cleanup. These should be
+ * very fast to run -- sleeping in there should be out of the question --
+ * but unlocking before running these ensures there can be no deadlock.
+ *
+ * NOTE: the calls to .unlock() also give a chance to other threads to lock
+ * the mutex in the meantime.
+ */
 void ThreadEntity::loop(void) {
     std::unique_lock<std::mutex> l(m_mtx, std::defer_lock);
 
-    auto wait_checker = [this]{
+    auto pause_checker = [this] {
         return m_state != PAUSED;
     };
 
     initialize();
 
-    /* NOTE:
-     * since we lock for a whole pass around the loop, client code
-     * can only change m_state at the end of pass since that's when
-     * the lock gets unlocked.
-     */
     while (true) {
-        l.lock();
+        l.lock(); /* (1) */
 
         switch (m_state) {
-        case RUNNING: do_task(); break;
-        case PAUSED:
-            m_flag.wait(l, wait_checker);
+        case RUNNING:
+            l.unlock();
+            do_task(); /* (2) */
+            break;
+        case PAUSED: /* (3) */
+            m_wait_cond.wait(l, pause_checker);
+            l.unlock();
             prepare_resume();
             break;
-        case STOPPED: cleanup(); return;
+        case STOPPED:
+            l.unlock();
+            cleanup();
+            return;
         default: break;
         }
 
-        l.unlock();
-
+#if 0
         /* NOTE: this is to give other threads a chance to get
          * the lock e.g. in order to pause, wake, or stop the
          * thread entity. Without this the infinite loop means
@@ -144,5 +193,6 @@ void ThreadEntity::loop(void) {
          * is inconsequential -- what matters is that it gets put
          * to sleep and suspended by the kernel. */
         std::this_thread::sleep_for(100ns);
+#endif
     }
 }
