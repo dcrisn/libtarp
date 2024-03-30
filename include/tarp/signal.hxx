@@ -11,23 +11,38 @@
 
 namespace tarp {
 
-template<typename>
+// template<typename>
+// class signal;
+
+template<typename callback_signature,
+         typename signal_output = tarp::func_return_type<callback_signature>,
+         template<typename output, typename input> typename reducer =
+           tarp::reduce::last>
 class signal;
 
-template<typename T>
-using hook = signal<T>;
+template<typename callback_signature,
+         typename signal_output = tarp::func_return_type<callback_signature>,
+         template<typename output, typename input> typename reducer =
+           tarp::reduce::last>
+using hook = signal<callback_signature, signal_output, reducer>;
 
+/*
+ * Means to safely synchronize disconnection of a signal consumer
+ * with a signal provider, even when the two run in different threads.
+ */
 struct signal_token {
     bool valid {true};
     std::mutex mtx;
 };
 
+/*
+ * Interface that allows disconnection of a signal consumer from
+ * a signal provider. The signal consumer *must* call disconnect()
+ * in its destructor -- otherwise an exception is thrown.
+ */
 class signal_connection {
 public:
     virtual void disconnect(void) = 0;
-
-    // else concrete class destructor will not
-    // get called
     virtual ~signal_connection() = default;
 };
 
@@ -93,18 +108,22 @@ public:
  *   last) is returned.
  *
  * - (4) otherwise if multiple callbacks are connected to the signal and the
- *   caller of emit() specifies a different reducer class, then the return
- *   value is obtained by running the return values of all the callbacks
- *   through the reducer.
+ *   signal was instantiated with template parameters to use a different
+ *   reducer, then the return value of the signal is the value returned by the
+ *   specified reducer.
  *
  * EXAMPLE of dealing with return values:
+ *   -- default, get last or default value
  *   tarp::signal<int(void)> sig;
- *   .... connect a bunch of callbacks
- *   sig.emit();   -- default call
- *   sig.emit<int, tarp::reduce::first>();   -- get value of *first* callback
- *   sig.emit<int, tarp::reduce::sum>();     -- get the sum of all values
- *   sig.emit<std::vector<int>, tarp::reduce::list>(); -- get a vector of all
- * values
+ *
+ *   -- get value of *first* callback
+ *   tarp::signal<int(void), int, tarp::reduce::first>();
+ *
+ *   -- get the sum of all values
+ *   tarp::signal<int(void), int, tarp::reduce::sum>();
+ *
+ *   -- get a vector of all values
+ *   tarp::signal<int(void), std::vector<int>, tarp::reduce::list>();
  * -------------------------------------
  *
  * The signature of callbacks connectable to the signal is specified as with
@@ -112,33 +131,65 @@ public:
  * etc. The signature is obtained from the R and vargs template parameters:
  * R(vargs...).
  */
-template<typename>
-class signal;
 
-template<typename R, typename... vargs>
-class signal<R(vargs...)> {
+/*
+ * Specification of template specialization parameters for
+ * the signal class.
+ *
+ * Macro rationale: avoid copy-pasting and make it easy to change.
+ *
+ * ~~~ TEMPLATE PARAMETERS: ~~~
+ *-----------------------------
+ * --> R
+ * The return type that callbacks must have.
+ *
+ * --> vargs
+ * The parameter types that callbacks must take.
+ *
+ * --> signal_output
+ * The output type of the signal returned by emit().
+ * This is almost always the same as R.
+ *
+ * --> reducer
+ * The reducer to use for producing a signal_output type.
+ * emit() will instantiate a reduce template class and use
+ * it to reduce the return vaues of all the callbacks (which
+ * return R) to a single value (of type signal_output), which
+ * is then returned by emit().
+ *
+ * NOTE: reducer is instantiated as follows:
+ *   reducer<signal_output, R>
+ * IOW the reducer must take R (the type returned by a callback)
+ * and finally produce a value of signal_output type.
+ */
+// clang-format off
+#define SIGNAL_TEMPLATE_SPEC                                  \
+   typename R,                                                \
+   typename... vargs,                                         \
+   typename signal_output,                                    \
+   template<typename output, typename input> class reducer
+
+#define SIGNAL_TEMPLATE_INSTANCE    \
+   R(vargs...), signal_output, reducer
+//clang-format on
+
+/*
+ * Partial template specialization to make it possible to use an
+ * INVOKE-type signature for the first template parameter;
+ * the non-specialized signal class is left undefined.
+ */
+template<SIGNAL_TEMPLATE_SPEC>
+class signal<SIGNAL_TEMPLATE_INSTANCE> {
 public:
     DISALLOW_COPY_AND_MOVE(signal);
 
     signal(void) = default;
 
     /* same as .emit(...) */
-    template<typename output = R,
-             template<typename, typename> class reducer = tarp::reduce::last>
-    output operator()(vargs... params) {
-        return emit<output, reducer>(params...);
-    }
+    signal_output operator()(vargs... params) { return emit(params...); }
 
-    /*
-     * Invoke all connected callbacks in the order of their connection.
-     * --> R
-     *  Type of the return value.
-     * --> reducer
-     *  The reducer used to generate the return value.
-     */
-    template<typename output = R,
-             template<typename, typename> class reducer = tarp::reduce::last>
-    output emit(vargs... params);
+    /* Invoke all connected callbacks in the order of their connection. */
+    signal_output emit(vargs... params);
 
     /*
      *  Connect the given callback to the signal and return a connection object.
@@ -195,21 +246,20 @@ private:
     std::mutex m_mtx;
 };
 
-template<typename R, typename... vargs>
-template<typename output, template<typename, typename> class reducer>
-output tarp::signal<R(vargs...)>::emit(vargs... params) {
+template<SIGNAL_TEMPLATE_SPEC>
+signal_output tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
     /* If the return type of the signal is not void, then create the specified
      * reducer, which takes that type as input (R) and produces a final output
-     * of the specified type (output). Otherwise there would be a compile error
-     * since void is not a valid type and cannot be passed to a function.
+     * of the specified type (signal_output). Otherwise there would be a compile
+     * error since void is not a valid type and cannot be passed to a function.
      * The tarp::reduce::void_reducer is used in this case. */
     using reducer_input_type = R;
-    using reducer_output_type = output;
+    using reducer_output_type = signal_output;
     using reducer_type =
       typename std::conditional<std::is_void_v<reducer_input_type> or
                                   std::is_void_v<reducer_output_type>,
-                                tarp::reduce::void_reducer<output, R>,
-                                reducer<output, R>>::type;
+                                tarp::reduce::void_reducer<signal_output, R>,
+                                reducer<signal_output, R>>::type;
     reducer_type r;
 
     LOCK(m_mtx);
@@ -239,44 +289,46 @@ output tarp::signal<R(vargs...)>::emit(vargs... params) {
     return r.get();
 }
 
-template<typename R, typename... vargs>
-std::size_t tarp::signal<R(vargs...)>::count() {
+template<SIGNAL_TEMPLATE_SPEC>
+std::size_t tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::count() {
     LOCK(m_mtx);
     return m_observers.size();
 }
 
-template<typename R, typename... vargs>
-bool tarp::signal<R(vargs...)>::empty() {
+template<SIGNAL_TEMPLATE_SPEC>
+bool tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::empty() {
     return count() == 0;
 }
 
-template<typename R, typename... vargs>
+template<SIGNAL_TEMPLATE_SPEC>
 std::unique_ptr<tarp::signal_connection>
-tarp::signal<R(vargs...)>::connect(std::function<R(vargs...)> callback) {
+tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connect(
+  std::function<R(vargs...)> callback) {
     return register_observer(callback, false);
 }
 
-template<typename R, typename... vargs>
-void tarp::signal<R(vargs...)>::connect_detached(
+template<SIGNAL_TEMPLATE_SPEC>
+void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connect_detached(
   std::function<R(vargs...)> callback) {
     auto conn = register_observer(callback, true);
     conn->disconnect();
 }
 
-template<typename R, typename... vargs>
+template<SIGNAL_TEMPLATE_SPEC>
 std::unique_ptr<tarp::signal_connection>
-tarp::signal<R(vargs...)>::register_observer(observer_callback_t f,
-                                             bool detached) {
+tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::register_observer(observer_callback_t f,
+                                                          bool detached) {
     auto token = std::make_shared<tarp::signal_token>();
 
     LOCK(m_mtx);
 
     m_observers.emplace_back(observer({detached, token, f}));
-    return std::make_unique<tarp::signal<R(vargs...)>::connection>(token);
+    return std::make_unique<tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection>(
+      token);
 }
 
-template<typename R, typename... vargs>
-tarp::signal<R(vargs...)>::connection::connection(
+template<SIGNAL_TEMPLATE_SPEC>
+tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::connection(
   std::shared_ptr<tarp::signal_token> &tkn)
     : m_token(tkn) {
 }
@@ -336,8 +388,8 @@ tarp::signal<R(vargs...)>::connection::connection(
  * .disconnect() in its destructor, an exception is thrown in the destructor
  * of the signal_connection object if this is found not to have been done.
  */
-template<typename R, typename... vargs>
-void tarp::signal<R(vargs...)>::connection::disconnect(void) {
+template<SIGNAL_TEMPLATE_SPEC>
+void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
     {
         LOCK(m_token->mtx);
         m_token->valid = false;
@@ -345,8 +397,8 @@ void tarp::signal<R(vargs...)>::connection::disconnect(void) {
     m_token.reset();
 }
 
-template<typename R, typename... vargs>
-tarp::signal<R(vargs...)>::connection::~connection(void) {
+template<SIGNAL_TEMPLATE_SPEC>
+tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void) {
     if (!m_token) return;
 
     LOCK(m_token->mtx);
@@ -356,17 +408,17 @@ tarp::signal<R(vargs...)>::connection::~connection(void) {
     }
 }
 
-template<typename R, typename... vargs>
-tarp::signal<R(vargs...)>::observer::observer(
+template<SIGNAL_TEMPLATE_SPEC>
+tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::observer::observer(
   bool detached,
   std::shared_ptr<tarp::signal_token> &ref,
   std::function<R(vargs...)> f)
     : notify(f), m_detached(detached), m_link(ref) {
 }
 
-template<typename R, typename... vargs>
+template<SIGNAL_TEMPLATE_SPEC>
 std::shared_ptr<tarp::signal_token>
-tarp::signal<R(vargs...)>::observer::check(void) const {
+tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::observer::check(void) const {
     // a detached observer is deemed perpetually alive. User
     // must ensure that is the case (i.e. that the signal consumer
     // outlives the signal provider)
@@ -375,6 +427,7 @@ tarp::signal<R(vargs...)>::observer::check(void) const {
     return m_link.lock();
 }
 
-
+#undef SIGNAL_TEMPLATE_SPEC
+#undef SIGNAL_TEMPLATE_INSTANCE
 
 }  // namespace tarp
