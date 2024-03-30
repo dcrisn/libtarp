@@ -12,6 +12,27 @@
 namespace tarp {
 
 /*
+ * Helper template to extract return value type from a function
+ * signature by means of partial template specialization.
+ * The type of the return value is stored in the typedef member
+ * 'return_type'.
+ */
+template<typename signature>
+struct func;
+
+template<typename R, typename... args>
+struct func<R(args...)> {
+    using return_type = R;
+};
+
+template<typename signature>
+using func_return_type = typename func<signature>::return_type;
+
+///////////////////////////////////////////////////////////////
+
+
+
+/*
  * Classes that can be used as 'reducers'. They expose a
  * .process() method that when called on each element in a
  * collection reduces the collection to a single summary value.
