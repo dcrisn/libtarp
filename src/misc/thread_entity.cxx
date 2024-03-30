@@ -181,18 +181,5 @@ void ThreadEntity::loop(void) {
             return;
         default: break;
         }
-
-#if 0
-        /* NOTE: this is to give other threads a chance to get
-         * the lock e.g. in order to pause, wake, or stop the
-         * thread entity. Without this the infinite loop means
-         * no other threads will get a chance to lock the mutex
-         * -- even though we unlock it at the end of the while loop,
-         * as that is too fast.
-         * A minimal sleep will fix this problem. The sleep duration
-         * is inconsequential -- what matters is that it gets put
-         * to sleep and suspended by the kernel. */
-        std::this_thread::sleep_for(100ns);
-#endif
     }
 }
