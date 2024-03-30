@@ -93,6 +93,49 @@ private:
     T m_value {};
 };
 
+// Return the smallest element processed.
+// NOTE: 2nd param unused
+template<typename T, typename = void>
+class min : public reducer<T, T> {
+public:
+    virtual void process(T value) override {
+        if (!m_set) {
+            m_set = true;
+            m_value = value;
+            return;
+        }
+        m_value = std::min(value, m_value);
+    }
+
+    virtual T get(void) const override { return m_value; }
+
+private:
+    bool m_set {false};
+    T m_value {};
+};
+
+// Return the largest element processed.
+// NOTE: 2nd param unused
+template<typename T, typename = void>
+class max : public reducer<T, T> {
+public:
+    virtual void process(T value) override {
+        if (!m_set) {
+            m_set = true;
+            m_value = value;
+            return;
+        }
+
+        m_value = std::max(value, m_value);
+    }
+
+    virtual T get(void) const override { return m_value; }
+
+private:
+    bool m_set {false};
+    T m_value {};
+};
+
 // Return the sum of all elements procesed.
 // NOTE: 2nd template param unused.
 template<typename T, typename = T>
@@ -103,6 +146,7 @@ public:
     virtual T get(void) const override { return m_sum; }
 
 private:
+    bool m_set {false};
     T m_sum {};
 };
 
@@ -114,7 +158,7 @@ private:
  * elements of type T.
  *
  * EXAMPLE instantiation:
- *   get_list<std::vector<int>, int> r;
+ *   list<std::vector<int>, int> r;
  */
 template<typename R, typename T>
 class list : public reducer<R, T> {
