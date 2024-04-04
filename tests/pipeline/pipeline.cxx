@@ -36,13 +36,13 @@ OUT test_ma(enum transformType transform,
         break;
     };
 
-    for (auto &i : inputs) {
-        ma->apply(i);
-        if (ma->has_output()) {
-            actual_outputs.push_back(ma->get());
-        }
-    }
+    ma->output.connect_detached([&](OUT val) {
+        actual_outputs.push_back(val);
+    });
 
+    for (auto &i : inputs) {
+        ma->process(i);
+    }
 
     fprintf(stderr, "EXPECTED outputs: ");
     for (auto &elem : expected_outputs) {
