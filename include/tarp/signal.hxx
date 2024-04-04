@@ -40,7 +40,7 @@ struct signal_token {
 class signal_connection {
 public:
     virtual void disconnect(void) = 0;
-    virtual ~signal_connection() = default;
+    virtual ~signal_connection() noexcept(false) = default;
 };
 
 /*
@@ -395,7 +395,7 @@ void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void) {
+tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void){
     if (!m_token) return;
 
     LOCK(m_token->mtx);
