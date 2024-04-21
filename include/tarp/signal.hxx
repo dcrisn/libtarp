@@ -243,6 +243,10 @@ private:
     std::mutex m_mtx;
 };
 
+/*
+ * WARNING: connection to/disconnection from a signal is not allowed
+ * from within a signal handler. Doing so will produce a deadlock.
+ */
 template<SIGNAL_TEMPLATE_SPEC>
 signal_output tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
     /* If the return type of the signal is not void, then create the specified
@@ -308,6 +312,11 @@ template<SIGNAL_TEMPLATE_SPEC>
 void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connect_detached(
   std::function<R(vargs...)> callback) {
     auto conn = register_observer(callback, true);
+
+    // when connecting in detached mode, 'disconnect()' does nothing.
+    // However, the connection object requires us to invoke this method
+    // otherwise it will throw an exception in the dtor. So we're doing
+    // it here before the object is destructed.
     conn->disconnect();
 }
 
