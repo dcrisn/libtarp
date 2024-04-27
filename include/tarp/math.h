@@ -83,16 +83,24 @@ namespace tarp::math {
  *
  * The algorithm is 'exponentiation by squaring' and is based on
  * the following recurrence:
- *       { x * (x^2)^((n-1)/2), if n is odd.
+ *       { x * (x^2)^((n-1)/2),  if n is odd.
  * x^n = |
  *       { x * (x^2)^(n/2),      if n is even.
  *
  * See https://en.wikipedia.org/wiki/Exponentiation_by_squaring
  *
- * For reference, the recursive version is given for refence. This
- * is compiled out however -- this particular implementation does
+ * The recursive version is also given for refence. This
+ * is compiled out, however -- this particular implementation does
  * not use tail recursion and the iterative version is therefore
  * likely faster.
+ *
+ * NOTE: for large bases and/or large exponents this will end up in
+ * wraparound very soon. Use an appropriate-width integer: e.g.
+ * uint64_t for the template type parameter if needed.
+ *
+ * NOTE: does not allow negative indices e.g. x^-n since that entails
+ * floating point (unless we use floor division) which is precisely
+ * what this function is supposed to avoid.
  */
 #if 0
 template<typename T = uint32_t>
