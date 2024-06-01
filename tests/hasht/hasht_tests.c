@@ -158,7 +158,7 @@ enum testStatus test_hasht_duplicates(void){
     node = new_testnode();
     node->key = key;
     tmp = Hasht_get(ht, node, link);
-    assert(tmp);
+    assert_not_null(tmp);
     if (tmp->data != inputs[0]){
         debug("count correct but item invalid: expected %u got %u",
                 inputs[0], tmp->data);
@@ -187,7 +187,7 @@ enum testStatus test_hasht_duplicates(void){
     node->data = 0;
     for (ssize_t i = ARRLEN(inputs)-1; i >= 0; --i){
         tmp = Hasht_get(ht, node, link);
-        assert(tmp);
+        assert_not_null(tmp);
         unsigned expected_data = inputs[i]; // LIFO
 
         if (tmp->data != expected_data){

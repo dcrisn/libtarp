@@ -2,14 +2,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
-#include <tarp/container.h>
 #include <time.h>
 
+#include <tarp/container.h>
 #include <tarp/cohort.h>
 #include <tarp/common.h>
 #include <tarp/log.h>
 #include <tarp/avl.h>
 #include <tarp/staq.h>
+#include <tarp/error.h>
 
 
 struct testnode {
@@ -18,7 +19,6 @@ struct testnode {
     struct avlnode link;
     struct staqnode list;
 };
-
 
 #define new_testnode() salloc(sizeof(struct testnode), 0)
 
@@ -333,7 +333,7 @@ enum testStatus test_avl_find_min_max(void){
     // find the kth min for k=0...num and max for k=num...0
     for (size_t i = 1; i<=num; ++i){
         node = Avl_kmin(&tree, i, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (node->key != i){
             debug("failed to find kmin for k=%zu (expected %zu got %zu)",
                     i, i, node->key);
@@ -341,7 +341,7 @@ enum testStatus test_avl_find_min_max(void){
         }
 
         node = Avl_kmax(&tree, i, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (node->key != num+1 - i){
             debug("failed to find kmax for k=%zu (expected %zu got %zu)",
                     i, num+1-i, node->key);

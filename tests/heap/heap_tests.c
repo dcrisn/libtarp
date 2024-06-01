@@ -98,7 +98,7 @@ enum testStatus test_minmaxheap_push_pop(enum heapOrder type, bool explicit){
     {
         if (explicit) node = XHeap_pop(xh, struct testnode, xheaplink);
         else          node = Heap_pop(h, struct testnode, heaplink);
-        assert(node);
+        assert_not_null(node);
         //debug("deleting %u", node->prio);
         // fill the array min to max left to right
         if (type == MIN_HEAP) actual_outputs[i] = node->prio;

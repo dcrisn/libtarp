@@ -8,6 +8,7 @@
 #include <tarp/container.h>
 #include <tarp/log.h>
 #include <tarp/dllist.h>
+#include <tarp/error.h>
 
 struct testnode {
     size_t num;
@@ -64,7 +65,7 @@ enum testStatus test_enqdq_pushpop(size_t size, bool reversed_front_back, bool s
                 ? Dll_popfront(list, struct testnode, link)
                 : Dll_popback(list, struct testnode, link);
 
-            assert(node);
+            assert_not_null(node);
             if (node->num != size+1-i){
                 debug("expected %zu got %zu", size+1-i, node->num);
                 return TEST_FAIL;
@@ -75,7 +76,7 @@ enum testStatus test_enqdq_pushpop(size_t size, bool reversed_front_back, bool s
                 ? Dll_popback(list, struct testnode, link)
                 : Dll_popfront(list, struct testnode, link);
 
-            assert(node);
+            assert_not_null(node);
             if (node->num != i){
                 debug("expected %zu, got %zu", i, node->num);
                 return TEST_FAIL;
@@ -169,7 +170,7 @@ enum testStatus test_find_nth_node(void){
 
     for (size_t i = 1; i<=num; ++i){
         node = Dll_find_nth(&list, i, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if(node->num != i){
             debug("expected %zu got %zu", i, node->num);
             return TEST_FAIL;
@@ -208,7 +209,7 @@ enum testStatus test_list_upend(void){
         // on upending the whole list, expect value to match j exactly
         for (size_t j = 1; j<=size; ++j){
             node = Dll_popfront(&list, struct testnode, link);
-            assert(node);
+            assert_not_null(node);
             if (node->num != j){
                 debug("expected %zu got %zu", j, node->num);
                 return TEST_FAIL;
@@ -269,11 +270,11 @@ enum testStatus test_list_rotation__(size_t size, size_t rotations, int dir){
                 expected = ((modulus-1-i) + (modulus-numrot))%modulus;
             } else if (dir == -1){ /* rotate to bottom of stack */
                 expected = ((modulus-1-i) + numrot)%modulus;
-            } else (assert(false));
+            } else (THROW(ERROR_BADLOGIC));
 
             /* the position is the same as the actual value that was assigned to
              * node->num */
-            assert(node);
+            assert_not_null(node);
             if (expected != node->num){
                 debug("expected %zu got %zu", expected, node->num);
                 return TEST_FAIL;
@@ -370,7 +371,7 @@ enum testStatus test_foreach_forward(void){
     uint64_t values[] = {0xff, 0xff, 0x1, 0x5, 0x2, 0x1, 0x6, 0x2};
     for (size_t i = 0; i < (num-1); ++i){
         node = Dll_front(list, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (values[i] != node->num){
             debug("expected %zu got %zu", values[i], node->num);
             return TEST_FAIL;
@@ -415,7 +416,7 @@ enum testStatus test_headswap(void){
 
     for (size_t i=0; i<ARRLEN(vals);++i){
         struct testnode *node = Dll_popfront(&b, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (node->num != vals[i]){
             debug("expected %zu got %zu", vals[i], node->num);
             return TEST_FAIL;
@@ -424,7 +425,7 @@ enum testStatus test_headswap(void){
     }
     for (size_t i=ARRLEN(vals)-4; i<ARRLEN(vals);++i){
         struct testnode *node = Dll_popfront(&a, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (node->num != vals[i]){
             debug("expected %zu got %zu", vals[i], node->num);
             return TEST_FAIL;
@@ -501,7 +502,7 @@ enum testStatus test_list_join(void){
 
     for (size_t i = 0; i<len*2; ++i){
         node = Dll_popfront(&a, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (node->num != i%len){
             debug("expected %zu got %zu", i%len, node->num);
             return TEST_FAIL;
@@ -539,7 +540,7 @@ enum testStatus test_list_split(void){
 
     for (size_t i = 0; i< (len/2); ++i){
         node = Dll_popfront(&a, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
             return TEST_FAIL;
@@ -549,7 +550,7 @@ enum testStatus test_list_split(void){
 
     for (size_t i = b_len-1; i< len; ++i){
         node = Dll_popfront(b, struct testnode, link);
-        assert(node);
+        assert_not_null(node);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
             return TEST_FAIL;

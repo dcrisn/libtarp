@@ -7,8 +7,7 @@ extern "C" {
 #endif
 
 #include <stdio.h>
-#include <tarp/log.h>
-
+#include <stdnoreturn.h>  /* C11 noreturn */
 
 /*
  * Constants describing error conditions, meant to either be returned as
@@ -52,7 +51,11 @@ enum ErrorCode{
  * associated with CODE. */
 const char *tarp_strerror(unsigned int code);
 
-
+#ifdef __cplusplus
+[[noreturn]]  /* c++11 */
+#else
+noreturn /* stdnoreturn.h */
+#endif
 void throw__(
         enum ErrorCode code,
         const char *file,
@@ -94,8 +97,7 @@ void throw__(
         if (cond) THROWS__(cond, exception, __VA_ARGS__);      \
     } while(0)
 
-#define check_pointer(ptr) THROW_ON(!ptr, ERROR_BADPOINTER)
-
+#define assert_not_null(ptr) THROW_ON(!ptr, ERROR_BADPOINTER)
 
 /*
  * Print warning if condition is true */

@@ -7,6 +7,7 @@
 #include <tarp/common.h>
 #include <tarp/log.h>
 #include <tarp/staq.h>
+#include <tarp/error.h>
 
 struct testnode {
     uint64_t num;
@@ -14,7 +15,7 @@ struct testnode {
 };
 
 void destructor(struct staqnode *node){
-    assert(node);
+    assert_not_null(node);
     salloc(0, get_container(node, struct testnode, sqnode));
 }
 
@@ -40,7 +41,7 @@ enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){
         struct testnode *node;
         if (stackmode){
             node = Staq_pop(sq, struct testnode, sqnode);
-            assert(node);
+            assert_not_null(node);
             if (node->num != staqsz+1-i){
                 debug("expected %zu got %zu", staqsz+1-i, node->num);
                 return TEST_FAIL;
@@ -48,7 +49,7 @@ enum testStatus test_enqdq_pushpop(size_t staqsz, bool stackmode){
         }
         else{
             node = Staq_dq(sq, struct testnode, sqnode);
-            assert(node);
+            assert_not_null(node);
             if (node->num != i){
                 debug("expected %zu, got %zu", i, node->num);
                 return TEST_FAIL;
@@ -121,7 +122,7 @@ enum testStatus test_stack_upend__(size_t size){
     // pushed; in effect, upending turns the LIFO into a FIFO
     for (size_t i = 1; i <= size; ++i){
         struct testnode *node = Staq_pop(&sq, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
             return TEST_FAIL;
@@ -152,7 +153,7 @@ enum testStatus test_queue_upend__(size_t size){
     // enqueued; in effect, upending turns the FIFO into a LIFO
     for (size_t i = 0; i < size; ++i){
         struct testnode *node = Staq_dq(&sq, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         if (node->num != size-i){
             debug("expected %zu got %zu", size-i, node->num);
             return TEST_FAIL;
@@ -259,11 +260,11 @@ enum testStatus test_staq_rotate__(size_t size, size_t rotations, int dir){
                 expected = ((modulus-1-i) + (modulus-numrot))%modulus;
             } else if (dir == -1){ /* rotate to the the bottom of the stack */
                 expected = ((modulus-1-i) + numrot)%modulus;
-            } else (assert(false));
+            } else (THROW(ERROR_BADLOGIC));
 
             /* the position is the same as the actual value that was assigned to
              * node->num */
-            assert(node);
+            assert_not_null(node);
             if (expected != node->num){
                 debug("expected %zu got %zu", expected, node->num);
                 return TEST_FAIL;
@@ -298,7 +299,7 @@ enum testStatus test_peek(void){
 
     for (size_t i = 0 ; i<len; ++i){
         node = Staq_front(&sq, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         //debug("FRONT: %u (i=%zu)", node->num, i);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
@@ -306,7 +307,7 @@ enum testStatus test_peek(void){
         }
 
         node = Staq_back(&sq, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         //debug("BACK: %u (i=%zu)", node->num, i);
         size_t rotations=i;
         /* we never pop, so normally the value of at the back would always be
@@ -354,7 +355,7 @@ enum testStatus test_insert_after(void){
     // of 1,magic,2,magic,3,magic
     for (size_t i = 1; i <= 3; ++i){
         node = Staq_dq(&sq, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         //debug("FRONT: %zu", node->num);
         if (node->num != i){
             debug("expected %zu got %zu", i, node->num);
@@ -363,7 +364,7 @@ enum testStatus test_insert_after(void){
         free(node);
 
         node = Staq_dq(&sq, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         //debug("FRONT2: %zu", node->num);
         if (node->num != magic){
             debug("expected %zu got %zu", magic, node->num);
@@ -406,7 +407,7 @@ enum testStatus test_staq_join(void){
 
     for (size_t i = 0; i<len*2; ++i){
         node = Staq_dq(&a, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         if (node->num != i%len){
             debug("expected %zu got %zu", i%len, node->num);
             return TEST_FAIL;
@@ -449,7 +450,7 @@ enum testStatus test_staq_head_swap(void){
 
     for (size_t i=0; i<ARRLEN(vals);++i){
         struct testnode *node = Staq_dq(&b, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         if (node->num != vals[i]){
             debug("expected %zu got %zu", vals[i], node->num);
             return TEST_FAIL;
@@ -458,7 +459,7 @@ enum testStatus test_staq_head_swap(void){
     }
     for (size_t i=ARRLEN(vals)-4; i<ARRLEN(vals);++i){
         struct testnode *node = Staq_dq(&a, struct testnode, sqnode);
-        assert(node);
+        assert_not_null(node);
         if (node->num != vals[i]){
             debug("expected %zu got %zu", vals[i], node->num);
             return TEST_FAIL;

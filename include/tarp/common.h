@@ -71,10 +71,12 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  */
 void *salloc(size_t size, void *ptr);
 
+// print n newlines.
 #define nl(n)                             \
   do {                                    \
     for (int i = n; i > 0; --i) puts(""); \
   } while (0);
+
 #define match(a, b)     (strcmp(a, b) == 0)
 #define matchn(a, b, n) (strncmp(a, b, n) == 0)
 #define bool2str(val)   ((val) ? "True" : "False")
