@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+if (NOT TARGET tarp::tarp)
+  include(${CMAKE_CURRENT_LIST_DIR}/@TARP_CMAKE_EXPORT_FILE@.cmake)
+endif ()
+
+check_required_components(tarp)
+

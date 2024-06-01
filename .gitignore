@@ -3,6 +3,7 @@
 **valgrind*
 **/out/*
 **/tags*
+tags*
 build/*
 staging*
 cross.cmake
