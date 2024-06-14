@@ -1,5 +1,5 @@
-#ifndef __TARP_COMMON__
-#define __TARP_COMMON__
+#ifndef __TARP_COMMON_H__
+#define __TARP_COMMON_H__
 
 
 #ifdef __cplusplus

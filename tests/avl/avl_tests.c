@@ -280,7 +280,9 @@ enum testStatus test_avl_find_or_insert(void){
 
         // all insertions should FAIL on the second round as every node
         // has already been inserted and they should be found
-        if (!Avl_find_or_insert(&tree, node, link)){
+        struct testnode *found = Avl_find_or_insert(&tree, node, link);
+
+        if (!found){
             debug("insertion succeeded when it shouldn't have.");
             return TEST_FAIL;
         }

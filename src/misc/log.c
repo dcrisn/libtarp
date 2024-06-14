@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include <tarp/log.h>
 

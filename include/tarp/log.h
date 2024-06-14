@@ -1,13 +1,16 @@
+// clang-format off
 #ifndef TARP_LOG_H
 #define TARP_LOG_H
-
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-
-#include <tarp/common.h>
+// NOTE: these are duplicated from <tarp/common.h> in order to avoid
+// pulling in that header as it includes various other macros that collide
+// with C++ names.
+#define tostring__(x) #x
+#define tkn2str(x)    tostring__(x)
 
 /*
  * Subset from man 3 syslog.
@@ -75,4 +78,6 @@ void log_message(int priority, const char *fmt, ...);
 #endif
 
 
+
 #endif  /* TARP_LOG_H */
+// clang-format on

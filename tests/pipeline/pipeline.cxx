@@ -5,6 +5,7 @@
 #include <tarp/floats.h>
 #include <tarp/log.h>
 #include <tarp/pipeline.hxx>
+#include <tarp/common.h>
 
 using namespace std;
 using namespace tarp;
