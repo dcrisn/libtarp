@@ -1,9 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
+
+#include <cstdint>
 
 namespace tarp::utils::string {
 
@@ -52,6 +55,27 @@ std::string strip(const std::string &input,
 //   if n=1, the string is returned unchanged.
 std::string repeat(const std::string &s, unsigned n);
 
+// True if input is a base-10 integer of arbitrary width.
+bool is_integer(const std::string &input);
+
+// Convert input to an integer type T, if possible.
+// The input string is stripped of whitespace at both ends before processing.
+// If the resulting string contains non-(base 10) digits, the result will be
+// empty.
+template<typename T>
+std::optional<T> to_integer(const std::string &input);
+
+// Same as to_integer, but convert to a double.
+std::optional<double> to_float(const std::string &input);
+
+// If the string is a boolean (true/1 or false/0), convert it to a bool type.
+// NOTE: the input string is stripped of whitespace and converted to
+// all-lowercase before processing.
+std::optional<bool> to_boolean(const std::string &s);
+
+// True if the input is convertible to a bool, as described above.
+bool is_boolean(const std::string &s);
+
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////
@@ -71,6 +95,61 @@ std::string join(const container<std::string> &tokens, const std::string sep) {
     }
 
     return result;
+}
+
+template<typename T>
+std::optional<T> to_integer(const std::string &input) {
+    static_assert(std::is_integral_v<T>);
+
+    std::string s = tarp::utils::string::strip(input);
+    if (s.empty()) {
+        return {};
+    }
+
+    errno = 0;
+
+    // C++11 does not allow assigning string literals to char ** anymore;
+    // this is just a way to work around that.
+    char flag[1] = {'x'};
+    char *marker = flag;
+    long long converted = std::strtoll(s.c_str(), &marker, 10);
+
+    // if marker was set to NUL by strtoll, it means the whole string
+    // is valid (see man page). Therefore if this is not the case, either
+    // the whole or part of the string is invalid.
+    if (*marker != '\0') {
+        return {};
+    }
+
+    // conversion overflows/underflows
+    if (errno == ERANGE) {
+        return {};
+    }
+
+    // ---- strtoll succeeds; but does converted fit into the type of T? ----
+
+    using converted_type = decltype(converted);
+
+    // CASE: converted is positive.
+    if (converted >= 0) {
+        if (static_cast<std::uintmax_t>(converted) <=
+            std::numeric_limits<T>::max()) {
+            return converted;
+        }
+    }
+    // CASE: converted is negative.
+    else if (std::numeric_limits<converted_type>::is_signed) {
+        // cannot store input in output since input is signed and negative
+        // while output is unsigned.
+        if (std::numeric_limits<T>::is_signed) {
+            if (std::numeric_limits<T>::min() <= converted) {
+                return converted;
+            }
+        }
+    }
+
+    // converted does NOT fit into type T.
+    return {};
 }
 
 }  // namespace tarp::utils::string

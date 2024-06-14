@@ -206,6 +206,76 @@ std::string repeat(const std::string &s, unsigned n) {
     return result;
 }
 
+bool is_integer(const std::string &input) {
+    std::string s = tarp::utils::string::strip(input);
+    if (s.empty()) {
+        return false;
+    }
+
+    for (const auto &c : s) {
+        if (!isdigit(c)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::optional<double> to_float(const std::string &input) {
+    std::string s = tarp::utils::string::strip(input);
+    if (s.empty()) {
+        return {};
+    }
+
+    errno = 0;
+
+    // C++11 does not allow assigning string literals to char ** anymore;
+    // this is just a way to work around that.
+    char flag[1] = {'x'};
+    char *marker = flag;
+    double converted = std::strtod(s.c_str(), &marker);
+
+    // if marker was set to NUL by strtod, it means the whole string
+    // is valid (see man page). Therefore if this is not the case, either
+    // the whole or part of the string is invalid.
+    if (*marker != '\0') {
+        return {};
+    }
+
+    // conversion overflows/underflows
+    if (errno == ERANGE) {
+        return {};
+    }
+
+    return converted;
+}
+
+// Same as to_integer, but convert to a double.
+std::optional<double> to_float(const std::string &input);
+
+std::optional<bool> to_boolean(const std::string &s) {
+    std::string input = tarp::utils::string::strip(s);
+    if (input.empty()) {
+        return {};
+    }
+
+    std::transform(s.begin(), s.end(), input.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+
+    if (input == "true" or input == "1") {
+        return true;
+    }
+    if (input == "false" or input == "0") {
+        return false;
+    }
+
+    return {};
+}
+
+bool is_boolean(const std::string &s) {
+    return to_boolean(s).has_value();
+}
+
 }  // namespace string
 }  // namespace utils
 }  // namespace tarp
