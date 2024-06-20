@@ -6,7 +6,6 @@
 /* maximum allowable line length in config file */
 #define MAX_LINE_LEN 1024U
 
-#if(!defined(__cplusplus) || defined(CXX_INIPARSE_IMPL__))
 #ifdef __cplusplus
 extern "C"{
 #endif
@@ -49,6 +48,7 @@ enum iniParseError{
     INIPARSE_REDUNDANT_BRACKET,
     INIPARSE_LIST_NOT_STARTED,
     INIPARSE_LIST_NOT_ENDED,
+    INIPARSE_DUPLICATE,
     INIPARSE_SENTINEL        /* max index in iniparse_error_strings */
 };
 
@@ -76,12 +76,13 @@ enum iniParseError{
  * section value (if !list) or list entry (if list > 0)
  */
 typedef
-int (* config_cb)(
+int (* iniparse_callback_t)(
         uint32_t ln,
         enum iniParseListState list,
         const char *section,
         const char *k,
-        const char *v
+        const char *v,
+        void *priv
         );
 
 /*
@@ -138,42 +139,12 @@ void iniParse_destroy(struct iniparse_ctx *ctx);
 int iniParse_parse(
         struct iniparse_ctx *ctx,
         const char *path,
-        config_cb cb
+        iniparse_callback_t cb,
+        void *priv
         );
 
 
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
-#endif /* C api include guard */
 
-#ifdef __cplusplus
-#include <string>
-#include <unordered_map>
-#include <any>
-
-namespace tarp {
-
-class iniParser {
-public:
-    iniParser(void) = default;
-    iniParser(const iniParser&) = delete;
-    iniParser &operator=(const iniParser&) = delete;
-    iniParser(iniParser&&) = delete;
-    iniParser &operator=(iniParser&&) = delete;
-
-    void parse_string(const std::string &s);
-    void parse_file(const std::string &s);
-    bool has(const std::string &key);
-    bool islist(const std::string &key);
-    auto get(const std::string &key);
-
-
-private:
-    std::unordered_map<std::string, std::any> m_map;
-};
-
-} /* namespace tarp */
-
-
-#endif  /* __cplusplus */

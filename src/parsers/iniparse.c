@@ -76,7 +76,7 @@ static struct iniparse_ctx *get_initialized_iniparse_ctx(void){
  * Map of cinic error number to error string;
  * The last entry is a sentinel marking the greatest
  * index in the array. This makes it possible to catch
- * attempts to index out of bounds (see Cinic_err2str()). */
+ * attempts to index out of bounds (see iniParse_err2str()). */
 static const char *cinic_error_strings[] = {
     [INIPARSE_SUCCESS]           = "Success",
     [INIPARSE_NOSECTION]         = "entry without section",
@@ -91,12 +91,13 @@ static const char *cinic_error_strings[] = {
     [INIPARSE_REDUNDANT_BRACKET] = "malformed list (redundant bracket ?)",
     [INIPARSE_LIST_NOT_STARTED]  = "malformed list (missing opening bracket ?)",
     [INIPARSE_LIST_NOT_ENDED]    = "malformed list (unterminated list ?)",
+    [INIPARSE_DUPLICATE]         = "duplicated key",
     [INIPARSE_SENTINEL]          =  NULL
 };
 
 /*
  * Convert errnum to error string. Errnum must be < INIPARSE_SENTINEL */
-const char *Cinic_err2str(enum iniParseError errnum){
+const char *iniParse_err2str(enum iniParseError errnum){
     if (errnum >= INIPARSE_SENTINEL){  /* guard against out-of-bounds indexing attempt */
         fprintf(stderr, "Invalid cinic error number: '%d'\n", errnum);
         exit(13);
@@ -110,7 +111,7 @@ const char *Cinic_err2str(enum iniParseError errnum){
  * If the transition from the previous list state to the next one is as
  * expected, return CINIC_SUCCESS. Otherwise return an error number.
  */
-enum iniParseError iniParse_get_list_error(struct iniparse_ctx *ctx,
+enum iniParseError iniParse_get_list_error1000(struct iniparse_ctx *ctx,
         enum iniParseListState prev, enum iniParseListState next)
 {
     say("Assessing list state transition from  prev=%i to next=%i\n", prev, next);
@@ -165,14 +166,18 @@ enum iniParseError iniParse_get_list_error(struct iniparse_ctx *ctx,
     return INIPARSE_SUCCESS;
 }
 
-/*
- * Print Cinic error message associated with error, and exit with the same error code. */
-void cinic_exit_print(enum iniParseError error, uint32_t ln){
-    assert(error < INIPARSE_SENTINEL && error > INIPARSE_SUCCESS);
-
-    fprintf(stderr, "Cinic: failed to parse line %" PRIu32 " -- %s\n", ln, Cinic_err2str(error));
-    exit(EXIT_FAILURE);
-}
+/* either exit with error or return the error depending on whether
+ * the error should be treated as fatal */
+#define error_out(ctx, error, line_num)                                       \
+    do {                                                                      \
+        assert(error < INIPARSE_SENTINEL && error > INIPARSE_SUCCESS);        \
+        if (ctx->fatal_errors){                                               \
+            fprintf(stderr, "Cinic: failed to parse line %" PRIu32 " -- %s\n",\
+                    ln, iniParse_err2str(error));                             \
+            exit(EXIT_FAILURE);                                               \
+        }                                                                     \
+        return error;                                                         \
+    } while(0)
 
 /*
  * Strip leading whitespace from s
@@ -674,13 +679,18 @@ bool is_list_entry(char *line, char v[], size_t buffsz, bool *islast){
  *
  * Beyond these fatal errors, the callback can itself also signal an
  * error condition by returning a non-zero value. If such a value is
- * returned, Cinic_parse will return immediately with the same value.
+ * returned, iniParse_parse will return immediately with the same value.
  *
  * NOTES:
  *  - cb and path must not be NULL
  *  - path must specify the absolute path to an .ini config file
  */
-int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
+int iniParse_parse(struct iniparse_ctx *ctx,
+        const char *path,
+        iniparse_callback_t cb,
+        void *priv
+        )
+{
     assert(path && cb);
 
     int rc = 0;
@@ -712,7 +722,7 @@ int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
 
         /* line too long */
         if(bytes_read > MAX_LINE_LEN){
-            cinic_exit_print(INIPARSE_TOOLONG, ln);
+            error_out(ctx, INIPARSE_TOOLONG, ln);
         }
 
         if (is_empty_line(buff) || is_comment_line(buff) ){
@@ -727,7 +737,7 @@ int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
         if(is_section_line(buff, section, MAX_LINE_LEN)){
             say(" ~ line %u is a section title\n", ln);
             if (list){
-                cinic_exit_print(INIPARSE_NESTED, ln);
+                error_out(ctx, INIPARSE_NESTED, ln);
             }
         }
 
@@ -735,11 +745,11 @@ int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
         else if (is_record_line(buff, key, val, MAX_LINE_LEN)){
             say(" ~ line %u is a record line\n", ln);
             if (! *section && !ctx->allow_global_records){
-                cinic_exit_print(INIPARSE_NOSECTION, ln);
+                error_out(ctx, INIPARSE_NOSECTION, ln);
             }else if (list){
-                cinic_exit_print(INIPARSE_NESTED, ln);
+                error_out(ctx, INIPARSE_NESTED, ln);
             }
-            if ( (rc = cb(ln, list, section, key, val)) ) return rc;
+            if ( (rc = cb(ln, list, section, key, val, priv)) ) return rc;
         }
 
         /* else, try list */
@@ -755,8 +765,8 @@ int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
 
                 /* list head */
                 if(is_list_head(curr_token_buff, key, MAX_LINE_LEN)){
-                    if ( (cerr = iniParse_get_list_error(ctx, list, LIST_HEAD)) ){
-                        cinic_exit_print(cerr, ln);
+                    if ( (cerr = iniParse_get_list_error1000(ctx, list, LIST_HEAD)) ){
+                        error_out(ctx, cerr, ln);
                     }
                     list = LIST_HEAD;
                     islast = false;
@@ -765,8 +775,8 @@ int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
 
                 /* opening bracket */
                 else if (is_list_start(ctx, curr_token_buff)){
-                    if ( (cerr = iniParse_get_list_error(ctx, list, LIST_OPEN)) ){
-                        cinic_exit_print(cerr, ln);
+                    if ( (cerr = iniParse_get_list_error1000(ctx, list, LIST_OPEN)) ){
+                        error_out(ctx, cerr, ln);
                     }
                     list = LIST_OPEN;
                     continue;
@@ -774,17 +784,17 @@ int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
 
                 /* list entry */
                 else if(is_list_entry(curr_token_buff, val, MAX_LINE_LEN, &islast)){
-                    if ( (cerr = iniParse_get_list_error(ctx, list, islast ? LIST_LAST : LIST_ONGOING)) )
+                    if ( (cerr = iniParse_get_list_error1000(ctx, list, islast ? LIST_LAST : LIST_ONGOING)) )
                     {
-                        cinic_exit_print(cerr, ln);
+                        error_out(ctx, cerr, ln);
                     }
                     list = islast ? LIST_LAST : LIST_ONGOING; /* reset :  */
                 }
 
                 /* list end */
                 else if(is_list_end(ctx, curr_token_buff)){
-                    if ( (cerr = iniParse_get_list_error(ctx, list, NOLIST)) ){
-                        cinic_exit_print(cerr, ln);
+                    if ( (cerr = iniParse_get_list_error1000(ctx, list, NOLIST)) ){
+                        error_out(ctx, cerr, ln);
                     }
                     list = NOLIST;
                     continue;
@@ -793,10 +803,10 @@ int iniParse_parse(struct iniparse_ctx *ctx, const char *path, config_cb cb){
                 /* not a list component/token recognized as valid */
                 /* not any kind of line recognized as valid */
                 else{
-                    cinic_exit_print(INIPARSE_MALFORMED, ln);
+                    error_out(ctx, INIPARSE_MALFORMED, ln);
                 }
 
-                if ( (rc = cb(ln, list, section, key, val)) ) return rc;
+                if ( (rc = cb(ln, list, section, key, val, priv)) ) return rc;
             } /* while: list token parsing */
         } /* if: try list parsing */
     } /* while getline() */
@@ -837,4 +847,10 @@ struct iniparse_ctx *iniParse_init(
     ctx->section_ns_sep = section_delim;
 
     return ctx;
+}
+
+// after calling this the user can set the handle to null
+// or reuse it or whatever
+void iniParse_destroy(struct iniparse_ctx *ctx){
+    if (ctx) salloc(0, ctx);
 }
