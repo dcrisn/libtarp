@@ -7,6 +7,9 @@ namespace tarp {
 /*
  * Convenience class to get the elapsed duration between two points
  * in time to a specified resolution (milliseconds by default).
+ * NOTE: the ceiling of the converted value is returned. For example,
+ * if 10 ms has elapsed and the returned value is in seconds, this will
+ * be 1s.
  */
 template<typename resolution = std::chrono::milliseconds>
 class StopWatch {
@@ -19,7 +22,7 @@ public:
 
     resolution get_time(void) const {
         auto time = m_stop_time - m_start_time;
-        return std::chrono::duration_cast<resolution>(time);
+        return std::chrono::ceil<resolution>(time);
     }
 
 private:
