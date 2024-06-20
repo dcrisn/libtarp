@@ -25,6 +25,11 @@ struct func<R(args...)> {
     using return_type = R;
 };
 
+template<typename obj, typename R, typename... args>
+struct func<R (obj::*)(args...)> {
+    using return_type = R;
+};
+
 template<typename signature>
 using func_return_type = typename func<signature>::return_type;
 
