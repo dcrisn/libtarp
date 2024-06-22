@@ -226,14 +226,18 @@ void TimeGuard<T>::shift(unsigned int num_intervals) {
         return;
     }
 
+    // previous shift was the last valid one; no intervals left,
+    // disabling guard.
+    if (m_intervals_left == 0) {
+        m_enabled = false;
+        return;
+    }
+
     if (m_intervals_left > 0) {
         if (m_intervals_left < num_intervals) {
             num_intervals = m_intervals_left;
         }
         m_intervals_left -= num_intervals;
-        if (m_intervals_left == 0) {
-            m_enabled = false;
-        }
     }
 
     auto last_timepoint = m_next_timepoint;
