@@ -3,24 +3,98 @@
 // C++ stdlib
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <future>
+#include <list>
+#include <map>
 #include <shared_mutex>
-#include <stdexcept>
 #include <thread>
+#include <type_traits>
 
 #include <tarp/cxxcommon.hxx>
 #include <tarp/sched.hxx>
 #include <tarp/signal.hxx>
 #include <tarp/timeguard.hxx>
-#include <type_traits>
 
 namespace tarp {
 namespace threading {
 
 using namespace std::chrono_literals;
 
-// TODO: extend the thread entity interface to make make it easy to implement
-// thread pools using the leader-follower pattern.
+/* Abstract task interface; it is important that this be a non-template
+ * so that we do not need to templatize task containers and everything else
+ * that interacts with tasks merely at an interface level. */
+class task : public tarp::sched::QueueItem {
+public:
+    virtual ~task();
+
+    virtual void execute(void) = 0;
+};
+
+/*
+ * Concrete task that packs a callable for scheduling and deferred
+ * execution.
+ *
+ * --> result_type
+ * This should be the return type of the callable, communicated back to the
+ * caller via a future.
+ *
+ * --> callable_type
+ * A callable that returns a value of type result_type and that must be
+ * invokable without arguments. It should contain all the context it
+ * requires for execution. Therefore this is typically a lambda or
+ * a functor or some such.
+ */
+template<typename result_type, typename callable_type>
+class command : public task {
+public:
+    command(callable_type &&func);
+    ~command() override {};
+
+    void execute() override;
+    std::future<result_type> get_future();
+
+    std::string get_pretty_name() const override { return ""; }
+
+private:
+    std::promise<result_type> m_result;
+    callable_type m_f;
+};
+
+template<typename callable_type>
+std::unique_ptr<task> make_task(callable_type &&f) {
+    std::unique_ptr<tarp::threading::task> ret;
+
+    using return_type = std::invoke_result_t<callable_type>;
+
+    ret.reset(new tarp::threading::command<return_type, callable_type>(
+      std::forward<decltype(f)>(f)));
+    return ret;
+}
+
+template<typename result_type, typename callable_type>
+command<result_type, callable_type>::command(callable_type &&func) : m_f(func) {
+}
+
+template<typename return_type, typename callable_type>
+void command<return_type, callable_type>::execute(void) {
+    /* If the callable returns a result, we must commmunicate it to
+     * the future. If it does not return a result (i.e. it returns void),
+     * we must still call .set_value() on the future without arguments
+     * in order to unblock the future since the promise is now fulfilled.
+     */
+    if constexpr (!std::is_void_v<std::invoke_result_t<decltype(m_f)>>) {
+        m_result.set_value(m_f());
+    } else {
+        m_f();
+        m_result.set_value();
+    }
+}
+
+template<typename result_type, typename callable_type>
+std::future<result_type> command<result_type, callable_type>::get_future(void) {
+    return m_result.get_future();
+}
 
 class ThreadEntity {
 public:
@@ -35,6 +109,8 @@ public:
      * 3) the thread is stopped, then do nothing. A stopped thread entity can
      *    not be resumed.
      * 4) the thread is already running, then do nothing.
+     *
+     * Return false if the thread entity is stopped, else true.
      */
     bool run();
 
@@ -278,44 +354,8 @@ public:
                             std::make_unique<tarp::sched::SchedulerFifo>());
 
 protected:
-    /* Abstract task interface; it is important that this be a non-template
-     * so that we do not need to templatize the scheduler and everything else
-     * that interacts with tasks merely at an interface level! */
-    class task : public tarp::sched::QueueItem {
-    public:
-        virtual void execute(void) = 0;
-    };
-
-    /*
-     * Concrete task that packs a callable for scheduling and deferred
-     * execution.
-     *
-     * --> result_type
-     * This should be the return type of the callable, communicated back to the
-     * caller via a future.
-     *
-     * --> callable_type
-     * A callable that returns a value of type result_type and that must be
-     * invokable without arguments. It should contain all the context it
-     * requires for execution. Therefore this is typically a lambda or
-     * a functor or some such.
-     */
-    template<typename result_type, typename callable_type>
-    class command : public task {
-    public:
-        command(callable_type &&func);
-
-        void execute() override;
-        std::future<result_type> get_future();
-
-        std::string get_pretty_name() const override { return ""; }
-
-    private:
-        std::promise<result_type> m_result;
-        callable_type m_f;
-    };
-
-    //
+    bool has_pending_tasks() const;
+    std::unique_ptr<task> get_next_task();
 
     /* Create a task based on the future-promise mechanism.
      * This will be scheduled for execution according to
@@ -333,7 +373,7 @@ protected:
      * it needs using the appropriate semantics (move/copy/reference).
      */
     template<typename callable_type>
-    auto schedule_task(callable_type &&func) const
+    auto schedule_task(callable_type &&func)
       -> std::future<std::invoke_result_t<callable_type>> {
         auto task_item = std::make_unique<
           command<std::invoke_result_t<callable_type>, callable_type>>(
@@ -346,34 +386,10 @@ protected:
             m_scheduler->enqueue(std::move(task_item));
         }
 
+        /* wake up the active object if idling */
+        signal();
+
         return future;
-    }
-
-    bool has_pending_tasks() const {
-        std::unique_lock l {m_scheduler_mtx};
-        return m_scheduler->get_queue_length() > 0;
-    }
-
-    std::unique_ptr<task> get_next_task() {
-        std::unique_lock l {m_scheduler_mtx};
-
-        auto queue_item = m_scheduler->dequeue().release();
-        auto task_to_handle = dynamic_cast<task *>(queue_item);
-
-        // NOTE: if the exception throws there will be a leak
-        // because nothing frees the queue_item pointer. This is benign
-        // since this exception should never be raised if the code is
-        // correct.
-        if (!task_to_handle) {
-            throw std::logic_error(
-              "BUG: cannot get task from QueueItem in ActiveObject");
-        }
-
-        // release the unique pointer ownership of the QueueItem
-        // and create a new one to own the task pointer instead.
-        // Unfortunately, this whole song and dance needs to be done
-        // here because dynamic_cast does not work on std::unique_ptr.
-        return std::unique_ptr<task>(task_to_handle);
     }
 
 private:
@@ -381,32 +397,139 @@ private:
     mutable std::mutex m_scheduler_mtx;
 };
 
-template<typename result_type, typename callable_type>
-ActiveObject::command<result_type, callable_type>::command(callable_type &&func)
-    : m_f(func) {
-}
-
-template<typename return_type, typename callable_type>
-void ActiveObject::command<return_type, callable_type>::execute(void) {
-    /* If the callable returns a result, we must commmunicate it to
-     * the future. If it does not return a result (i.e. it returns void),
-     * we must still call .set_value() on the future without arguments
-     * in order to unblock the future since the promise is now complete.
+/*
+ * An extension of a ThreadEntity to make it better suited as a worker thread in
+ * a thread pool. The WorkerThread follows moves through a basic sequence of
+ * states:
+ * - if no next task, pause.
+ * - if given a task and signaled, run that task.
+ */
+class WorkerThread : public ThreadEntity {
+public:
+    /* Create a new worker thread. ID is a unique identifier for a given
+     * thread. Convenient for looking up the threads in hash tables and such.
+     * NOTE: the reason that std::thread_id is not used instead is that it might
+     * be useful to be in control of allocating the thread identifiers. For
+     * example, we could associate certain ID ranges with higher priorities
+     * or associate an ID with certain events only.
+     * Therefore the id is more of a *worker* id than a *thread* id.
      */
-    if constexpr (!std::is_void_v<std::invoke_result_t<decltype(m_f)>>) {
-        m_result.set_value(m_f());
-    } else {
-        m_f();
-        m_result.set_value();
-    }
-}
+    WorkerThread(std::uint32_t worker_id);
 
-template<typename result_type, typename callable_type>
-std::future<result_type>
-ActiveObject::command<result_type, callable_type>::get_future(void) {
-    return m_result.get_future();
-}
+    std::size_t get_worker_id() const;
 
+    /* Signal emitted when the worker has completed its current task and is
+     * ready for new work. In leader-followers terminology, the signal is
+     * emitted when a processing thread is now ready to become a follower
+     * again. Therefore this is a notifying signal meant for a thread pool. */
+    auto &get_idle_signal() { return m_sig_work_done; }
+
+    /*
+     * Set the next task (work item) to be done by the worker thread.
+     * NOTE: this function overwrites the previous value. Therefore it should
+     * only be called when the worker has finished the previous task.
+     */
+    void set_task(std::unique_ptr<task> task);
+
+private:
+    virtual void do_work(void) override final;
+    virtual void initialize(void) override final;
+    virtual void cleanup(void) override final;
+    virtual void prepare_resume(void) override final;
+
+    /* When doing a task, we take the next task and make it current;
+     * this is to prevent the task from being destroyed if the user called
+     * set_task() while we are in the middle of doing that task */
+    std::unique_ptr<tarp::threading::task> m_next_task;
+    std::unique_ptr<tarp::threading::task> m_current_task;
+
+    mutable std::mutex m_mtx;
+    const std::uint32_t m_worker_id;
+    tarp::signal<void(std::uint32_t id)> m_sig_work_done;
+};
+
+/*
+ * Implementation of a thread pool.
+ * The number of worker threads is specified at construction time but can be
+ * dynamically adjusted (up to a system-dependent maximum).
+ * The thread pool takes tarp::threading::task's as input and passes the tasks
+ * on to workers in the thread pool. A default FIFO queueing discipline is used
+ * for scheduling the tasks but another scheduler can be specified in the
+ * CTOR.
+ *
+ * The implementation is roughly based on the Leader-followers design pattern.
+ */
+class ThreadPool final : public ThreadEntity {
+public:
+    /* Inherited from ThreadEntity. A thread pool cannot be paused. */
+    void pause(void) = delete;
+
+    /* Create a thread pool with an initial size of num_workers and using the
+     * specified queue discpline for the tasks in the run queue. */
+    explicit ThreadPool(uint16_t num_workers,
+                        std::unique_ptr<tarp::sched::Scheduler> scheduler =
+                          std::make_unique<tarp::sched::SchedulerFifo>());
+
+    /* Get number of tasks queued waiting for execution */
+    std::size_t get_queue_length() const;
+
+    /* total number of tasks handled across all workers combined */
+    std::size_t get_num_tasks_handled() const;
+
+    /* Schedule a task for execution */
+    void enqueue_task(std::unique_ptr<tarp::threading::task> task);
+
+    /* Get the number of worker threads i.e. the size of the worker pool. */
+    std::size_t get_num_threads() const;
+
+    /* Resize the worker pool. NOTE: if n is smaller than the previous value
+     * and all workers are busy, the request will not be honored immediately.
+     * This is since the workers can only be destroyed once they've completed
+     * whatever current tak they are in the middle of. */
+    void set_num_threads(std::size_t n);
+
+    /* Spawn all the worker threads and start assigning tasks if any are
+     * scheduled. */
+    void start();
+
+private:
+    virtual void initialize(void) override final;
+    virtual void prepare_resume(void) override final;
+
+    /* main loop; dispatches tasks to workers and resizes the thread
+     * pool as requested */
+    void do_work() override;
+
+    /* Stop and destroy all the workers.
+     * NOTE: This is a permanent action: the thread pool cannot be restarted
+     * once paused.
+     * NOTE: This function will block until all workers have been stopped. A
+     * worker may only be stopped when idle i.e. once it has completed whatever
+     * current task it is in the middle of. */
+    virtual void cleanup(void) override final;
+
+    void resize_pool_if_needed(void);
+    void add_follower(uint32_t worker_id);
+    void hook_up_task_completion_signal(tarp::threading::WorkerThread &worker);
+
+    mutable std::shared_mutex m_mtx;
+    std::size_t m_num_workers {0};    /* number of user-requested workers */
+    std::size_t m_next_worker_id {0}; /* monotically incrementing */
+
+    /* all the workers in the current thread pool */
+    std::map<std::uint32_t, std::shared_ptr<tarp::threading::WorkerThread>>
+      m_threads;
+
+    /* workers not currently engaged in processing a task. i.e. workers that
+     * are available to take on new work ('followers'). */
+    std::list<std::shared_ptr<tarp::threading::WorkerThread>> m_idle_threads;
+
+    std::map<uint32_t, std::unique_ptr<tarp::signal_connection>>
+      m_worker_signals;
+
+    const std::unique_ptr<tarp::sched::Scheduler> m_taskq;
+    std::uint64_t m_num_tasks_handled {0};
+};
 
 }  // namespace threading
 }  // namespace tarp
