@@ -11,10 +11,17 @@ void QueueItem::set_priority(uint8_t prio) {
     m_priority = prio;
 }
 
+QueueItem::~QueueItem() {
+}
+
 Scheduler::Scheduler() {
 }
 
 Scheduler::~Scheduler() {
+}
+
+bool Scheduler::empty() const {
+    return get_queue_length() == 0;
 }
 
 SchedulerFifo::SchedulerFifo() : Scheduler() {
