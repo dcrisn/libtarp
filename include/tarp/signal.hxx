@@ -396,19 +396,28 @@ tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::connection(
  */
 template<SIGNAL_TEMPLATE_SPEC>
 void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
-    {
-        LOCK(m_token->mtx);
-        m_token->valid = false;
+    /* make copy in case m_token is reset by some other thread */
+    auto token = m_token;
+    if (!token){
+        return;
     }
+
+    {
+        LOCK(token->mtx);
+        token->valid = false;
+    }
+
     m_token.reset();
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
 tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void){
-    if (!m_token) return;
+    // make copy in case m_token gets reset by some other thread.
+    auto token = m_token;
+    if (!token) return;
 
-    LOCK(m_token->mtx);
-    if (m_token->valid) {
+    LOCK(token->mtx);
+    if (token->valid) {
         throw std::logic_error(
           "signal_connection destructed without being disconnected");
     }
