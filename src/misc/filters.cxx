@@ -1,7 +1,5 @@
-#include <tarp/sched.hxx>
+#include <tarp/filters.hxx>
 
 namespace tarp::sched {
-using namespace std;
-
 
 }  // namespace tarp::sched

@@ -21,81 +21,6 @@ namespace threading {
 
 using namespace std::chrono_literals;
 
-/* Abstract task interface; it is important that this be a non-template
- * so that we do not need to templatize task containers and everything else
- * that interacts with tasks merely at an interface level. */
-class task : public tarp::sched::QueueItem {
-public:
-    virtual ~task();
-
-    virtual void execute(void) = 0;
-};
-
-/*
- * Concrete task that packs a callable for scheduling and deferred
- * execution.
- *
- * --> result_type
- * This should be the return type of the callable, communicated back to the
- * caller via a future.
- *
- * --> callable_type
- * A callable that returns a value of type result_type and that must be
- * invokable without arguments. It should contain all the context it
- * requires for execution. Therefore this is typically a lambda or
- * a functor or some such.
- */
-template<typename result_type, typename callable_type>
-class command : public task {
-public:
-    command(callable_type &&func);
-    ~command() override {};
-
-    void execute() override;
-    std::future<result_type> get_future();
-
-    std::string get_pretty_name() const override { return ""; }
-
-private:
-    std::promise<result_type> m_result;
-    callable_type m_f;
-};
-
-template<typename callable_type>
-std::unique_ptr<task> make_task(callable_type &&f) {
-    std::unique_ptr<tarp::threading::task> ret;
-
-    using return_type = std::invoke_result_t<callable_type>;
-
-    ret.reset(new tarp::threading::command<return_type, callable_type>(
-      std::forward<decltype(f)>(f)));
-    return ret;
-}
-
-template<typename result_type, typename callable_type>
-command<result_type, callable_type>::command(callable_type &&func) : m_f(func) {
-}
-
-template<typename return_type, typename callable_type>
-void command<return_type, callable_type>::execute(void) {
-    /* If the callable returns a result, we must commmunicate it to
-     * the future. If it does not return a result (i.e. it returns void),
-     * we must still call .set_value() on the future without arguments
-     * in order to unblock the future since the promise is now fulfilled.
-     */
-    if constexpr (!std::is_void_v<std::invoke_result_t<decltype(m_f)>>) {
-        m_result.set_value(m_f());
-    } else {
-        m_f();
-        m_result.set_value();
-    }
-}
-
-template<typename result_type, typename callable_type>
-std::future<result_type> command<result_type, callable_type>::get_future(void) {
-    return m_result.get_future();
-}
-
 class ThreadEntity {
 public:
     ThreadEntity(void);
@@ -350,12 +275,13 @@ class ActiveObject : public ThreadEntity {
 public:
     /* The scheduler is specified via dependency injection in order to avoid
      * unnecessary templates. */
-    explicit ActiveObject(std::unique_ptr<tarp::sched::Scheduler> sched =
-                            std::make_unique<tarp::sched::SchedulerFifo>());
+    explicit ActiveObject(
+      std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> sched =
+        std::make_unique<tarp::sched::SchedulerFifo<tarp::sched::task>>());
 
 protected:
     bool has_pending_tasks() const;
-    std::unique_ptr<task> get_next_task();
+    std::unique_ptr<tarp::sched::task> get_next_task();
 
     /* Create a task based on the future-promise mechanism.
      * This will be scheduled for execution according to
@@ -372,12 +298,16 @@ protected:
      * Typically, this is going to to be a small lambda that captures everything
      * it needs using the appropriate semantics (move/copy/reference).
      */
+    // clang-format off
     template<typename callable_type>
     auto schedule_task(callable_type &&func)
-      -> std::future<std::invoke_result_t<callable_type>> {
+      -> std::future<std::invoke_result_t<callable_type>>
+    {
         auto task_item = std::make_unique<
-          command<std::invoke_result_t<callable_type>, callable_type>>(
-          std::forward<decltype(func)>(func));
+            tarp::sched::command<
+               std::invoke_result_t<callable_type>, callable_type>>(
+                  std::forward<decltype(func)>(func)
+               );
 
         auto future = task_item->get_future();
 
@@ -390,10 +320,11 @@ protected:
         signal();
 
         return future;
+        // clang-format on
     }
 
 private:
-    std::unique_ptr<tarp::sched::Scheduler> m_scheduler;
+    std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> m_scheduler;
     mutable std::mutex m_scheduler_mtx;
 };
 
@@ -429,7 +360,7 @@ public:
      * NOTE: this function overwrites the previous value. Therefore it should
      * only be called when the worker has finished the previous task.
      */
-    void set_task(std::unique_ptr<task> task);
+    void set_task(std::unique_ptr<tarp::sched::task> task);
 
 private:
     virtual void do_work(void) override final;
@@ -440,8 +371,8 @@ private:
     /* When doing a task, we take the next task and make it current;
      * this is to prevent the task from being destroyed if the user called
      * set_task() while we are in the middle of doing that task */
-    std::unique_ptr<tarp::threading::task> m_next_task;
-    std::unique_ptr<tarp::threading::task> m_current_task;
+    std::unique_ptr<tarp::sched::task> m_next_task;
+    std::unique_ptr<tarp::sched::task> m_current_task;
 
     mutable std::mutex m_mtx;
     const std::uint32_t m_worker_id;
@@ -466,9 +397,10 @@ public:
 
     /* Create a thread pool with an initial size of num_workers and using the
      * specified queue discpline for the tasks in the run queue. */
-    explicit ThreadPool(uint16_t num_workers,
-                        std::unique_ptr<tarp::sched::Scheduler> scheduler =
-                          std::make_unique<tarp::sched::SchedulerFifo>());
+    explicit ThreadPool(
+      uint16_t num_workers,
+      std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> scheduler =
+        std::make_unique<tarp::sched::SchedulerFifo<tarp::sched::task>>());
 
     /* Get number of tasks queued waiting for execution */
     std::size_t get_queue_length() const;
@@ -477,7 +409,7 @@ public:
     std::size_t get_num_tasks_handled() const;
 
     /* Schedule a task for execution */
-    void enqueue_task(std::unique_ptr<tarp::threading::task> task);
+    void enqueue_task(std::unique_ptr<tarp::sched::task> task);
 
     /* Get the number of worker threads i.e. the size of the worker pool. */
     std::size_t get_num_threads() const;
@@ -527,7 +459,7 @@ private:
     std::map<uint32_t, std::unique_ptr<tarp::signal_connection>>
       m_worker_signals;
 
-    const std::unique_ptr<tarp::sched::Scheduler> m_taskq;
+    const std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> m_taskq;
     std::uint64_t m_num_tasks_handled {0};
 };
 

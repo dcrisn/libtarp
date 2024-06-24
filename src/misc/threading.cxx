@@ -279,7 +279,8 @@ void Oscillator::cleanup(void) {
 void Oscillator::prepare_resume(void) {
 }
 
-ActiveObject::ActiveObject(std::unique_ptr<tarp::sched::Scheduler> sched) {
+ActiveObject::ActiveObject(
+  std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> sched) {
     m_scheduler = std::move(sched);
 }
 
@@ -291,14 +292,13 @@ bool ActiveObject::has_pending_tasks() const {
 std::unique_ptr<task> ActiveObject::get_next_task() {
     std::unique_lock l {m_scheduler_mtx};
 
-    auto queue_item = m_scheduler->dequeue();
-    auto task_to_handle = queue_item_cast<task>(queue_item);
+    auto task = m_scheduler->dequeue();
 
-    if (!task_to_handle) {
+    if (!task) {
         throw std::logic_error(
           "BUG: cannot get task from QueueItem in ActiveObject");
     }
-    return task_to_handle;
+    return task;
 }
 
 WorkerThread::WorkerThread(std::uint32_t worker_id) : m_worker_id(worker_id) {
@@ -343,8 +343,9 @@ std::size_t WorkerThread::get_worker_id() const {
     return m_worker_id;
 }
 
-ThreadPool::ThreadPool(uint16_t num_workers,
-                       std::unique_ptr<tarp::sched::Scheduler> scheduler)
+ThreadPool::ThreadPool(
+  uint16_t num_workers,
+  std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> scheduler)
     : m_num_workers(num_workers), m_taskq(std::move(scheduler)) {
 }
 
@@ -353,7 +354,7 @@ std::size_t ThreadPool::get_queue_length() const {
     return m_taskq->get_queue_length();
 }
 
-void ThreadPool::enqueue_task(std::unique_ptr<tarp::threading::task> task) {
+void ThreadPool::enqueue_task(std::unique_ptr<tarp::sched::task> task) {
     if (!task) {
         throw std::invalid_argument("Illegal attempt to enqueue null task");
     }
@@ -430,7 +431,7 @@ void ThreadPool::do_work(void) {
     resize_pool_if_needed();
 
     std::shared_ptr<tarp::threading::WorkerThread> worker;
-    std::unique_ptr<tarp::threading::task> task;
+    std::unique_ptr<tarp::sched::task> task;
 
     {
         std::unique_lock l {m_mtx};
@@ -449,9 +450,7 @@ void ThreadPool::do_work(void) {
         worker = m_idle_threads.front();
         m_idle_threads.pop_front();
 
-        auto queue_item = m_taskq->dequeue();
-        task = queue_item_cast<tarp::threading::task>(queue_item);
-
+        task = m_taskq->dequeue();
         if (!task) {
             throw std::logic_error("BUG: failed conversion from QueueItem "
                                    "to tarp::threading::task");
