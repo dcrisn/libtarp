@@ -12,13 +12,15 @@
 namespace tarp {
 
 template<typename callback_signature,
-         typename signal_output = tarp::func_return_type<callback_signature>,
+         typename signal_output =
+           tarp::signature_decomp_return_t<callback_signature>,
          template<typename output, typename input> typename reducer =
            tarp::reduce::last>
 class signal;
 
 template<typename callback_signature,
-         typename signal_output = tarp::func_return_type<callback_signature>,
+         typename signal_output =
+           tarp::signature_decomp_return_t<callback_signature>,
          template<typename output, typename input> typename reducer =
            tarp::reduce::last>
 using hook = signal<callback_signature, signal_output, reducer>;
