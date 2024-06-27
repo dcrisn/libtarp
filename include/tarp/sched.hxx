@@ -11,22 +11,9 @@
 #include <tarp/common.h>
 #include <tarp/cxxcommon.hxx>
 #include <tarp/filters.hxx>
+#include <tarp/type_traits.hxx>
 
 //
-
-/* Convenient way to check a class inherits from an interface; will do in the
- * absence of C++20's concepts. */
-#define REPORT_INTERFACE_VIOLATION(TYPE, INTERFACE)              \
-    "Interface Requirement Violation: specified type (" tkn2str( \
-      TYPE) ") does not implement required interface (" tkn2str(INTERFACE) ")"
-
-#define REQUIRE(type_argument, required_interface)          \
-    static_assert(                                          \
-      std::is_base_of_v<required_interface, type_argument>, \
-      REPORT_INTERFACE_VIOLATION(type_argument, required_interface))
-
-//
-
 namespace tarp::sched {
 
 enum class queueingDiscipline : std::uint8_t {
@@ -116,18 +103,25 @@ private:
 //
 
 /* Queue Item interfaces required by various schedulers.
- * NOTE: qiif = 'queue item interface', for brevity. */
-class fifo_qiif {};
+ * NOTE: qitif = 'queue item template interface', for brevity. */
+struct fifo_qitif {
+    template<typename C>
+    struct constraints;
+};
 
-class deadline_qiif {
-public:
-    /* True if we are at or past the deadline, else False */
-    virtual bool expired() = 0;
+struct deadline_qitif {
+    template<typename T>
+    using signature_get_expiration_time =
+      typename std::chrono::system_clock::time_point (T::*)() const;
 
-    std::chrono::system_clock::time_point get_expiration_time() const;
-
-    /* Delay the expiration time by _delay_ */
-    void delay(std::chrono::microseconds delay);
+    // clang-format off
+    template <typename C,
+        bool (CLASS_OF(&C::expired) :: *)() const = &C::expired,
+        signature_get_expiration_time<CLASS_OF(&C::get_expiration_time)> = &C::get_expiration_time,
+        void (CLASS_OF(&C::delay) :: *)(std::chrono::microseconds) = &C::delay
+             >
+    struct constraints;
+    // clang-format on
 };
 
 //
@@ -135,7 +129,7 @@ public:
 template<typename queue_item_t>
 class SchedulerFifo : public Scheduler<queue_item_t> {
 public:
-    REQUIRE(queue_item_t, fifo_qiif);
+    REQUIRE(queue_item_t, fifo_qitif);
 
     explicit SchedulerFifo(uint32_t id = 0) : Scheduler<queue_item_t>(id) {}
 
@@ -188,7 +182,7 @@ void SchedulerFifo<queue_item_t>::clear() {
 template<typename queue_item_t>
 class SchedulerDeadline : public Scheduler<queue_item_t> {
 public:
-    REQUIRE(queue_item_t, deadline_qiif);
+    REQUIRE(queue_item_t, deadline_qitif);
 
     SchedulerDeadline(uint32_t id = 0) : Scheduler<queue_item_t>(id) {};
     virtual std::size_t get_queue_length() const override;
@@ -200,7 +194,7 @@ private:
 
     inline auto time_now() const { return std::chrono::system_clock::now(); }
 
-    std::list<std::shared_ptr<queue_item_t>> m_q {};
+    std::list<std::unique_ptr<queue_item_t>> m_q {};
 };
 
 template<typename queue_item_t>
@@ -221,13 +215,13 @@ std::unique_ptr<queue_item_t> SchedulerDeadline<queue_item_t>::do_dequeue() {
     }
 
     /* Buffer items until they are actually expired. */
-    if (deadline_qiif &front = *(m_q.front()); !front.expired()) {
+    if (!m_q.front()->expired()) {
         return nullptr;
     }
 
-    auto front = m_q.front();
+    auto front = std::move(m_q.front());
     m_q.pop_front();
-    return front;
+    return std::move(front);
 }
 
 template<typename queue_item_t>
@@ -248,10 +242,9 @@ void SchedulerDeadline<queue_item_t>::clear() {
  * NOTE: it is important that this be a non-template
  * so that we do not need to templatize task containers and everything else
  * that interacts with tasks merely at an interface level. */
-class task : public fifo_qiif {
+class task {
 public:
-    virtual ~task();
-
+    virtual ~task() = default;
     virtual void execute(void) = 0;
 };
 
@@ -320,7 +313,6 @@ template<typename result_type, typename callable_type>
 std::future<result_type> command<result_type, callable_type>::get_future(void) {
     return m_result.get_future();
 }
-
 
 
 }  // namespace tarp::sched

@@ -8,7 +8,7 @@
 
 #include <tarp/cxxcommon.hxx>
 #include <tarp/functools.hxx>
-#include <tarp/types_traits.hxx>
+#include <tarp/type_traits.hxx>
 
 namespace tarp {
 

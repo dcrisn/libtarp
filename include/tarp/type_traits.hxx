@@ -2,6 +2,8 @@
 
 #include <type_traits>
 
+#include <tarp/cxxcommon.hxx>
+
 namespace tarp {
 namespace type_traits {
 
@@ -102,7 +104,70 @@ template<typename signature>
 using signature_decomp_memfn_class_t =
   typename signature_decomp<signature>::class_t;
 
+#define CLASS_OF(member_function) \
+    tarp::type_traits::signature_decomp_memfn_class_t<decltype(member_function)>
+
 //
+
+/*------------------------------------------------------------
+ * Detect if a class C implements the specified interface.
+ *
+ * NOTE: this is a crutch meant to be useful pre-C++20 (when
+ * concepts are introduced).
+ *
+ * The 'interface' argument should be a non-template class
+ * that contains a template class member named 'constraints',
+ * instantiable with a single template argument, which is the
+ * name of the class being tested for interface compliance.
+ *
+ * The 'interface' class (specifically, its 'constraints')
+ * member ultimatey determines whether this class will evaluate
+ * to true (=C implements the expected interface) or false (=C
+ * does not implement the expected interface).
+ *------------------------------------------------------------*/
+
+namespace impl {
+
+// General fallback case. This template gets selected if the more
+// specialized version below is not well-formed.
+template<typename C, typename interface, typename = void>
+struct implements_interface : std::false_type {};
+
+// This specialization will be selected over the default if well-formed.
+// If this gets selected, then C is deemed to comply with the expected
+// interface.
+template<typename C, typename interface>
+struct implements_interface<
+  C,
+  interface,
+  std::void_t<typename interface::template constraints<C>>> : std::true_type {};
+}  // namespace impl
+
+/*
+ * Public API; used to hide the third unnamed template parameter to the
+ * impl::implements_interface template. */
+template<typename C, typename interface>
+using implements_interface = impl::implements_interface<C, interface>;
+
+template<typename C, typename interface>
+inline constexpr bool implements_interface_v =
+  impl::implements_interface<C, interface>::value;
+
+/* Convenient way to check a class inherits from an interface; will do in the
+ * absence of C++20's concepts. */
+#define REPORT_INTERFACE_VIOLATION(TYPE, INTERFACE)      \
+    "Interface Requirement Violation (at " __FILE__      \
+    ":" tkn2str(__LINE__) "): specified type (" tkn2str( \
+      TYPE) ") does not implement required interface (" tkn2str(INTERFACE) ")"
+
+#define REQUIRE(type_argument, required_interface)                     \
+    static_assert(                                                     \
+      (tarp::type_traits::implements_interface_v<type_argument,        \
+                                                 required_interface>), \
+      REPORT_INTERFACE_VIOLATION(type_argument, required_interface))
+
+//
+
 
 }  // namespace type_traits
 }  // namespace tarp

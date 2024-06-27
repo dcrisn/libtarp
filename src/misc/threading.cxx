@@ -12,9 +12,6 @@ using namespace tarp::sched;
 
 using namespace std;
 
-task::~task() {
-}
-
 ThreadEntity::ThreadEntity()
     : m_state(threadState::INITIALIZED), m_signaled(false) {
 }
