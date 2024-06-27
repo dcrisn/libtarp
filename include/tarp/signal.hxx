@@ -8,19 +8,20 @@
 
 #include <tarp/cxxcommon.hxx>
 #include <tarp/functools.hxx>
+#include <tarp/types_traits.hxx>
 
 namespace tarp {
 
 template<typename callback_signature,
          typename signal_output =
-           tarp::signature_decomp_return_t<callback_signature>,
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
          template<typename output, typename input> typename reducer =
            tarp::reduce::last>
 class signal;
 
 template<typename callback_signature,
          typename signal_output =
-           tarp::signature_decomp_return_t<callback_signature>,
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
          template<typename output, typename input> typename reducer =
            tarp::reduce::last>
 using hook = signal<callback_signature, signal_output, reducer>;
