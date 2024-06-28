@@ -277,7 +277,7 @@ void Oscillator::prepare_resume(void) {
 }
 
 ActiveObject::ActiveObject(
-  std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> sched) {
+  std::unique_ptr<tarp::sched::Scheduler<interfaces::task>> sched) {
     m_scheduler = std::move(sched);
 }
 
@@ -286,7 +286,7 @@ bool ActiveObject::has_pending_tasks() const {
     return m_scheduler->get_queue_length() > 0;
 }
 
-std::unique_ptr<task> ActiveObject::get_next_task() {
+std::unique_ptr<interfaces::task> ActiveObject::get_next_task() {
     std::unique_lock l {m_scheduler_mtx};
 
     auto task = m_scheduler->dequeue();
@@ -301,7 +301,7 @@ std::unique_ptr<task> ActiveObject::get_next_task() {
 WorkerThread::WorkerThread(std::uint32_t worker_id) : m_worker_id(worker_id) {
 }
 
-void WorkerThread::set_task(std::unique_ptr<task> task) {
+void WorkerThread::set_task(std::unique_ptr<interfaces::task> task) {
     std::unique_lock l {m_mtx};
     m_next_task = std::move(task);
 }
@@ -342,7 +342,7 @@ std::size_t WorkerThread::get_worker_id() const {
 
 ThreadPool::ThreadPool(
   uint16_t num_workers,
-  std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> scheduler)
+  std::unique_ptr<tarp::sched::Scheduler<interfaces::task>> scheduler)
     : m_num_workers(num_workers), m_taskq(std::move(scheduler)) {
 }
 
@@ -351,7 +351,7 @@ std::size_t ThreadPool::get_queue_length() const {
     return m_taskq->get_queue_length();
 }
 
-void ThreadPool::enqueue_task(std::unique_ptr<tarp::sched::task> task) {
+void ThreadPool::enqueue_task(std::unique_ptr<interfaces::task> task) {
     if (!task) {
         throw std::invalid_argument("Illegal attempt to enqueue null task");
     }
@@ -428,7 +428,7 @@ void ThreadPool::do_work(void) {
     resize_pool_if_needed();
 
     std::shared_ptr<tarp::threading::WorkerThread> worker;
-    std::unique_ptr<tarp::sched::task> task;
+    std::unique_ptr<interfaces::task> task;
 
     {
         std::unique_lock l {m_mtx};

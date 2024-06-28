@@ -276,12 +276,13 @@ public:
     /* The scheduler is specified via dependency injection in order to avoid
      * unnecessary templates. */
     explicit ActiveObject(
-      std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> sched =
-        std::make_unique<tarp::sched::SchedulerFifo<tarp::sched::task>>());
+      std::unique_ptr<tarp::sched::Scheduler<tarp::sched::interfaces::task>>
+        sched = std::make_unique<
+          tarp::sched::SchedulerFifo<tarp::sched::interfaces::task>>());
 
 protected:
     bool has_pending_tasks() const;
-    std::unique_ptr<tarp::sched::task> get_next_task();
+    std::unique_ptr<tarp::sched::interfaces::task> get_next_task();
 
     /* Create a task based on the future-promise mechanism.
      * This will be scheduled for execution according to
@@ -304,7 +305,7 @@ protected:
       -> std::future<std::invoke_result_t<callable_type>>
     {
         auto task_item = std::make_unique<
-            tarp::sched::command<
+            tarp::sched::task<
                std::invoke_result_t<callable_type>, callable_type>>(
                   std::forward<decltype(func)>(func)
                );
@@ -324,7 +325,8 @@ protected:
     }
 
 private:
-    std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> m_scheduler;
+    std::unique_ptr<tarp::sched::Scheduler<tarp::sched::interfaces::task>>
+      m_scheduler;
     mutable std::mutex m_scheduler_mtx;
 };
 
@@ -360,7 +362,7 @@ public:
      * NOTE: this function overwrites the previous value. Therefore it should
      * only be called when the worker has finished the previous task.
      */
-    void set_task(std::unique_ptr<tarp::sched::task> task);
+    void set_task(std::unique_ptr<tarp::sched::interfaces::task> task);
 
 private:
     virtual void do_work(void) override final;
@@ -371,8 +373,8 @@ private:
     /* When doing a task, we take the next task and make it current;
      * this is to prevent the task from being destroyed if the user called
      * set_task() while we are in the middle of doing that task */
-    std::unique_ptr<tarp::sched::task> m_next_task;
-    std::unique_ptr<tarp::sched::task> m_current_task;
+    std::unique_ptr<tarp::sched::interfaces::task> m_next_task;
+    std::unique_ptr<tarp::sched::interfaces::task> m_current_task;
 
     mutable std::mutex m_mtx;
     const std::uint32_t m_worker_id;
@@ -399,8 +401,9 @@ public:
      * specified queue discpline for the tasks in the run queue. */
     explicit ThreadPool(
       uint16_t num_workers,
-      std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> scheduler =
-        std::make_unique<tarp::sched::SchedulerFifo<tarp::sched::task>>());
+      std::unique_ptr<tarp::sched::Scheduler<tarp::sched::interfaces::task>>
+        scheduler = std::make_unique<
+          tarp::sched::SchedulerFifo<tarp::sched::interfaces::task>>());
 
     /* Get number of tasks queued waiting for execution */
     std::size_t get_queue_length() const;
@@ -409,7 +412,7 @@ public:
     std::size_t get_num_tasks_handled() const;
 
     /* Schedule a task for execution */
-    void enqueue_task(std::unique_ptr<tarp::sched::task> task);
+    void enqueue_task(std::unique_ptr<tarp::sched::interfaces::task> task);
 
     /* Get the number of worker threads i.e. the size of the worker pool. */
     std::size_t get_num_threads() const;
@@ -459,7 +462,8 @@ private:
     std::map<uint32_t, std::unique_ptr<tarp::signal_connection>>
       m_worker_signals;
 
-    const std::unique_ptr<tarp::sched::Scheduler<tarp::sched::task>> m_taskq;
+    const std::unique_ptr<tarp::sched::Scheduler<tarp::sched::interfaces::task>>
+      m_taskq;
     std::uint64_t m_num_tasks_handled {0};
 };
 

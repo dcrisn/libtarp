@@ -236,6 +236,7 @@ void SchedulerDeadline<queue_item_t>::clear() {
 
 //
 
+namespace interfaces {
 /*
  * Abstract interface for a task. A task is a packaged piece of executable code.
  *
@@ -246,7 +247,24 @@ class task {
 public:
     virtual ~task() = default;
     virtual void execute(void) = 0;
+    virtual std::string get_name() const = 0;
 };
+
+/*
+ * A task with the additional semantics of being undo-able
+ * and redo-able. */
+class command {
+public:
+    virtual ~command() = default;
+    virtual void execute() = 0;
+    virtual void undo() = 0;
+    virtual void redo() = 0;
+    virtual std::string get_name() const = 0;
+};
+
+}  // namespace interfaces
+
+//
 
 /*
  * Concrete task that packs a callable for scheduling and deferred
@@ -263,39 +281,50 @@ public:
  * a functor or some such.
  */
 template<typename result_type, typename callable_type>
-class command : public task {
+class task : public tarp::sched::interfaces::task {
 public:
-    command(callable_type &&func);
-    ~command() override {};
+    task(callable_type &&func, const std::string &name = "");
+    ~task() override {};
 
     void execute() override;
     std::future<result_type> get_future();
 
+    std::string get_name() const;
+
 private:
+    std::string m_name;
     std::promise<result_type> m_result;
     callable_type m_f;
 };
 
-/* Return a unique_ptr to an abc (abstract base class) that stores a command. */
+/* Create and store a task in a unique_ptr to a task or one of its parent
+ * classes. */
 template<typename abc, typename callable_type>
-std::unique_ptr<abc> make_command_as(callable_type &&f) {
+std::unique_ptr<abc> make_task_as(callable_type &&f) {
     std::unique_ptr<abc> ret;
 
     using return_type = std::invoke_result_t<callable_type>;
-    using command_type = tarp::sched::command<return_type, callable_type>;
+    using task_type = tarp::sched::task<return_type, callable_type>;
 
-    REQUIRE(command_type, abc);
+    REQUIRE(task_type, abc);
 
-    ret.reset(new command_type(std::forward<decltype(f)>(f)));
+    ret.reset(new task_type(std::forward<decltype(f)>(f)));
     return ret;
 }
 
 template<typename result_type, typename callable_type>
-command<result_type, callable_type>::command(callable_type &&func) : m_f(func) {
+task<result_type, callable_type>::task(callable_type &&func,
+                                       const std::string &name)
+    : m_f(func), m_name(name) {
+}
+
+template<typename result_type, typename callable_type>
+std::string task<result_type, callable_type>::get_name() const {
+    return m_name;
 }
 
 template<typename return_type, typename callable_type>
-void command<return_type, callable_type>::execute(void) {
+void task<return_type, callable_type>::execute(void) {
     /* If the callable returns a result, we must commmunicate it to
      * the future. If it does not return a result (i.e. it returns void),
      * we must still call .set_value() on the future without arguments
@@ -310,7 +339,7 @@ void command<return_type, callable_type>::execute(void) {
 }
 
 template<typename result_type, typename callable_type>
-std::future<result_type> command<result_type, callable_type>::get_future(void) {
+std::future<result_type> task<result_type, callable_type>::get_future(void) {
     return m_result.get_future();
 }
 
