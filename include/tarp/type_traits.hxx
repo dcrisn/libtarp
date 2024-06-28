@@ -155,10 +155,10 @@ inline constexpr bool implements_interface_v =
 
 /* Convenient way to check a class inherits from an interface; will do in the
  * absence of C++20's concepts. */
-#define REPORT_INTERFACE_VIOLATION(TYPE, INTERFACE)      \
-    "Interface Requirement Violation (at " __FILE__      \
-    ":" tkn2str(__LINE__) "): specified type (" tkn2str( \
-      TYPE) ") does not implement required interface (" tkn2str(INTERFACE) ")"
+#define REPORT_INTERFACE_VIOLATION(TYPE, INTERFACE)         \
+    "Interface Requirement Violation (at " __FILE__         \
+    ":" tkn2str(__LINE__) "): type specified for " tkn2str( \
+      TYPE) " does not implement required interface (" tkn2str(INTERFACE) ")"
 
 #define REQUIRE(type_argument, required_interface)                     \
     static_assert(                                                     \
@@ -166,6 +166,10 @@ inline constexpr bool implements_interface_v =
                                                  required_interface>), \
       REPORT_INTERFACE_VIOLATION(type_argument, required_interface))
 
+// Helper to be used for member function signature compliance checks inside
+// interface validators.
+#define VALIDATE(memfn_address, signature) \
+    decltype(static_cast<signature>(memfn_address)) = memfn_address
 //
 
 

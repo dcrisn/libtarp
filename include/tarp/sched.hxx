@@ -12,6 +12,7 @@
 #include <tarp/cxxcommon.hxx>
 #include <tarp/filters.hxx>
 #include <tarp/type_traits.hxx>
+#include <type_traits>
 
 //
 namespace tarp::sched {
@@ -110,15 +111,10 @@ struct fifo_qitif {
 };
 
 struct deadline_qitif {
-    template<typename T>
-    using signature_get_expiration_time =
-      typename std::chrono::system_clock::time_point (T::*)() const;
-
     // clang-format off
     template <typename C,
-        bool (CLASS_OF(&C::expired) :: *)() const = &C::expired,
-        signature_get_expiration_time<CLASS_OF(&C::get_expiration_time)> = &C::get_expiration_time,
-        void (CLASS_OF(&C::delay) :: *)(std::chrono::microseconds) = &C::delay
+        VALIDATE(&C::expired, bool (C::*)() const),
+        VALIDATE(&C::get_expiration_time, std::chrono::system_clock::time_point (C::*)() const)
              >
     struct constraints;
     // clang-format on
@@ -306,7 +302,7 @@ std::unique_ptr<abc> make_task_as(callable_type &&f) {
     using return_type = std::invoke_result_t<callable_type>;
     using task_type = tarp::sched::task<return_type, callable_type>;
 
-    REQUIRE(task_type, abc);
+    static_assert(std::is_base_of_v<abc, task_type>);
 
     ret.reset(new task_type(std::forward<decltype(f)>(f)));
     return ret;
