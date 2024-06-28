@@ -90,6 +90,11 @@ void ThreadEntity::set_state(enum threadState state) {
     m_state = state;
 }
 
+// NOTE: Private function. No lock here.
+enum ThreadEntity::threadState ThreadEntity::get_state() const {
+    return m_state;
+}
+
 void ThreadEntity::spawn(void) {
     set_state(threadState::RUNNING);
     std::thread t {[this] {
@@ -230,6 +235,12 @@ void Oscillator::set_period(const std::chrono::microseconds &period) {
     {
         std::unique_lock l {m_mtx};
         m_period = period;
+
+        /* If the thread entity has been created but not .run() yet,
+         * then keep it that way. Do not signal. */
+        if (get_state() == threadState::INITIALIZED) {
+            return;
+        }
     }
 
     signal();
