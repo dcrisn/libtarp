@@ -64,6 +64,7 @@ protected:
     };
 
     void set_state(enum threadState state);
+    enum ThreadEntity::threadState get_state() const;
 
     /*
      * Hooks derived classes can override -- NOPs by default;
