@@ -1,18 +1,19 @@
 #pragma once
 
+#include <cstdint>
 #include <deque>
+#include <future>
 #include <list>
 #include <map>
 #include <memory>
-
-#include <cstdint>
-#include <future>
+#include <optional>
+#include <type_traits>
 
 #include <tarp/common.h>
 #include <tarp/cxxcommon.hxx>
 #include <tarp/filters.hxx>
+#include <tarp/signal.hxx>
 #include <tarp/type_traits.hxx>
-#include <type_traits>
 
 //
 namespace tarp::sched {
@@ -258,6 +259,42 @@ public:
     virtual std::string get_name() const = 0;
 };
 
+/* A task that:
+ *  - has a deadline
+ *  - can be executed once (one-shot) or at an interval.
+ *  - returns a 'future' that can be waited on to get the actual result of
+ *  executing a callback.
+ *
+ * NOTE: an already-expired deadline (a deadline of NOW or in the past) is
+ * effectively the same as having *no* deadline. Therefore this task can be used
+ * for simple tasks that must be enqueued once only.
+ */
+class interval_task {
+public:
+    ~interval_task() = default;
+
+    /* Execute the function bound to this task */
+    virtual void execute() = 0;
+
+    /* True if we are at or past the deadline, else False */
+    virtual bool expired() const = 0;
+
+    virtual std::chrono::system_clock::time_point
+    get_expiration_time() const = 0;
+
+    /* Postpone the expiration time by the specified delay value */
+    virtual void delay(std::chrono::microseconds delay) = 0;
+
+    /* True if the task can be 'renewed' -- that is re-armed and re-scheduled
+     * for another execution. */
+    virtual bool renewable() const = 0;
+
+    /* Move the expiration time into the future so the task is considered not to
+     * have expired. This is usually called before re-scheduling a renewable
+     * task. */
+    virtual void renew() = 0;
+};
+
 }  // namespace interfaces
 
 //
@@ -339,5 +376,117 @@ std::future<result_type> task<result_type, callable_type>::get_future(void) {
     return m_result.get_future();
 }
 
+//
+
+// Implements much of the interval_task interface that does not involve
+// templates. Not meant to be instantiated directly, only derived from by
+// concrete subclasses.
+class interval_task_mixin : public interfaces::interval_task {
+public:
+    /* If starts_expired=true, then the deadline is in the present. That is, the
+     * task starts off with expired=true. Otherwise if starts_expired=false, the
+     * initial deadline is INTERVAL from NOW.
+     *
+     * NOTE: f is copied by value so it can be saved internally and used when
+     * renewing.
+     */
+    explicit interval_task_mixin(std::chrono::milliseconds interval,
+                                 std::optional<std::size_t> max_num_expirations,
+                                 bool starts_expired);
+
+    bool expired() const override;
+    std::chrono::system_clock::time_point get_expiration_time() const override;
+    void delay(std::chrono::microseconds delay) override;
+    bool renewable() const override;
+    void renew() override;
+
+protected:
+    void set_expiration(std::chrono::system_clock::time_point deadline);
+    std::chrono::system_clock::time_point time_now() const;
+    std::chrono::milliseconds get_interval() const;
+    bool starts_expired() const;
+
+    std::optional<std::size_t> get_max_num_expirations() const;
+
+private:
+    std::chrono::system_clock::time_point m_next_deadline;
+    std::chrono::milliseconds m_interval;
+    std::optional<std::size_t> m_max_num_expirations;
+    std::size_t m_num_expirations {0};
+    bool m_start_expired;
+};
+
+// Logically, an interval_task is an extension of task. However, this risks
+// resulting in a complex inheritance tree and requiring virtual inheritance.
+// That is best avoided (both because of unnecessary overhead and more complex
+// behavior), so keep these as two separate inheritance hierarchies.
+template<typename result_type, typename callable_type>
+class interval_task : public interval_task_mixin {
+public:
+    explicit interval_task(std::chrono::milliseconds interval,
+                           std::optional<std::size_t> max_num_expirations,
+                           bool starts_expired,
+                           callable_type f)
+        : interval_task_mixin(interval, max_num_expirations, starts_expired)
+        , m_f(std::move(f)) {}
+
+    void execute() override;
+
+    /* NOTE: Ideally we would like to use a std::future here as a way to signal
+     * the completion of a task, without risk of blocking. However, the
+     * issue is that a std::promise may only be set once. A new one would need
+     * to be created for every execution, which means the user would need to
+     * keep getting the newly associated future, which is very inconvenient. The
+     * signal mechanism here is much more flexible, but it is blocking: one
+     * single slow handler will block the task indefinitely. Worse, **in a
+     * multithreaded application signals can easily cause deadlocks**. Signal
+     * handlers therefore must run very fast and not block for any period of
+     * time and not do anything that needs locks or runs the risk of deadlocks.
+     * It is the responsibility of the user to ensure this is the case. */
+    auto &signal_result() { return m_result; }
+
+private:
+    using signal_signature =
+      tarp::type_traits::signature_comp_t<void, result_type>;
+    tarp::signal<signal_signature> m_result;
+
+    callable_type m_f;
+};
+
+/* Return a unique_ptr to an abc (abstract base class) that stores a command. */
+template<typename abc, typename callable_type>
+std::unique_ptr<abc>
+make_interval_task_as(std::chrono::milliseconds interval,
+                      std::optional<std::size_t> max_num_expirations,
+                      bool starts_expired,
+                      callable_type &&f) {
+    using return_type = std::invoke_result_t<callable_type>;
+    using interval_command_type =
+      tarp::sched::interval_task<return_type, callable_type>;
+
+    static_assert(std::is_base_of_v<abc, interval_command_type>);
+
+    auto *ptr = (new interval_command_type(interval,
+                                           max_num_expirations,
+                                           starts_expired,
+                                           std::forward<decltype(f)>(f)));
+
+    return std::unique_ptr<abc>(ptr);
+}
+
+template<typename return_type, typename callable_type>
+void interval_task<return_type, callable_type>::execute(void) {
+    /* If the callable returns a result, we must commmunicate it to
+     * the future. If it does not return a result (i.e. it returns void),
+     * we must still call .set_value() on the future without arguments
+     * in order to unblock the future since the promise is now fulfilled.
+     */
+    if constexpr (!std::is_void_v<std::invoke_result_t<decltype(m_f)>>) {
+        m_result.emit(m_f());
+    } else {
+        m_f();
+        m_result.emit();
+    }
+}
 
 }  // namespace tarp::sched
