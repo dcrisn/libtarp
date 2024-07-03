@@ -9,8 +9,6 @@
 
 #include <cstring>
 
-namespace std {
-
 namespace tarp {
 
 /*
