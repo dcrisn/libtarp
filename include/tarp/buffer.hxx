@@ -1,30 +1,26 @@
 #pragma once
 
-#include <cstdint>
-#include <vector>
-#include <memory>
-#include <cstring>
-#include <stdexcept>
 #include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <optional>
+#include <vector>
 
-namespace tarp{
+#include <cstring>
+
+namespace std {
+
+namespace tarp {
 
 /*
- * (1) This gives back a raw writable pointer through which calling
- * code can modify the underlying bytes in the buffer. NOTE this
- * relies on the user writing within bounds. It's therefore unsafe
- * and should be avoided wherever possible. NOTE the pointer returned
- * is only valid while nothing else is pushed or removed from the buffer.
- * If any other operation is invoked on the buffer, a new pointer must
- * be obtained, since the memory location of the underlying bytes
- * might have changed!
  */
-class ByteBuffer{
+class ByteBuffer {
 public:
     ByteBuffer(void) = default;
-    ByteBuffer(const std::vector<uint8_t> &bytes);
-    ByteBuffer(const uint8_t *bytes, std::size_t len);
-    ByteBuffer(int fd, ssize_t num_bytes = -1);
+    ByteBuffer(const std::vector<std::byte> &bytes);
+    ByteBuffer(const std::byte *bytes, std::size_t len);
+    ByteBuffer(int fd, std::int32_t num_bytes = -1);
 
     /*
      * NOTE: when copying or moving from a rhs ByteBuffer,
@@ -36,28 +32,26 @@ public:
     ByteBuffer(const ByteBuffer &buff);
     ByteBuffer &operator=(const ByteBuffer &rhs);
 
-    template <typename T>
-    const T *get(bool advance = true) const;
+    /* Get a T if there are enough bytes */
+    template<typename T>
+    std::optional<T> get(bool advance = true) const;
 
-    /* (1) */
-    template <typename T>
-    T *get_writable(bool advance = true);
+    /* Get a unique_ptr to a T if there are enough bytes, else null. */
+    template<typename T>
+    std::unique_ptr<T> get_ptr(bool advance = true);
 
-    uint8_t get_byte(bool advance = true);
+    std::byte get_byte(bool advance = true);
 
-    template <typename T>
-    std::shared_ptr<T> get_copy(bool advance = true);
-
-    template <typename T>
+    template<typename T>
     bool room4(void) const;
 
-    template <typename T>
+    template<typename T>
     void push(const T &elem);
 
-    void push(const std::vector<uint8_t> &v);
-    void push(const uint8_t *start, size_t len);
+    void push(const std::vector<std::byte> &v);
+    void push(const std::byte *start, size_t len);
 
-    void from_fd(int fd, size_t num_bytes = -1);
+    void from_fd(int fd, std::int32_t num_bytes = -1);
 
     void skip(size_t nbytes);
     void unwind(size_t nbytes);
@@ -72,45 +66,58 @@ private:
     bool within_bounds(void) const;
     void swap(ByteBuffer &other);
 
-    std::vector<std::uint8_t> m_buff;
+    std::vector<std::byte> m_buff;
     mutable std::size_t m_buff_offset = 0;
 };
 
-template <typename T>
-bool ByteBuffer::room4(void) const{
+template<typename T>
+bool ByteBuffer::room4(void) const {
     return (m_buff.size() - m_buff_offset >= sizeof(T));
 }
 
-template <typename T>
-const T *ByteBuffer::get(bool advance) const{
+/*
+ * NOTE: type punning via memcpy is well-defined in C++
+ * under certain circumstances (trivally copiable and
+ * constructible types etc. In this category fall C-compatible
+ * POD types which are of course in fact primarily of interest).
+ * Starting with C++20, this is formally specified in the standard
+ * (refer to proposal p0593r6).
+ * NOTE: reinterpret_cast, as usual, is mostly UB; only use it to cast
+ * an arbitrary type to unsigned char or std::byte.
+ */
+template<typename T>
+std::optional<T> ByteBuffer::get(bool advance) const {
+    if (!room4<T>()) return {};
+
+    static_assert(std::is_trivially_copyable_v<T>);
+    static_assert(std::is_trivially_constructible_v<T>);
+    T ret;
+    memcpy(&ret, get_offset_ptr(), sizeof(T));
+
+    if (advance) m_buff_offset += sizeof(T);
+    return ret;
+}
+
+template<typename T>
+std::unique_ptr<T> ByteBuffer::get_ptr(bool advance) {
     if (!room4<T>()) return nullptr;
-    const T *ret = static_cast<const T *>(get_offset_ptr());
+
+    static_assert(std::is_trivially_copyable_v<T>);
+    static_assert(std::is_trivially_constructible_v<T>);
+    auto ret = std::make_unique<T>();
+    memcpy(ret.get(), get_offset_ptr(), sizeof(T));
 
     if (advance) m_buff_offset += sizeof(T);
 
     return ret;
 }
 
-template <typename T>
-T *ByteBuffer::get_writable(bool advance) {
-    auto const_this = const_cast<const ByteBuffer *>(this);
-    const T *ptr = const_this->get<T>();
-    return const_cast<T*>(ptr);
+template<typename T>
+void ByteBuffer::push(const T &elem) {
+    // NOTE: this is well defined; anything can be cast to std::byte, and
+    // unsigned char.
+    const std::byte *p = reinterpret_cast<const std::byte *>(&elem);
+    m_buff.insert(m_buff.end(), p, p + sizeof(T));
 }
 
-template <typename T>
-std::shared_ptr<T> ByteBuffer::get_copy(bool advance){
-    if (!room4<T>()) return nullptr;
-    T *ret = new T;
-    std::memcpy(ret, get_offset_ptr(), sizeof(T));
-    if (advance) m_buff_offset += sizeof(T);
-    return ret;
-}
-
-template <typename T>
-void ByteBuffer::push(const T &elem){
-    const uint8_t *p = reinterpret_cast<const uint8_t *>(&elem);
-    m_buff.insert(m_buff.end(), p, p+sizeof(T));
-}
-
-}  /* namespace tarp */
+} /* namespace tarp */
