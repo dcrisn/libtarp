@@ -76,6 +76,28 @@ std::optional<bool> to_boolean(const std::string &s);
 // True if the input is convertible to a bool, as described above.
 bool is_boolean(const std::string &s);
 
+// Return an all-lowercase version of s.
+std::string to_lower(const std::string &s);
+
+// Return an all-uppercase version of s.
+std::string to_upper(const std::string &s);
+
+// Return a copy of input with all occurences of pattern replaced with
+// replacement. If use_regex=true, then pattern is taken to be an extended POSIX
+// regular expression pattern instead of a plain string. If
+// case_sensitive=false, then the pattern (irrespective of whether regex is used
+// or not ) is matched without regard to case.
+// NOTE: an optional is returned because an invalid regex pattern will cause the
+// regex engine to throw.
+std::optional<std::string> replace(const std::string &input,
+                                   const std::string &pattern,
+                                   const std::string &replacement,
+                                   bool use_regex = false,
+                                   bool case_sensitive = false);
+
+// Return a copy of input with all occurrences of a replaced with b.
+std::string replace_char(const std::string &input, char a, char b);
+
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////

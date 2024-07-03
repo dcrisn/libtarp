@@ -1,6 +1,7 @@
 #include <cctype>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <regex>
 #include <set>
 
@@ -98,6 +99,34 @@ find_nonmatching_slice(const std::string &input,
 
     return {start_index, end_index};
 }
+
+std::optional<std::string> replace_regex(const std::string &input,
+                                         const std::string &pattern,
+                                         const std::string &replacement,
+                                         bool case_sensitive) {
+    std::string result {input};
+
+    auto flags = std::regex_constants::extended;
+    if (!case_sensitive) {
+        flags |= std::regex_constants::icase;
+    }
+
+    // stray escapes etc can cause an exception to be thrown
+    try {
+        std::regex_replace(result.begin(),
+                           input.begin(),
+                           input.end(),
+                           std::regex(pattern, flags),
+                           replacement);
+    } catch (...) {
+        return std::nullopt;
+    }
+
+    return result;
+}
+
+
+
 };  // anonymous namespace
 
 std::vector<std::string> read_lines(const std::string &filepath,
@@ -274,6 +303,59 @@ std::optional<bool> to_boolean(const std::string &s) {
 
 bool is_boolean(const std::string &s) {
     return to_boolean(s).has_value();
+}
+
+std::string to_lower(const std::string &s) {
+    std::string result {s};
+    std::transform(s.begin(), s.end(), result.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+    return result;
+}
+
+std::string to_upper(const std::string &s) {
+    std::string result {s};
+    std::transform(s.begin(), s.end(), result.begin(), [](unsigned char c) {
+        return std::toupper(c);
+    });
+    return result;
+}
+
+std::optional<std::string> replace(const std::string &input,
+                                   const std::string &pattern,
+                                   const std::string &replacement,
+                                   bool use_regex,
+                                   bool case_sensitive) {
+    if (use_regex) {
+        return replace_regex(input, pattern, replacement, case_sensitive);
+    }
+
+    std::string result;
+    auto indices = case_sensitive ? find_needle_positions(input, pattern)
+                                  : find_needle_positions(to_lower(input),
+                                                          to_lower(pattern));
+    auto patlen = pattern.size();
+
+    std::size_t prev_end_index = 0;
+
+    for (std::size_t idx : indices) {
+        std::cerr << "index is " << idx << std::endl;
+        result += input.substr(prev_end_index, idx - prev_end_index);
+
+        // skip the matched pattern and append replacement in its stead
+        result += replacement;
+        prev_end_index = idx + patlen;
+    }
+
+    result += input.substr(prev_end_index, input.size() - prev_end_index);
+
+    return result;
+}
+
+std::string replace_char(const std::string &s, char a, char b) {
+    std::string result {s};
+    std::replace(result.begin(), result.end(), a, b);
+    return result;
 }
 
 }  // namespace string
