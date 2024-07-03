@@ -339,7 +339,6 @@ std::optional<std::string> replace(const std::string &input,
     std::size_t prev_end_index = 0;
 
     for (std::size_t idx : indices) {
-        std::cerr << "index is " << idx << std::endl;
         result += input.substr(prev_end_index, idx - prev_end_index);
 
         // skip the matched pattern and append replacement in its stead
