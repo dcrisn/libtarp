@@ -269,9 +269,9 @@ public:
  * effectively the same as having *no* deadline. Therefore this task can be used
  * for simple tasks that must be enqueued once only.
  */
-class interval_task {
+class deadline_task {
 public:
-    ~interval_task() = default;
+    ~deadline_task() = default;
 
     /* Execute the function bound to this task */
     virtual void execute() = 0;
@@ -381,7 +381,7 @@ std::future<result_type> task<result_type, callable_type>::get_future(void) {
 // Implements much of the interval_task interface that does not involve
 // templates. Not meant to be instantiated directly, only derived from by
 // concrete subclasses.
-class interval_task_mixin : public interfaces::interval_task {
+class interval_task_mixin : public interfaces::deadline_task {
 public:
     /* If starts_expired=true, then the deadline is in the present. That is, the
      * task starts off with expired=true. Otherwise if starts_expired=false, the
@@ -488,5 +488,67 @@ void interval_task<return_type, callable_type>::execute(void) {
         m_result.emit();
     }
 }
+
+//
+
+template<typename result_type, typename callable_type>
+class deadline_task : public interval_task_mixin {
+public:
+    explicit deadline_task(std::chrono::milliseconds expires_from_now,
+                           callable_type f)
+        : interval_task_mixin(expires_from_now, 1, false), m_f(std::move(f)) {}
+
+    void execute() override;
+    std::future<result_type> get_future();
+
+    // use std::future here; this is semantically a one-shot so that will work
+    // fine.
+private:
+    callable_type m_f;
+    std::promise<result_type> m_result;
+};
+
+/* Return a unique_ptr to an abc (abstract base class) that stores a deadline
+ * task. */
+template<typename abc, typename callable_type>
+std::unique_ptr<abc>
+make_deadline_task_as(std::chrono::milliseconds interval,
+                      std::optional<std::size_t> max_num_expirations,
+                      bool starts_expired,
+                      callable_type &&f) {
+    using return_type = std::invoke_result_t<callable_type>;
+    using interval_command_type =
+      tarp::sched::interval_task<return_type, callable_type>;
+
+    static_assert(std::is_base_of_v<abc, interval_command_type>);
+
+    auto *ptr = (new interval_command_type(interval,
+                                           max_num_expirations,
+                                           starts_expired,
+                                           std::forward<decltype(f)>(f)));
+
+    return std::unique_ptr<abc>(ptr);
+}
+
+template<typename return_type, typename callable_type>
+void deadline_task<return_type, callable_type>::execute(void) {
+    /* If the callable returns a result, we must commmunicate it to
+     * the future. If it does not return a result (i.e. it returns void),
+     * we must still call .set_value() on the future without arguments
+     * in order to unblock the future since the promise is now fulfilled.
+     */
+    if constexpr (!std::is_void_v<std::invoke_result_t<decltype(m_f)>>) {
+        m_result.set_value(m_f());
+    } else {
+        m_f();
+        m_result.set_value();
+    }
+}
+
+template<typename result_type, typename callable_type>
+std::future<result_type> deadline_task<result_type, callable_type>::get_future(void) {
+    return m_result.get_future();
+}
+
 
 }  // namespace tarp::sched
