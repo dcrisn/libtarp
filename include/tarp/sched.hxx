@@ -333,16 +333,18 @@ private:
 /* Create and store a task in a unique_ptr to a task or one of its parent
  * classes. */
 template<typename abc, typename callable_type>
-std::unique_ptr<abc> make_task_as(callable_type &&f) {
-    std::unique_ptr<abc> ret;
-
+std::pair<std::unique_ptr<abc>,
+          std::future<std::invoke_result_t<callable_type>>>
+make_task_as(callable_type &&f) {
     using return_type = std::invoke_result_t<callable_type>;
     using task_type = tarp::sched::task<return_type, callable_type>;
 
     static_assert(std::is_base_of_v<abc, task_type>);
 
-    ret.reset(new task_type(std::forward<decltype(f)>(f)));
-    return ret;
+    auto task = new task_type(std::forward<decltype(f)>(f));
+    auto future = task->get_future();
+
+    return std::make_pair(std::unique_ptr<abc>(task), std::move(future));
 }
 
 template<typename result_type, typename callable_type>
@@ -511,23 +513,18 @@ private:
 /* Return a unique_ptr to an abc (abstract base class) that stores a deadline
  * task. */
 template<typename abc, typename callable_type>
-std::unique_ptr<abc>
-make_deadline_task_as(std::chrono::milliseconds interval,
-                      std::optional<std::size_t> max_num_expirations,
-                      bool starts_expired,
+std::future<std::invoke_result_t<callable_type>>
+make_deadline_task_as(std::chrono::milliseconds expires_from_now,
                       callable_type &&f) {
     using return_type = std::invoke_result_t<callable_type>;
-    using interval_command_type =
-      tarp::sched::interval_task<return_type, callable_type>;
+    using task_t = tarp::sched::deadline_task<return_type, callable_type>;
 
-    static_assert(std::is_base_of_v<abc, interval_command_type>);
+    static_assert(std::is_base_of_v<abc, task_t>);
 
-    auto *ptr = (new interval_command_type(interval,
-                                           max_num_expirations,
-                                           starts_expired,
-                                           std::forward<decltype(f)>(f)));
+    auto *ptr = new task_t(expires_from_now, std::forward<decltype(f)>(f));
+    auto future = ptr->get_future();
 
-    return std::unique_ptr<abc>(ptr);
+    return std::make_pair(std::unique_ptr<abc>(ptr), std::move(future));
 }
 
 template<typename return_type, typename callable_type>
@@ -546,7 +543,8 @@ void deadline_task<return_type, callable_type>::execute(void) {
 }
 
 template<typename result_type, typename callable_type>
-std::future<result_type> deadline_task<result_type, callable_type>::get_future(void) {
+std::future<result_type>
+deadline_task<result_type, callable_type>::get_future(void) {
     return m_result.get_future();
 }
 
