@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tuple>
 #include <type_traits>
 
 #include <tarp/cxxcommon.hxx>
@@ -170,8 +171,37 @@ inline constexpr bool implements_interface_v =
 // interface validators.
 #define VALIDATE(memfn_address, signature) \
     decltype(static_cast<signature>(memfn_address)) = memfn_address
+
 //
 
+// Given a variadic list of types, convert this to a tuple and produce
+// a member type named T. Make T the same as the first (and only) type
+// in types... if the size of the tuple is 1.
+// Otherwise make it a std::tuple<types...> type.
+//
+// Additionally, if the size of the tuple is gt 1 (meaning the member T
+// will in fact be a tuple), then the member 'is_tuple' will be a
+// std::true_type, otherwise it will be a std::false_type.
+// This allows you to check whether the member T is a tuple or not.
+template<typename... types>
+struct type_or_tuple {
+    using tup = std::tuple<types...>;
+    using T = std::conditional_t<(std::tuple_size_v<tup> == 1),
+                                 std::tuple_element_t<0, tup>,
+                                 tup>;
 
+    using is_tuple = std::conditional_t<(std::tuple_size_v<tup> > 1),
+                                        std::true_type,
+                                        std::false_type>;
+};
+
+template<typename... types>
+using type_or_tuple_t = typename type_or_tuple<types...>::T;
+
+template<typename... types>
+inline constexpr bool is_tuple_v = type_or_tuple<types...>::is_tuple::value;
 }  // namespace type_traits
+
+
+
 }  // namespace tarp
