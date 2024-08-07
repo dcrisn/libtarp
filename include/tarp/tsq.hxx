@@ -3,7 +3,7 @@
 #include <deque>
 #include <mutex>
 
-#include <tarp/common.h>
+#include <tarp/cxxcommon.hxx>
 
 namespace tarp {
 
@@ -128,7 +128,7 @@ public:
     }
 
 private:
-    std::deque<T>      m_queue;
+    std::deque<T> m_queue;
     mutable std::mutex m_mtx;
 };
 
