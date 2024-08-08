@@ -271,7 +271,7 @@ public:
  */
 class deadline_task {
 public:
-    ~deadline_task() = default;
+    virtual ~deadline_task() = default;
 
     /* Execute the function bound to this task */
     virtual void execute() = 0;
@@ -408,13 +408,13 @@ protected:
     std::chrono::milliseconds get_interval() const;
     bool starts_expired() const;
 
-    std::optional<std::size_t> get_max_num_expirations() const;
+    std::optional<std::size_t> get_max_num_renewals() const;
 
 private:
     std::chrono::system_clock::time_point m_next_deadline;
     std::chrono::milliseconds m_interval;
-    std::optional<std::size_t> m_max_num_expirations;
-    std::size_t m_num_expirations {0};
+    std::optional<std::size_t> m_max_num_renewals;
+    std::size_t m_num_renewals {0};
     bool m_start_expired;
 };
 
@@ -498,7 +498,7 @@ class deadline_task : public interval_task_mixin {
 public:
     explicit deadline_task(std::chrono::milliseconds expires_from_now,
                            callable_type f)
-        : interval_task_mixin(expires_from_now, 1, false), m_f(std::move(f)) {}
+        : interval_task_mixin(expires_from_now, 0, false), m_f(std::move(f)) {}
 
     void execute() override;
     std::future<result_type> get_future();

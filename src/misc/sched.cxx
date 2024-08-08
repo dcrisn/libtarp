@@ -7,11 +7,11 @@ using T = interval_task_mixin;
 
 interval_task_mixin::interval_task_mixin(
   std::chrono::milliseconds interval,
-  std::optional<std::size_t> max_num_expirations,
+  std::optional<std::size_t> max_num_renewals,
   bool starts_expired)
     : m_interval(interval)
-    , m_max_num_expirations(max_num_expirations)
-    , m_num_expirations(0)
+    , m_max_num_renewals(max_num_renewals)
+    , m_num_renewals(0)
     , m_start_expired(starts_expired) {
     if (starts_expired) {
         m_next_deadline = time_now();
@@ -35,12 +35,12 @@ void T::delay(std::chrono::microseconds delay) {
 
 bool T::renewable() const {
     // no upper limit to the number of times we can expire.
-    if (!m_max_num_expirations.has_value()) {
+    if (!m_max_num_renewals.has_value()) {
         return true;
     }
 
     // an upper limit, but not yet reached
-    if (m_max_num_expirations.value() > m_num_expirations) {
+    if (m_max_num_renewals.value() > m_num_renewals) {
         return true;
     }
 
@@ -69,7 +69,7 @@ void T::renew() {
         m_next_deadline = now + m_interval;
     }
 
-    m_num_expirations++;
+    m_num_renewals++;
 }
 
 void T::set_expiration(std::chrono::system_clock::time_point deadline) {
@@ -88,9 +88,8 @@ bool T::starts_expired() const {
     return m_start_expired;
 }
 
-std::optional<std::size_t> T::get_max_num_expirations() const {
-    return m_max_num_expirations;
+std::optional<std::size_t> T::get_max_num_renewals() const {
+    return m_max_num_renewals;
 }
-
 
 }  // namespace tarp::sched
