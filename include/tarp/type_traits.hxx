@@ -202,6 +202,50 @@ template<typename... types>
 inline constexpr bool is_tuple_v = type_or_tuple<types...>::is_tuple::value;
 }  // namespace type_traits
 
+//
 
+// ---------------------------------------------------------------
+// Policy types meant for compile-time inclusion or removal
+// of mutexes and locks inside a class. Some classes are designed
+// to be thread-safe; however, when used in a single-threaded
+// application or in a context not exposed to multithreaded access,
+// this is overhead that might be better removed, particularly if
+// many locks are used.
+struct thread_safe : public std::true_type {};
+
+struct thread_unsafe : public std::false_type {};
+
+// Define two member types: mutex_t and lock_t. When the policy is thread_safe,
+// mutex_t is a std::mutex and lock_t a std::lock_guard. When the policy is
+// thread+unsafe, the mutex_t and lock_t types are defined to be empty dummy
+// types.
+//
+// A class that wants to support conditionally compiling in/out thread-safety
+// i.e. calls to lock mutexes, needs to:
+// 1) take a policy template parameter, to be forwarded to ts_types.
+// 2) use the lock_t and mutex_t types defined by ts_types.
+template<typename policy>
+struct ts_types {
+    static_assert(std::is_same_v<policy, thread_safe> ||
+                  std::is_same_v<policy, thread_unsafe>);
+
+    struct dummy_mutex {};
+
+    struct dummy_lock {
+        dummy_lock(dummy_mutex &) {}
+    };
+
+    using mutex_t = std::conditional_t<std::is_same_v<policy, thread_safe>,
+                                       std::mutex,
+                                       dummy_mutex>;
+
+    using lock_t = std::conditional_t<std::is_same_v<policy, thread_safe>,
+                                      std::lock_guard<std::mutex>,
+                                      dummy_lock>;
+};
+
+// ---------------------------------------------------------------
+
+//
 
 }  // namespace tarp
