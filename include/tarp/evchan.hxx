@@ -79,15 +79,26 @@ public:
 
 //
 
+namespace impl {
+
 // TODO: for maximum genericity, we could even intialize with a LIST of
 // semaphores to be posted and use an improved tarp/semahore that
 // also supports an eventfd backend etc.
-template<typename... types>
+template<typename ts_policy, typename... types>
 class event_channel
-    : public wchan<event_channel<types...>, types...>
-    , public rchan<event_channel<types...>, types...> {
+    : public wchan<event_channel<ts_policy, types...>, types...>
+    , public rchan<event_channel<ts_policy, types...>, types...> {
+    //
+
     using is_tuple =
       typename tarp::type_traits::type_or_tuple<types...>::is_tuple;
+
+    using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
+    using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
+
+    using this_type = event_channel<ts_policy, types...>;
+
+    //
 
     void do_enqueue_misc() {
         // If there is an upper limit to the capacity of the channel,
@@ -111,7 +122,7 @@ class event_channel
 public:
     using payload_t = tarp::type_traits::type_or_tuple_t<types...>;
 
-    DISALLOW_COPY_AND_MOVE(event_channel<types...>);
+    // DISALLOW_COPY_AND_MOVE(this_type);
 
     // NOTE: semaphore can be null if not necessary i.e. if the
     // channel is merely used as a temporary thread-safe buffer and no
@@ -137,7 +148,7 @@ public:
     // explicitly will be more performant when *moving* or forwarding
     // the parameters into the function, since it is a template.
     void enqueue(const types &...event_data) {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
 
         // if the payload is made up of multiple elements, treat it as a tuple.
         if constexpr (tarp::type_traits::is_tuple_v<types...>) {
@@ -160,25 +171,25 @@ public:
           std::is_same_v<std::remove_reference_t<T>, payload_t> ||
           std::is_convertible_v<std::remove_reference<T>, payload_t>);
 
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
         m_event_data_items.emplace_back(std::forward<T>(event_data));
         do_enqueue_misc();
     }
 
     // True if there are no queued items.
     bool empty() const {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
         return m_event_data_items.empty();
     }
 
     // Return the number of events currently enqueued.
     std::size_t size() const {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
         return m_event_data_items.size();
     }
 
     std::optional<payload_t> get() {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
         if (m_event_data_items.empty()) {
             return std::nullopt;
         }
@@ -201,7 +212,7 @@ public:
     }
 
     std::deque<payload_t> get_all() {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
         decltype(m_event_data_items) events;
         std::swap(events, m_event_data_items);
         return events;
@@ -236,7 +247,7 @@ private:
     const std::uint32_t m_id {m_next_event_buffer_id++};
     const std::optional<std::uint32_t> m_max_buffsz;
 
-    mutable std::mutex m_mtx;
+    mutable mutex_t m_mtx;
     std::deque<payload_t> m_event_data_items;
 
     std::shared_ptr<tarp::binary_semaphore> m_event_sink_notifier;
@@ -244,11 +255,15 @@ private:
 
 //
 
-template<typename... types>
+#if 0
+template<typename ts_policy, typename... types>
 class event_broadcaster {
     static_assert(((std::is_copy_assignable_v<types> ||
                     std::is_copy_constructible_v<types>) &&
                    ...));
+    using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
+    using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
+    using event_channel_t = event_channel<ts_policy, types...>;
 
 public:
     event_broadcaster(bool autodispatch = false)
@@ -266,9 +281,9 @@ public:
     }
 
     void dispatch() {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
 
-        std::vector<std::shared_ptr<event_channel<types...>>> channels;
+        std::vector<std::shared_ptr<event_channel_t>> channels;
 
         for (auto it = m_event_channels.begin();
              it != m_event_channels.end();) {
@@ -306,41 +321,58 @@ public:
     // Get the number of channels connected. This includes dangling
     // channels that  are no longer alive.
     std::size_t num_channels() const {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
         return m_event_channels.size();
     }
 
     void connect(std::weak_ptr<event_channel<types...>> channel) {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
         m_event_channels.push_back(channel);
     }
 
 private:
-    mutable std::mutex m_mtx;
+    mutable mutex_t m_mtx;
     const bool m_autodispatch {false};
-    event_channel<types...> m_event_buffer;
-    std::vector<std::weak_ptr<event_channel<types...>>> m_event_channels;
+    event_channel_t m_event_buffer;
+    std::vector<std::weak_ptr<event_channel_t>> m_event_channels;
 };
+#endif
+
+}  // namespace impl
 
 //
 
-template<typename T>
-class event_stream_pubif {
-public:
-    DISALLOW_COPY_AND_MOVE(event_stream_pubif<T>);
-    event_stream_pubif<T>() = default;
+#if 0
+NOTE: the streamer returns a channel but there is no form of efficient synchrnoization. I.e. no semaphore gets incremented. TODO think about this: does the caller provide a semaphore? Do we keep a vector of weak semaphore pointers? Do we RETURN a semaphore?
+#endif
 
-    // std::shared_ptr<rchan<event_channel<types...>, types...>> channel() {
-    //     return static_cast<T *>(this)->channel();
-    // }
+namespace interfaces {
+
+template<typename T>
+class event_stream {
+public:
+    event_stream<T>() = default;
 
     auto channel() { return static_cast<T *>(this)->channel(); }
 };
+}  // namespace interfaces
 
-template<typename... types>
-class event_stream : public event_stream_pubif<event_stream<types...>> {
+//
+
+namespace impl {
+
+template<typename ts_policy, typename... types>
+class event_rstream
+    : public interfaces::event_stream<event_rstream<ts_policy, types...>> {
+    //
+    using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
+    using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
+    using event_channel_t = event_channel<ts_policy, types...>;
+    using event_rchan_t = rchan<event_channel_t, types...>;
+    using this_type = event_rstream<ts_policy, types...>;
+    //
 public:
-    event_stream(bool autoflush = false) : m_autoflush(autoflush) {}
+    event_rstream(bool autoflush = false) : m_autoflush(autoflush) {}
 
     template<typename... event_data_t>
     void enqueue(event_data_t &&...data) {
@@ -358,13 +390,14 @@ public:
     }
 
     void flush() {
-        std::unique_lock l {m_mtx};
+        lock_t l {m_mtx};
 
         auto events = m_event_buffer.get_all();
 
         auto chan = m_stream_channel.lock();
 
-        // no one is listening, so no point streaming any events!
+        // no one is listening, so no point streaming any events!;
+        // events already enqueued get silently dropped.
         if (!chan) {
             return;
         }
@@ -390,20 +423,19 @@ public:
         return *this;
     }
 
-    std::shared_ptr<rchan<event_channel<types...>, types...>> channel() {
+    std::shared_ptr<event_rchan_t> channel() {
         auto chan = m_stream_channel.lock();
         if (chan) {
             return chan;
         }
 
-        chan = std::make_shared<event_channel<types...>>();
+        chan = std::make_shared<event_channel_t>();
         m_stream_channel = chan;
         return chan;
     }
 
     auto &interface() {
-        return dynamic_cast<event_stream_pubif<event_stream<types...>> &>(
-          *this);
+        return static_cast<interfaces::event_stream<this_type> &>(*this);
     }
 
 private:
@@ -418,23 +450,99 @@ private:
         }
     }
 
-    mutable std::mutex m_mtx;
+    mutable mutex_t m_mtx;
     const bool m_autoflush {false};
-    event_channel<types...> m_event_buffer;
-    std::weak_ptr<event_channel<types...>> m_stream_channel;
+    event_channel_t m_event_buffer;
+    std::weak_ptr<event_channel_t> m_stream_channel;
 };
 
 //
 
+template<typename ts_policy, typename... types>
+class event_wstream
+    : public interfaces::event_stream<event_wstream<ts_policy, types...>> {
+    //
+    using event_channel_t = event_channel<ts_policy, types...>;
+    using event_wchan_t = wchan<event_channel_t, types...>;
+    using payload_t = typename event_channel_t::payload_t;
+    using this_type = event_rstream<ts_policy, types...>;
+    //
+public:
+    // TODO: take notifier, propagate it to channel.
+    event_wstream() { m_stream_channel = std::make_shared<event_channel_t>(); }
+
+    std::optional<payload_t> get() { return m_stream_channel->get(); }
+
+    std::deque<payload_t> get_all() { return m_stream_channel->get_all(); }
+
+    auto &operator>>(std::optional<payload_t> &event) {
+        m_stream_channel->operator>>(event);
+        return *this;
+    }
+
+    std::shared_ptr<event_wchan_t> channel() { return m_stream_channel; }
+
+    auto &interface() {
+        return static_cast<interfaces::event_stream<this_type> &>(*this);
+    }
+
+private:
+    std::shared_ptr<event_channel_t> m_stream_channel;
+};
+
 //
-  // dequeue()
-  // get_channel (and associated it with a label in a lookup dict)
-  // remove_channel
-  // associate it with a semaphore that gets posted when ANY or ALL
-  // of the channels have items enqueued in them.
+// dequeue()
+// get_channel (and associated it with a label in a lookup dict)
+// remove_channel
+// associate it with a semaphore that gets posted when ANY or ALL
+// of the channels have items enqueued in them.
 
 template<typename... types>
 class event_aggregator {};
 
+}  // namespace impl
 
+namespace evchan {
+
+// Thread-safe version of all the classes
+namespace ts {
+template<typename... types>
+using event_channel =
+  impl::event_channel<tarp::type_traits::thread_safe, types...>;
+
+template<typename... types>
+using event_broadcaster =
+  impl::event_channel<tarp::type_traits::thread_safe, types...>;
+
+template<typename... types>
+using event_rstream =
+  impl::event_rstream<tarp::type_traits::thread_safe, types...>;
+
+template<typename... types>
+using event_wstream =
+  impl::event_wstream<tarp::type_traits::thread_safe, types...>;
+}  // namespace ts
+
+//
+
+// Thread-unsafe (i.e. non-thread-safe) version of all the classes.
+namespace tu {
+template<typename... types>
+using event_channel =
+  impl::event_channel<tarp::type_traits::thread_unsafe, types...>;
+
+template<typename... types>
+using event_broadcaster =
+  impl::event_channel<tarp::type_traits::thread_unsafe, types...>;
+
+template<typename... types>
+using event_rstream =
+  impl::event_rstream<tarp::type_traits::thread_unsafe, types...>;
+
+template<typename... types>
+using event_wstream =
+  impl::event_wstream<tarp::type_traits::thread_unsafe, types...>;
+}  // namespace tu
+
+}  // namespace evchan
 }  // namespace tarp
