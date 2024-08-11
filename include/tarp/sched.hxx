@@ -81,7 +81,7 @@ public:
     bool attach_parent(uint32_t parent_id, Scheduler<queue_item_t> &parent);
     bool detach_parent(uint32_t parent_id);
 
-    using filter_type = tarp::sched::filters::Filter<queue_item_t>;
+    using filter_type = sched::filters::Filter<queue_item_t>;
     void attach_filter(uint32_t filter_id,
                        std::shared_ptr<filter_type> filter,
                        uint32_t destination_child_id);
@@ -314,7 +314,7 @@ public:
  * a functor or some such.
  */
 template<typename result_type, typename callable_type>
-class task : public tarp::sched::interfaces::task {
+class task : public sched::interfaces::task {
 public:
     task(callable_type &&func, const std::string &name = "");
     ~task() override {};
@@ -337,7 +337,7 @@ std::pair<std::unique_ptr<abc>,
           std::future<std::invoke_result_t<callable_type>>>
 make_task_as(callable_type &&f) {
     using return_type = std::invoke_result_t<callable_type>;
-    using task_type = tarp::sched::task<return_type, callable_type>;
+    using task_type = sched::task<return_type, callable_type>;
 
     static_assert(std::is_base_of_v<abc, task_type>);
 
@@ -449,7 +449,7 @@ public:
 
 private:
     using signal_signature =
-      tarp::type_traits::signature_comp_t<void, result_type>;
+      type_traits::signature_comp_t<void, result_type>;
     tarp::signal<signal_signature> m_result;
 
     callable_type m_f;
@@ -464,7 +464,7 @@ make_interval_task_as(std::chrono::milliseconds interval,
                       callable_type &&f) {
     using return_type = std::invoke_result_t<callable_type>;
     using interval_command_type =
-      tarp::sched::interval_task<return_type, callable_type>;
+      sched::interval_task<return_type, callable_type>;
 
     static_assert(std::is_base_of_v<abc, interval_command_type>);
 
@@ -517,7 +517,7 @@ std::future<std::invoke_result_t<callable_type>>
 make_deadline_task_as(std::chrono::milliseconds expires_from_now,
                       callable_type &&f) {
     using return_type = std::invoke_result_t<callable_type>;
-    using task_t = tarp::sched::deadline_task<return_type, callable_type>;
+    using task_t = sched::deadline_task<return_type, callable_type>;
 
     static_assert(std::is_base_of_v<abc, task_t>);
 
