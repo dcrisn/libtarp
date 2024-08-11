@@ -19,3 +19,11 @@
  * Stringify token x to allow concatenation with string literals */
 #define tostring__(x) #x
 #define tkn2str(x)    tostring__(x)
+
+#define THROW_IF_NULL(ptr)                                                 \
+    do {                                                                   \
+        if (ptr == nullptr) {                                              \
+            throw std::logic_error(std::string("Pointer") + tkn2str(ptr) + \
+                                   " unexpectedly null");                  \
+        }                                                                  \
+    } while (0)

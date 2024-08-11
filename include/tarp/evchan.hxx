@@ -12,6 +12,8 @@
 #include <tarp/semaphore.hxx>
 #include <tarp/type_traits.hxx>
 
+#include <iostream>
+
 //
 
 namespace tarp {
@@ -94,7 +96,7 @@ class event_channel
         // unacceptable, since a slow consumer may this way inadvertently
         // cause a DOS for all and any other consumers.
         if (m_max_buffsz.has_value()) {
-            if (m_event_data_items.size() > m_max_buffsz) {
+            if (m_event_data_items.size() > *m_max_buffsz) {
                 // discard oldest
                 m_event_data_items.pop_front();
             }
@@ -109,7 +111,7 @@ class event_channel
 public:
     using payload_t = tarp::type_traits::type_or_tuple_t<types...>;
 
-    struct void_event_t {};
+    DISALLOW_COPY_AND_MOVE(event_channel<types...>);
 
     // NOTE: semaphore can be null if not necessary i.e. if the
     // channel is merely used as a temporary thread-safe buffer and no
@@ -122,14 +124,18 @@ public:
         }
     }
 
+    // Get an id uniquely identifying the event channel. This is unique across
+    // all instances of this class at any given time.
     std::uint32_t get_id() const { return m_id; }
 
+    // Enqueue an event into the channel.
     // If the payload type is a tuple made up of various items,
     // this function is a convenience that allows passing discrete
     // elements for the parameters. These will be implicitly tied together
-    // into a std::tuple. NOTE: the other overload where std::tuple would
-    // be passed explicitly will be more performant when *moving* or
-    // forwarding the parameters into the function, since it is a template.
+    // into a std::tuple: enqueue(a,b,c) => enqueue({a,b,c}).
+    // NOTE: the other overload where std::tuple would be passed
+    // explicitly will be more performant when *moving* or forwarding
+    // the parameters into the function, since it is a template.
     void enqueue(const types &...event_data) {
         std::unique_lock l {m_mtx};
 
@@ -214,7 +220,13 @@ public:
     }
 
     auto &operator>>(std::optional<payload_t> &event) {
-        event = get();
+        if constexpr (((std::is_copy_assignable_v<types> ||
+                        std::is_copy_constructible_v<types>) &&
+                       ...)) {
+            event = get();
+        } else {
+            event = std::move(get());
+        }
         return *this;
     }
 
@@ -275,7 +287,7 @@ public:
         auto events = m_event_buffer.get_all();
         std::size_t num_channels = channels.size();
 
-        for (const auto &event : events) {
+        for (auto &event : events) {
             for (std::size_t i = 0; i < num_channels; ++i) {
                 channels[i]->enqueue(event);
             }
@@ -312,20 +324,37 @@ private:
 
 //
 
+template<typename T>
+class event_stream_pubif {
+public:
+    DISALLOW_COPY_AND_MOVE(event_stream_pubif<T>);
+    event_stream_pubif<T>() = default;
+
+    // std::shared_ptr<rchan<event_channel<types...>, types...>> channel() {
+    //     return static_cast<T *>(this)->channel();
+    // }
+
+    auto channel() { return static_cast<T *>(this)->channel(); }
+};
+
 template<typename... types>
-class event_stream {
+class event_stream : public event_stream_pubif<event_stream<types...>> {
 public:
     event_stream(bool autoflush = false) : m_autoflush(autoflush) {}
 
     template<typename... event_data_t>
     void enqueue(event_data_t &&...data) {
-        m_event_buffer.enqueue(std::forward<event_data_t>(data)...);
-
-        // if autodispatch is enabled, then always flush immediately: do not
-        // buffer.
+        // if autoflush enabled, then do not buffer.
         if (m_autoflush) {
-            flush();
+            auto chan = m_stream_channel.lock();
+            if (!chan) {
+                return;
+            }
+            push_to_channel(data..., *chan);
+            return;
         }
+
+        m_event_buffer.enqueue(std::forward<event_data_t>(data)...);
     }
 
     void flush() {
@@ -361,17 +390,34 @@ public:
         return *this;
     }
 
-    std::shared_ptr<event_channel<types...>> channel() {
+    std::shared_ptr<rchan<event_channel<types...>, types...>> channel() {
         auto chan = m_stream_channel.lock();
         if (chan) {
             return chan;
         }
 
-        m_stream_channel = std::make_shared<event_channel<types...>>();
-        return m_stream_channel;
+        chan = std::make_shared<event_channel<types...>>();
+        m_stream_channel = chan;
+        return chan;
+    }
+
+    auto &interface() {
+        return dynamic_cast<event_stream_pubif<event_stream<types...>> &>(
+          *this);
     }
 
 private:
+    template<typename T, typename C>
+    void push_to_channel(T &&data, C &chan) {
+        if constexpr (((std::is_copy_assignable_v<types> ||
+                        std::is_copy_constructible_v<types>) &&
+                       ...)) {
+            chan.enqueue(data);
+        } else {
+            chan.enqueue(std::move(std::move(data)));
+        }
+    }
+
     mutable std::mutex m_mtx;
     const bool m_autoflush {false};
     event_channel<types...> m_event_buffer;
@@ -379,6 +425,13 @@ private:
 };
 
 //
+
+//
+  // dequeue()
+  // get_channel (and associated it with a label in a lookup dict)
+  // remove_channel
+  // associate it with a semaphore that gets posted when ANY or ALL
+  // of the channels have items enqueued in them.
 
 template<typename... types>
 class event_aggregator {};
