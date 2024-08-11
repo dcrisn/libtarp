@@ -12,8 +12,6 @@
 #include <tarp/semaphore.hxx>
 #include <tarp/type_traits.hxx>
 
-#include <iostream>
-
 //
 
 namespace tarp {
@@ -26,11 +24,21 @@ namespace tarp {
 
 #define REAL static_cast<C *>(this)
 
+//
+
+// Interface of a write-only event channel.
+// CRTP is used for static dispatch.
+// Refer to the corresponding event_channel member functions
+// being forwarded to fmi.
 template<typename C, typename... types>
 class wchan {
     using payload_t = tarp::type_traits::type_or_tuple_t<types...>;
 
 public:
+    // prevent object slicing!
+    DISALLOW_COPY_AND_MOVE(wchan);
+    wchan() = default;
+
     std::uint32_t get_id() const { return REAL->get_id(); }
 
     void enqueue(const types &...event_data) {
@@ -42,8 +50,6 @@ public:
         return REAL->enqueue(std::forward<T>(event_data));
     }
 
-    // More convenient and expressive overloads for enqueuing
-    // and dequeueing an element.
     auto &operator<<(const payload_t &event) { return REAL->operator<<(event); }
 
     auto &operator<<(payload_t &&event) {
@@ -53,17 +59,24 @@ public:
 
 //
 
+// Interface of a read-only event channel.
+// CRTP is used for static dispatch.
+// Refer to the corresponding event_channel member functions
+// being forwarded to fmi.
 template<typename C, typename... types>
 class rchan {
     using payload_t = tarp::type_traits::type_or_tuple_t<types...>;
 
 public:
+    // prevent object slicing!
+    DISALLOW_COPY_AND_MOVE(rchan);
+
+    rchan() = default;
+
     std::uint32_t get_id() const { return REAL->get_id(); }
 
-    // True if there are no queued items.
     bool empty() const { return REAL->empty(); }
 
-    // Return the number of events currently enqueued.
     std::size_t size() const { return REAL->size(); }
 
     std::optional<payload_t> get() { return REAL->get(); }
@@ -81,6 +94,34 @@ public:
 
 namespace impl {
 
+//
+
+// An event channel is a typed queue that stores data items of the specified
+// type.
+//   *
+// A channel can be enqueued into and dequeued from. Some other basic
+// operations are provided. On dequeuing/enqueueing, the specified notifier
+// is signaled.
+//   *
+// A channel can be bounded/unbounded. If bounded, once the maximum capacity
+// is reached, a subsequent enqueueing will be made room for by discarding
+// the oldest data item in the channel.
+//   *
+// ts_policy is used to compile in/out mutex-locking calls for thread-safety.
+//   *
+// Channel directionality (send/write or receive/read) is achieved/enforced
+// by casting the event_channel to an rchan (read channel) or wchan
+// (write-channel). Note the event_channel inherits from both of those
+// two interfaces using CRTP. CRTP makes it possible to use static dispatch
+// thus avoiding the overhead of dynamic dispatch and dynamic binding.
+// And iheriting these interfaces enables implicit conversion from an
+// event_channel to either interface (upcasting does not need an explicit
+// cast).
+//
+// NOTE: producer-consumer and/or pub-sub etc semantics are implemented
+// by higher-level classes and through judicious use of the rchan & wchan
+// interfaces.
+//
 // TODO: for maximum genericity, we could even intialize with a LIST of
 // semaphores to be posted and use an improved tarp/semahore that
 // also supports an eventfd backend etc.
@@ -92,15 +133,12 @@ class event_channel
 
     using is_tuple =
       typename tarp::type_traits::type_or_tuple<types...>::is_tuple;
-
     using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
     using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
-
     using this_type = event_channel<ts_policy, types...>;
 
     //
-
-    void do_enqueue_misc() {
+    void enqueue_do_misc() {
         // If there is an upper limit to the capacity of the channel,
         // we discard the oldest entry to make room. Conversely, we could
         // block instead and wait until there is room, but this is typically
@@ -122,11 +160,11 @@ class event_channel
 public:
     using payload_t = tarp::type_traits::type_or_tuple_t<types...>;
 
-    // DISALLOW_COPY_AND_MOVE(this_type);
+    DISALLOW_COPY_AND_MOVE(event_channel);
 
-    // NOTE: semaphore can be null if not necessary i.e. if the
-    // channel is merely used as a temporary thread-safe buffer and no
-    // notification is needed.
+    // NOTE: semaphore can be null if not necessary e.g. if the
+    // channel is merely used as a temporary thread-safe buffer and
+    // no notification is needed.
     event_channel(std::optional<std::uint32_t> max_buffer_size = std::nullopt,
                   std::shared_ptr<tarp::binary_semaphore> sem = nullptr)
         : m_max_buffsz(max_buffer_size), m_event_sink_notifier(sem) {
@@ -135,8 +173,8 @@ public:
         }
     }
 
-    // Get an id uniquely identifying the event channel. This is unique across
-    // all instances of this class at any given time.
+    // Get an id uniquely identifying the event channel. This is unique
+    // across all instances of this class at any given time.
     std::uint32_t get_id() const { return m_id; }
 
     // Enqueue an event into the channel.
@@ -146,12 +184,13 @@ public:
     // into a std::tuple: enqueue(a,b,c) => enqueue({a,b,c}).
     // NOTE: the other overload where std::tuple would be passed
     // explicitly will be more performant when *moving* or forwarding
-    // the parameters into the function, since it is a template.
+    // the parametersinto the function, since it is a template.
     void enqueue(const types &...event_data) {
         lock_t l {m_mtx};
 
         // if the payload is made up of multiple elements, treat it as a tuple.
-        if constexpr (tarp::type_traits::is_tuple_v<types...>) {
+        // if constexpr (tarp::type_traits::is_tuple_v<types...>) {
+        if constexpr (is_tuple::value) {
             m_event_data_items.push_back(std::make_tuple(event_data...));
         }
 
@@ -160,11 +199,12 @@ public:
             m_event_data_items.push_back(event_data...);
         }
 
-        do_enqueue_misc();
+        enqueue_do_misc();
     }
 
     // This overload takes an actual tuple as the argument
-    // -- IFF payload_t is an actual tuple.
+    // -- IFF payload_t is an actual tuple (i.e. if is_tuple::value
+    // is true).
     template<typename T>
     void enqueue(T &&event_data) {
         static_assert(
@@ -173,7 +213,7 @@ public:
 
         lock_t l {m_mtx};
         m_event_data_items.emplace_back(std::forward<T>(event_data));
-        do_enqueue_misc();
+        enqueue_do_misc();
     }
 
     // True if there are no queued items.
@@ -188,6 +228,10 @@ public:
         return m_event_data_items.size();
     }
 
+    // Return a std::optional result; this is empty if there is
+    // nothing in the channel; otherwise it's the oldest data item
+    // in the channel. If the data item will be copied into the
+    // optional if copiable else moved if movable.
     std::optional<payload_t> get() {
         lock_t l {m_mtx};
         if (m_event_data_items.empty()) {
@@ -199,6 +243,7 @@ public:
         // this is to cover both copy-assignable/copy-construcible and
         // move-only semantics objects. Either copying or moving must be
         // supported, otherwise the channel cannot be used.
+        // The data items are removed from the channel.
         if constexpr (((std::is_copy_assignable_v<types> ||
                         std::is_copy_constructible_v<types>) &&
                        ...)) {
@@ -211,6 +256,8 @@ public:
         return data;
     }
 
+    // Return a deque of all data items currently in the channel.
+    // The data items are removed from the channel.
     std::deque<payload_t> get_all() {
         lock_t l {m_mtx};
         decltype(m_event_data_items) events;
@@ -255,7 +302,22 @@ private:
 
 //
 
-#if 0
+// A single-producer multi-consumer (SPMC) event dispatcher.
+// This can employed as a rudimentary publish-subscribe interface,
+// i.e. the asynchronous counterpart to the observer (aka
+// signals&slots) design pattern. The 'subscribers' can attach
+// channels to the broadcaster, thus forming a broadcast group.
+// An event enqueued to the broadcaster will then be written
+// to every single attached channel.
+//
+// A class embedding an event_broadcaster therefore becomes
+// an event publisher; the 'topic'/event is defined by whatever
+// name is given to it by the publisher and by the data type
+// of the event channel.
+//
+// NOTE that by definition the 'event' i.e. the data item
+// must be copiable, since one event is cloned to be written
+// to an arbitrary number of connected channels.
 template<typename ts_policy, typename... types>
 class event_broadcaster {
     static_assert(((std::is_copy_assignable_v<types> ||
@@ -266,9 +328,16 @@ class event_broadcaster {
     using event_channel_t = event_channel<ts_policy, types...>;
 
 public:
+    DISALLOW_COPY_AND_MOVE(event_broadcaster);
+
+    // If autodispatch is enabled, then any event pushed to the brodacaster
+    // is immediately broadcast. OTOH if autodispatch=false, events are
+    // buffered into a first-stage queue and only get broadcast when
+    // .dispatch() is invoked.
     event_broadcaster(bool autodispatch = false)
         : m_autodispatch(autodispatch) {}
 
+    // Enqueue an event, pending broadcast.
     template<typename... event_data_t>
     void enqueue(event_data_t &&...data) {
         m_event_buffer.enqueue(std::forward<event_data_t>(data)...);
@@ -280,6 +349,7 @@ public:
         }
     }
 
+    // Flush the event buffer: broadcast all buffered events.
     void dispatch() {
         lock_t l {m_mtx};
 
@@ -319,7 +389,7 @@ public:
     }
 
     // Get the number of channels connected. This includes dangling
-    // channels that  are no longer alive.
+    // channels that are no longer alive.
     std::size_t num_channels() const {
         lock_t l {m_mtx};
         return m_event_channels.size();
@@ -336,7 +406,6 @@ private:
     event_channel_t m_event_buffer;
     std::vector<std::weak_ptr<event_channel_t>> m_event_channels;
 };
-#endif
 
 }  // namespace impl
 
