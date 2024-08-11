@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <tuple>
 #include <type_traits>
 
@@ -200,7 +201,6 @@ using type_or_tuple_t = typename type_or_tuple<types...>::T;
 
 template<typename... types>
 inline constexpr bool is_tuple_v = type_or_tuple<types...>::is_tuple::value;
-}  // namespace type_traits
 
 //
 
@@ -224,7 +224,9 @@ struct thread_unsafe : public std::false_type {};
 // i.e. calls to lock mutexes, needs to:
 // 1) take a policy template parameter, to be forwarded to ts_types.
 // 2) use the lock_t and mutex_t types defined by ts_types.
-template<typename policy>
+template<typename policy,
+         typename mutex_type = std::mutex,
+         template<typename> typename lock_type = std::lock_guard>
 struct ts_types {
     static_assert(std::is_same_v<policy, thread_safe> ||
                   std::is_same_v<policy, thread_unsafe>);
@@ -236,13 +238,15 @@ struct ts_types {
     };
 
     using mutex_t = std::conditional_t<std::is_same_v<policy, thread_safe>,
-                                       std::mutex,
+                                       mutex_type,
                                        dummy_mutex>;
 
     using lock_t = std::conditional_t<std::is_same_v<policy, thread_safe>,
-                                      std::lock_guard<std::mutex>,
+                                      lock_type<std::mutex>,
                                       dummy_lock>;
 };
+
+}  // namespace type_traits
 
 // ---------------------------------------------------------------
 
