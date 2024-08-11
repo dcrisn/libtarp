@@ -9,7 +9,7 @@ namespace tarp {
 
 /* Semaphore implementation -- only useful pre c++20, when semaphores are
  * introduced in the c++ stdlib.
- * NOTE: set max_count=2 if you need binary semaphore semantics (or better, use
+ * NOTE: set max_count=1 if you need binary semaphore semantics (or better, use
  * the binary_semaphore alias).
  */
 template<std::uint32_t max_count = std::numeric_limits<std::uint32_t>::max()>
@@ -27,6 +27,8 @@ public:
         m_counter = 0;
     }
 
+    // Signal the semaphore. Iff the internal counter has not reached
+    // the maximum set value, then the counter is incremented as well.
     void release() {
         std::unique_lock l {m_mtx};
 
@@ -37,6 +39,8 @@ public:
         m_condvar.notify_all();
     }
 
+    // Block until the semaphore is signaled AND the internal counter is
+    // non-zero.
     void acquire() {
         std::unique_lock l(m_mtx);
 
@@ -46,6 +50,8 @@ public:
         --m_counter;
     }
 
+    // Try to decrement the internal counter; return immediately.
+    // True if successful, False if failed (==> counter is 0)
     bool try_acquire() {
         std::unique_lock l {m_mtx};
 
@@ -83,6 +89,6 @@ private:
     const std::uint32_t m_max_count;
 };
 
-using binary_semaphore = semaphore<2>;
+using binary_semaphore = semaphore<1>;
 
 }  // namespace tarp
