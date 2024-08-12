@@ -204,6 +204,17 @@ inline constexpr bool is_tuple_v = type_or_tuple<types...>::is_tuple::value;
 
 //
 
+// Given a std::tuple<types...>, convert this to a function signature
+// of the form void(types...).
+// This is achieved through the specialization below.
+template<typename tup>
+struct tuple_to_signature;
+
+template<typename... types>
+struct tuple_to_signature<std::tuple<types...>> {
+    using signature = void(types...);
+};
+
 // ---------------------------------------------------------------
 // Policy types meant for compile-time inclusion or removal
 // of mutexes and locks inside a class. Some classes are designed

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 #include <tarp/cxxcommon.hxx>
@@ -223,6 +224,7 @@ class event_channel
 
 public:
     using payload_t = tarp::type_traits::type_or_tuple_t<types...>;
+    using Ts = std::tuple<types...>;
 
     DISALLOW_COPY_AND_MOVE(event_channel);
 
@@ -391,6 +393,7 @@ class event_broadcaster {
     using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
     using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
     using event_channel_t = event_channel<ts_policy, types...>;
+    using wchan_t = wchan<event_channel_t, types...>;
 
 public:
     DISALLOW_COPY_AND_MOVE(event_broadcaster);
@@ -418,7 +421,7 @@ public:
     void dispatch() {
         lock_t l {m_mtx};
 
-        std::vector<std::shared_ptr<event_channel_t>> channels;
+        std::vector<std::shared_ptr<wchan_t>> channels;
 
         for (auto it = m_event_channels.begin();
              it != m_event_channels.end();) {
@@ -460,7 +463,7 @@ public:
         return m_event_channels.size();
     }
 
-    void connect(std::weak_ptr<event_channel<types...>> channel) {
+    void connect(std::weak_ptr<wchan_t> channel) {
         lock_t l {m_mtx};
         m_event_channels.push_back(channel);
     }
@@ -469,7 +472,7 @@ private:
     mutable mutex_t m_mtx;
     const bool m_autodispatch {false};
     event_channel_t m_event_buffer;
-    std::vector<std::weak_ptr<event_channel_t>> m_event_channels;
+    std::vector<std::weak_ptr<wchan_t>> m_event_channels;
 };
 
 //
@@ -481,8 +484,7 @@ NOTE: the streamer returns a channel but there is no form of efficient synchrnoi
 //
 
 template<typename ts_policy, typename... types>
-class event_rstream
-    : public event_stream<event_rstream<ts_policy, types...>> {
+class event_rstream : public event_stream<event_rstream<ts_policy, types...>> {
     //
     using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
     using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
@@ -627,8 +629,129 @@ private:
 // associate it with a semaphore that gets posted when ANY or ALL
 // of the channels have items enqueued in them.
 
-template<typename... types>
-class event_aggregator {};
+template<typename ts_policy, typename key_t, typename... types>
+class event_aggregator {
+    //
+    using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
+    using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
+    using event_channel_t = event_channel<ts_policy, types...>;
+    using event_wchan_t = wchan<event_channel_t, types...>;
+    using payload_t = typename event_channel_t::payload_t;
+    using this_type = event_rstream<ts_policy, types...>;
+    //
+public:
+    DISALLOW_COPY_AND_MOVE(event_aggregator);
+
+    event_aggregator() {};
+
+    std::shared_ptr<event_wchan_t> channel(const key_t &k) {
+        lock_t l {m_mtx};
+
+        auto found = m_index.find(k);
+        if (found != m_index.end()) {
+            auto chan = found->second.lock();
+            if (chan) {
+                return chan;
+            }
+        }
+
+        auto chan = std::make_shared<event_channel_t>();
+        m_index[k] = chan;
+        m_channels.push_back(chan);
+        return chan;
+    }
+
+    void remove(const key_t &k) {
+        lock_t l {m_mtx};
+
+        std::shared_ptr<event_channel_t> chan;
+
+        auto found = m_index.find(k);
+        if (found != m_index.end()) {
+            chan = found->second.lock();
+            m_index.erase(found);
+        }
+
+        if (!chan) {
+            return;
+        }
+
+        for (auto it = m_channels.begin(); it != m_channels.end();) {
+            if (*it == chan) {
+                it = m_channels.erase(it);
+                continue;
+            }
+            ++it;
+        }
+    }
+
+    std::optional<payload_t> get() {
+        lock_t l {m_mtx};
+        if (m_channels.empty()) {
+            return std::nullopt;
+        }
+
+        std::size_t n = m_channels.size();
+        m_idx = m_idx % n;
+
+        for (unsigned i = 0; i < n; ++i) {
+            auto res = m_channels[m_idx]->get();
+            m_idx = (m_idx + 1) % n;
+            if (res.has_value()) {
+                return res;
+            }
+        }
+        return std::nullopt;
+    }
+
+    auto &operator>>(std::optional<payload_t> &event) {
+        event = get();
+        return *this;
+    }
+
+    std::deque<payload_t> get_all() {
+        lock_t l {m_mtx};
+
+        if (m_channels.empty()) {
+            return {};
+        }
+
+        std::size_t n = m_channels.size();
+        std::vector<std::deque<payload_t>> events;
+        std::deque<payload_t> results;
+
+        // get all events currently sitting in the queues
+        for (std::size_t i = 0; i < n; ++i) {
+            events.emplace_back(m_channels[i].get_all());
+        }
+
+        m_idx = m_idx % n;
+
+        // round-robin over all event channels, taking one event from
+        // each channel.
+        while (!events.empty()) {
+            auto i = m_idx;
+
+            if (events[i].empty()) {
+                events.erase(events.begin() + i);
+                m_idx %= n;
+                continue;
+            }
+
+            results.emplace_back(std::move(events.front()));
+            events.pop_front();
+            m_idx = (m_idx + 1) % n;
+        }
+
+        return results;
+    }
+
+private:
+    mutable std::mutex m_mtx;
+    std::size_t m_idx {0};
+    std::vector<std::shared_ptr<event_channel_t>> m_channels;
+    std::unordered_map<key_t, std::weak_ptr<event_channel_t>> m_index;
+};
 
 }  // namespace impl
 
@@ -643,6 +766,10 @@ using event_channel =
 template<typename... types>
 using event_broadcaster =
   impl::event_channel<tarp::type_traits::thread_safe, types...>;
+
+template<typename key_t, typename... types>
+using event_aggregator =
+  impl::event_aggregator<tarp::type_traits::thread_safe, key_t, types...>;
 
 template<typename... types>
 using event_rstream =
@@ -665,6 +792,10 @@ template<typename... types>
 using event_broadcaster =
   impl::event_channel<tarp::type_traits::thread_unsafe, types...>;
 
+template<typename key_t, typename... types>
+using event_aggregator =
+  impl::event_aggregator<tarp::type_traits::thread_safe, key_t, types...>;
+
 template<typename... types>
 using event_rstream =
   impl::event_rstream<tarp::type_traits::thread_unsafe, types...>;
@@ -672,6 +803,7 @@ using event_rstream =
 template<typename... types>
 using event_wstream =
   impl::event_wstream<tarp::type_traits::thread_unsafe, types...>;
+
 }  // namespace tu
 
 }  // namespace evchan
