@@ -15,7 +15,7 @@
 //
 
 namespace tarp {
-
+namespace evchan {
 //
 
 #ifdef REAL
@@ -26,7 +26,9 @@ namespace tarp {
 
 //
 
-// Interface of a write-only event channel.
+namespace interfaces {
+
+// Interface for a write-only event channel.
 // CRTP is used for static dispatch.
 // Refer to the corresponding event_channel member functions
 // being forwarded to fmi.
@@ -38,6 +40,7 @@ public:
     // prevent object slicing!
     DISALLOW_COPY_AND_MOVE(wchan);
     wchan() = default;
+    virtual ~wchan() = default;
 
     std::uint32_t get_id() const { return REAL->get_id(); }
 
@@ -59,7 +62,7 @@ public:
 
 //
 
-// Interface of a read-only event channel.
+// Interface for a read-only event channel.
 // CRTP is used for static dispatch.
 // Refer to the corresponding event_channel member functions
 // being forwarded to fmi.
@@ -72,6 +75,7 @@ public:
     DISALLOW_COPY_AND_MOVE(rchan);
 
     rchan() = default;
+    virtual ~rchan() = default;
 
     std::uint32_t get_id() const { return REAL->get_id(); }
 
@@ -88,11 +92,71 @@ public:
     }
 };
 
+//
+
+// Restricted interface for an event stream.
+//
+// A single-producer-multi-consumer (SPMC) or multi-producer-single-consumer
+// (MPSC) event channel, + a thin interface layer on top.
+//
+// Unlike the event_broadcaster, which multiple channels can be attached to,
+// forming a broadcast group, the event_stream consists of a singular channel
+// that carries a stream of events, hence the name of the class.
+// The stream's directionality is given by that of the underlying channel:
+// an rstream uses an rchan, and a wstream uses a wchan.
+//
+// Unlike the event_broadcaster, since events are always enqueued to a single
+// channel (the stream channel) and only dequeued from this one channel once,
+// events needs not be copiable: move-only objects such as std::unique_ptr
+// can be enqueued.
+//
+// In the most basic scenario, the stream joins a single producer to a single
+// consumer. The object exposing the stream fundamentally sets the producer and
+// consumer roles based on whether the stream is an r- or a w- stream,
+// respectively. The object that exposes the stream must by definition be
+// 'well-known' so interested consumers or producers (depending on the direction
+// of the stream, as mentioned) must themselves connect to the stream by
+// obtaining a shared_ptr to its (r/w) channel.
+//
+// The object exposing the stream decides on the type of the stream depending
+// on the role it wants or needs to play: it uses an rstream if it wants to be
+// a producer, and it uses a wstream if it wants to be a consumer. That is, the
+// 'r' and 'w' directional prefixes are from the POV of _clients_ of this object
+// (i.e. other objects wanting to connect to the stream).
+// This means this side of the stream is always fixed to 1 participant
+// (1 consumer if a wstream, 1 producer if an rstream). The other side, however
+// need not be fixed to one. Any number of producers (for a wstream) or
+// consumers (for an rstream) can connect to the stream.
+// * * *
+// HOWEVER, NOTE: whereas in the case of the event_broadcaster the SPMC
+// topology entails broadcast semantics (an event posted by the producer is
+// broadcast to all the consumers), here it has **anycast** semantics:
+// an event posted by the producer is dequeued by a single one (any one)
+// of an arbitrary number of consumers. This is since the there is a single
+// channel and since the data item could be move-only (e.g. a std::unique_ptr).
+// A suitable use case would be delivering tasks to a thread pool where it
+// is acceptable for any one of a number of workers to get whichever task.
+//   *
+// NOTE: CRTP is used for interface inheritance to enable static dispatch.
+template<typename T>
+class event_stream {
+public:
+    DISALLOW_COPY_AND_MOVE(event_stream);
+    event_stream<T>() = default;
+    virtual ~event_stream() = default;
+
+    auto channel() { return static_cast<T *>(this)->channel(); }
+};
+
+
+}  // namespace interfaces
+
 #undef REAL
 
 //
 
 namespace impl {
+using namespace interfaces;
 
 //
 
@@ -107,7 +171,8 @@ namespace impl {
 // is reached, a subsequent enqueueing will be made room for by discarding
 // the oldest data item in the channel.
 //   *
-// ts_policy is used to compile in/out mutex-locking calls for thread-safety.
+// ts_policy is used to compile in/out mutex-locking calls in order to
+// add or remove thread-safety.
 //   *
 // Channel directionality (send/write or receive/read) is achieved/enforced
 // by casting the event_channel to an rchan (read channel) or wchan
@@ -119,8 +184,7 @@ namespace impl {
 // cast).
 //
 // NOTE: producer-consumer and/or pub-sub etc semantics are implemented
-// by higher-level classes and through judicious use of the rchan & wchan
-// interfaces.
+// by higher-level classes and by using the rchan & wchan interfaces.
 //
 // TODO: for maximum genericity, we could even intialize with a LIST of
 // semaphores to be posted and use an improved tarp/semahore that
@@ -303,6 +367,7 @@ private:
 //
 
 // A single-producer multi-consumer (SPMC) event dispatcher.
+//
 // This can employed as a rudimentary publish-subscribe interface,
 // i.e. the asynchronous counterpart to the observer (aka
 // signals&slots) design pattern. The 'subscribers' can attach
@@ -316,7 +381,7 @@ private:
 // of the event channel.
 //
 // NOTE that by definition the 'event' i.e. the data item
-// must be copiable, since one event is cloned to be written
+// must be copyable, since one event is cloned to be written
 // to an arbitrary number of connected channels.
 template<typename ts_policy, typename... types>
 class event_broadcaster {
@@ -407,32 +472,17 @@ private:
     std::vector<std::weak_ptr<event_channel_t>> m_event_channels;
 };
 
-}  // namespace impl
-
 //
 
 #if 0
 NOTE: the streamer returns a channel but there is no form of efficient synchrnoization. I.e. no semaphore gets incremented. TODO think about this: does the caller provide a semaphore? Do we keep a vector of weak semaphore pointers? Do we RETURN a semaphore?
 #endif
 
-namespace interfaces {
-
-template<typename T>
-class event_stream {
-public:
-    event_stream<T>() = default;
-
-    auto channel() { return static_cast<T *>(this)->channel(); }
-};
-}  // namespace interfaces
-
 //
-
-namespace impl {
 
 template<typename ts_policy, typename... types>
 class event_rstream
-    : public interfaces::event_stream<event_rstream<ts_policy, types...>> {
+    : public event_stream<event_rstream<ts_policy, types...>> {
     //
     using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
     using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
@@ -443,6 +493,9 @@ class event_rstream
 public:
     event_rstream(bool autoflush = false) : m_autoflush(autoflush) {}
 
+    // Enqueue an event to the stream channel. This buffers the event
+    // until flush() is called, or if autoflush=true, it dispatches the
+    // event immediately.
     template<typename... event_data_t>
     void enqueue(event_data_t &&...data) {
         // if autoflush enabled, then do not buffer.
@@ -455,9 +508,11 @@ public:
             return;
         }
 
+        // else buffer
         m_event_buffer.enqueue(std::forward<event_data_t>(data)...);
     }
 
+    // Send off all buffered events.
     void flush() {
         lock_t l {m_mtx};
 
@@ -503,6 +558,9 @@ public:
         return chan;
     }
 
+    // Return a restricted stream interface suitable
+    // for API clients. This only allows the client to get
+    // the stream channel.
     auto &interface() {
         return static_cast<interfaces::event_stream<this_type> &>(*this);
     }
@@ -551,6 +609,9 @@ public:
 
     std::shared_ptr<event_wchan_t> channel() { return m_stream_channel; }
 
+    // Return a restricted stream interface suitable
+    // for API clients. This only allows the client to get
+    // the stream channel.
     auto &interface() {
         return static_cast<interfaces::event_stream<this_type> &>(*this);
     }
@@ -571,7 +632,7 @@ class event_aggregator {};
 
 }  // namespace impl
 
-namespace evchan {
+//
 
 // Thread-safe version of all the classes
 namespace ts {
