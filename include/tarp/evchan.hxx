@@ -1,17 +1,29 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <deque>
+#include <limits>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <unordered_map>
 #include <vector>
+
+#include <iostream>
 
 #include <tarp/cxxcommon.hxx>
 #include <tarp/semaphore.hxx>
 #include <tarp/type_traits.hxx>
+
+// TODO: add note:
+// the capacity of the channel should be the number of last events you are
+// interested in. The channel is lossy and designed as a circular buffer
+// so when the channel is full, the oldest item is forced out to make room.
 
 //
 
@@ -45,13 +57,69 @@ public:
 
     std::uint32_t get_id() const { return REAL->get_id(); }
 
-    void enqueue(const types &...event_data) {
-        return REAL->enqueue(event_data...);
+    //
+
+    void push(const types &...event_data) { return REAL->push(event_data...); }
+
+    void push(types &&...event_data) {
+        return REAL->push(std::move(event_data)...);
     }
 
     template<typename T>
-    void enqueue(T &&event_data) {
-        return REAL->enqueue(std::forward<T>(event_data));
+    void push(T &&event_data) {
+        return REAL->push(std::forward<T>(event_data));
+    }
+
+    //
+
+    bool try_push(const types &...event_data) {
+        return REAL->push(event_data...);
+    }
+
+    bool try_push(types &&...event_data) {
+        return REAL->push(std::move(event_data)...);
+    }
+
+    template<typename T>
+    bool try_push(T &&event_data) {
+        return REAL->push(std::forward<T>(event_data));
+    }
+
+    //
+
+    template<typename timepoint>
+    bool try_push_until(const timepoint &abs_time, const types &...event_data) {
+        return REAL->try_push_until(abs_time, event_data...);
+    }
+
+    template<typename timepoint>
+    bool try_push_until(const timepoint &abs_time, types &&...event_data) {
+        return REAL->try_push_until(abs_time, std::move(event_data)...);
+    }
+
+    template<typename timepoint, typename T>
+    bool try_push_until(const timepoint &abs_time, T &&event_data) {
+        return REAL->try_push_until(abs_time, std::forward<T>(event_data));
+    }
+
+    //
+
+    template<class Rep, class Period>
+    bool try_push_for(const std::chrono::duration<Rep, Period> &rel_time,
+                      const types &...event_data) {
+        return REAL->try_push_for(rel_time, event_data...);
+    }
+
+    template<class Rep, class Period>
+    bool try_push_for(const std::chrono::duration<Rep, Period> &rel_time,
+                      types &&...event_data) {
+        return REAL->try_push_for(rel_time, std::move(event_data)...);
+    }
+
+    template<class Rep, class Period, typename T>
+    bool try_push_for(const std::chrono::duration<Rep, Period> &rel_time,
+                      T &&event_data) {
+        return REAL->try_push_until(rel_time, std::forward<T>(event_data));
     }
 
     auto &operator<<(const payload_t &event) { return REAL->operator<<(event); }
@@ -84,13 +152,22 @@ public:
 
     std::size_t size() const { return REAL->size(); }
 
-    std::optional<payload_t> get() { return REAL->get(); }
+    payload_t get() { return REAL->get(); }
 
-    std::deque<payload_t> get_all() { return REAL->get_all(); }
+    std::optional<payload_t> try_get() { return REAL->get(); }
 
-    auto &operator>>(std::optional<payload_t> &event) {
-        return REAL->operator>>(event);
+    template<typename timepoint>
+    std::optional<payload_t> try_get_until(const timepoint &abs_time) {
+        return REAL->try_get_until(abs_time);
     }
+
+    template<class Rep, class Period>
+    std::optional<payload_t>
+    try_get_for(const std::chrono::duration<Rep, Period> &rel_time) {
+        return REAL->try_get_for(rel_time);
+    }
+
+    auto &operator>>(payload_t &event) { return REAL->operator>>(event); }
 };
 
 //
@@ -202,42 +279,42 @@ class event_channel
     using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
     using this_type = event_channel<ts_policy, types...>;
 
-    //
-    void enqueue_do_misc() {
-        // If there is an upper limit to the capacity of the channel,
-        // we discard the oldest entry to make room. Conversely, we could
-        // block instead and wait until there is room, but this is typically
-        // unacceptable, since a slow consumer may this way inadvertently
-        // cause a DOS for all and any other consumers.
-        if (m_max_buffsz.has_value()) {
-            if (m_event_data_items.size() > *m_max_buffsz) {
-                // discard oldest
-                m_event_data_items.pop_front();
-            }
-        }
-
-        // If a semaphore was specified, post it.
-        if (m_event_sink_notifier) {
-            m_event_sink_notifier->release();
-        }
-    }
-
 public:
     using payload_t = tarp::type_traits::type_or_tuple_t<types...>;
     using Ts = std::tuple<types...>;
 
     DISALLOW_COPY_AND_MOVE(event_channel);
 
-    // NOTE: semaphore can be null if not necessary e.g. if the
-    // channel is merely used as a temporary thread-safe buffer and
-    // no notification is needed.
-    event_channel(std::optional<std::uint32_t> max_buffer_size = std::nullopt,
-                  std::shared_ptr<tarp::binary_semaphore> sem = nullptr)
-        : m_max_buffsz(max_buffer_size), m_event_sink_notifier(sem) {
-        if (m_max_buffsz.has_value() && *m_max_buffsz == 0) {
+    // Ctor for buffered channel. When the channel is filled to its max
+    // capacity, the behavior is as follows:
+    //  - if circular=false, writes block until reads make room
+    //  - if circular=true, each new write forces out the oldest item
+    //  in the channel. IOW, the channel uses ring-buffer semantics.
+    event_channel(std::uint32_t channel_capacity, bool circular)
+        : m_buffered(true)
+        , m_circular(circular)
+        , m_channel_capacity(channel_capacity)
+        , m_read_sem(channel_capacity, 0)
+        , m_write_sem(channel_capacity, channel_capacity) {
+        if (m_channel_capacity == 0) {
             throw std::logic_error("nonsensical max limit of 0");
         }
     }
+
+    // Ctor for unbuffered channel. Writes block until a corresponding
+    // read is done.
+    event_channel()
+        : m_buffered(false)
+        , m_circular(false)
+        , m_channel_capacity(0)
+        , m_read_sem()
+        , m_write_sem() {}
+
+    // TODO: add a notifier e.g. a semaphore, condition variable etc to be
+    // signaled when an event occurs: use a bit mask to specify one or more
+    // events  --> channel is closed, channel is readable, channel is writable
+    // etc.
+    void add_notifier();
 
     // Get an id uniquely identifying the event channel. This is unique
     // across all instances of this class at any given time.
@@ -251,35 +328,139 @@ public:
     // NOTE: the other overload where std::tuple would be passed
     // explicitly will be more performant when *moving* or forwarding
     // the parametersinto the function, since it is a template.
-    void enqueue(const types &...event_data) {
-        lock_t l {m_mtx};
-
-        // if the payload is made up of multiple elements, treat it as a tuple.
-        // if constexpr (tarp::type_traits::is_tuple_v<types...>) {
-        if constexpr (is_tuple::value) {
-            m_event_data_items.push_back(std::make_tuple(event_data...));
+    void push(const types &...event_data) {
+        if (m_buffered) {
+            push_buffered(event_data...);
+            return;
         }
 
-        // else it is a single element
-        else {
-            m_event_data_items.push_back(event_data...);
+        push_unbuffered(event_data...);
+    }
+
+    void push(types &&...event_data) {
+        if (m_buffered) {
+            push_buffered(std::move(event_data...));
+            return;
         }
 
-        enqueue_do_misc();
+        push_unbuffered(std::move(event_data...));
     }
 
     // This overload takes an actual tuple as the argument
     // -- IFF payload_t is an actual tuple (i.e. if is_tuple::value
     // is true).
     template<typename T>
-    void enqueue(T &&event_data) {
+    void push(T &&event_data) {
         static_assert(
           std::is_same_v<std::remove_reference_t<T>, payload_t> ||
           std::is_convertible_v<std::remove_reference<T>, payload_t>);
 
-        lock_t l {m_mtx};
-        m_event_data_items.emplace_back(std::forward<T>(event_data));
-        enqueue_do_misc();
+        if (m_buffered) {
+            push_buffered(std::forward<T>(event_data));
+            return;
+        }
+
+        push_unbuffered(std::forward<T>(event_data));
+    }
+
+    //
+
+    // Enqueue an event into the channel.
+    // If the payload type is a tuple made up of various items,
+    // this function is a convenience that allows passing discrete
+    // elements for the parameters. These will be implicitly tied together
+    // into a std::tuple: enqueue(a,b,c) => enqueue({a,b,c}).
+    // NOTE: the other overload where std::tuple would be passed
+    // explicitly will be more performant when *moving* or forwarding
+    // the parametersinto the function, since it is a template.
+    void try_push(const types &...event_data) {
+        try_push_until(m_past_tp, event_data...);
+    }
+
+    void try_push(types &&...event_data) {
+        try_push_until(m_past_tp, event_data...);
+    }
+
+    template<typename T>
+    void try_push(T &&event_data) {
+        static_assert(
+          std::is_same_v<std::remove_reference_t<T>, payload_t> ||
+          std::is_convertible_v<std::remove_reference<T>, payload_t>);
+        try_push_until(m_past_tp, std::forward<T>(event_data));
+    }
+
+    //
+
+    // Enqueue an event into the channel.
+    // If the payload type is a tuple made up of various items,
+    // this function is a convenience that allows passing discrete
+    // elements for the parameters. These will be implicitly tied together
+    // into a std::tuple: enqueue(a,b,c) => enqueue({a,b,c}).
+    // NOTE: the other overload where std::tuple would be passed
+    // explicitly will be more performant when *moving* or forwarding
+    // the parametersinto the function, since it is a template.
+    template<typename timepoint>
+    bool try_push_until(const timepoint &abs_time, const types &...event_data) {
+        if (m_buffered) {
+            return try_push_buffered_until(abs_time, event_data...);
+        }
+
+        return try_push_unbuffered_until(abs_time, event_data...);
+    }
+
+    template<typename timepoint>
+    bool try_push_until(const timepoint &abs_time, types &&...event_data) {
+        if (m_buffered) {
+            return try_push_buffered_until(abs_time, std::move(event_data)...);
+        }
+
+        return try_push_unbuffered_until(abs_time, std::move(event_data)...);
+    }
+
+    template<typename timepoint, typename T>
+    bool try_push_until(const timepoint &abs_time, T &&event_data) {
+        static_assert(
+          std::is_same_v<std::remove_reference_t<T>, payload_t> ||
+          std::is_convertible_v<std::remove_reference<T>, payload_t>);
+
+        if (m_buffered) {
+            return try_push_buffered_until(abs_time,
+                                           std::forward<T>(event_data));
+        }
+
+        return try_push_unbuffered_until(abs_time, std::forward<T>(event_data));
+    }
+
+    //
+    template<class Rep, class Period>
+    bool try_push_for(const std::chrono::duration<Rep, Period> &rel_time,
+                      const types &...event_data) {
+        if (m_buffered) {
+            return try_push_buffered_for(rel_time, event_data...);
+        }
+        return try_push_unbuffered_for(rel_time, event_data...);
+    }
+
+    template<class Rep, class Period>
+    bool try_push_for(const std::chrono::duration<Rep, Period> &rel_time,
+                      types &&...event_data) {
+        if (m_buffered) {
+            return try_push_buffered_for(rel_time, std::move(event_data)...);
+        }
+        return try_push_unbuffered_for(rel_time, std::move(event_data)...);
+    }
+
+    template<class Rep, class Period, typename T>
+    bool try_push_for(const std::chrono::duration<Rep, Period> &rel_time,
+                      T &&event_data) {
+        static_assert(
+          std::is_same_v<std::remove_reference_t<T>, payload_t> ||
+          std::is_convertible_v<std::remove_reference<T>, payload_t>);
+
+        if (m_buffered) {
+            return try_push_buffered_for(rel_time, std::forward<T>(event_data));
+        }
+        return try_push_unbuffered_for(rel_time, std::forward<T>(event_data));
     }
 
     // True if there are no queued items.
@@ -294,14 +475,186 @@ public:
         return m_event_data_items.size();
     }
 
+    void clear() {
+        lock_t l {m_mtx};
+        m_event_data_items.clear();
+        m_read_sem.reset();
+        m_write_sem.reset();
+    }
+
     // Return a std::optional result; this is empty if there is
     // nothing in the channel; otherwise it's the oldest data item
     // in the channel. If the data item will be copied into the
     // optional if copiable else moved if movable.
-    std::optional<payload_t> get() {
+    std::optional<payload_t> try_get() {
+        if (m_buffered) {
+            return try_get_buffered();
+        }
+
+        return try_get_unbuffered();
+    }
+
+    template<typename timepoint>
+    std::optional<payload_t> try_get_until(const timepoint &abs_time) {
+        if (m_buffered) {
+            return try_get_buffered_until(abs_time);
+        }
+        return try_get_unbuffered(abs_time);
+    }
+
+    template<class Rep, class Period>
+    std::optional<payload_t>
+    try_get_for(const std::chrono::duration<Rep, Period> &rel_time) {
+        if (m_buffered) {
+            return try_get_buffered_for(rel_time);
+        }
+        return try_get_unbuffered_for(rel_time);
+    }
+
+    payload_t get() {
+        std::optional<payload_t> res;
+        m_read_sem.acquire();
+        res = try_get();
+
+        if (!res.has_value()) {
+            throw std::logic_error("BUG: semaphore acquired, but no resource.");
+        }
+
+        return std::move(res.value());
+    }
+
+    // Return a deque of all data items currently in the channel.
+    // The data items are removed from the channel.
+    std::deque<payload_t> get_all() {
         lock_t l {m_mtx};
-        if (m_event_data_items.empty()) {
-            return std::nullopt;
+        decltype(m_event_data_items) events;
+        std::swap(events, m_event_data_items);
+        m_read_sem.reset();
+        m_write_sem.reset();
+        return events;
+    }
+
+    // More convenient and expressive overloads for enqueuing
+    // and dequeueing an element.
+    auto &operator<<(const payload_t &event) {
+        push(event);
+        return *this;
+    }
+
+    auto &operator<<(payload_t &&event) {
+        push(std::move(event));
+        return *this;
+    }
+
+    auto &operator>>(payload_t &event) {
+        if constexpr (((std::is_copy_assignable_v<types> ||
+                        std::is_copy_constructible_v<types>) &&
+                       ...)) {
+            event = get();
+        } else {
+            event = std::move(get());
+        }
+        return *this;
+    }
+
+private:
+    template<bool buffered,
+             typename buffered_func,
+             typename unbuffered_func,
+             typename... vargs>
+    auto call_buffered_or_unbuffered(buffered_func &&buffered_f,
+                                     unbuffered_func &&unbuffered_f,
+                                     vargs &&...params) {
+        if constexpr (buffered) {
+            return buffered_f(std::forward<vargs>(params)...);
+        }
+        return unbuffered_f(std::forward<vargs>(params)...);
+    }
+
+    // A push is only possible when there is a corresponding get().
+    // Block waiting until that condition is satisfied.
+    template<typename... vargs>
+    void push_unbuffered(vargs &&...event_data) {
+        m_write_sem.acquire();
+        do_push_unbuffered(std::forward<vargs>(event_data)...);
+    }
+
+    // If there is a corresponding get(), perform the push immediately
+    // and return true. Else, wait until at most abs_time for that
+    // condition to be satisfied and return true if it was (and the
+    // push happened), otherwise false.
+    template<typename timepoint, typename... vargs>
+    bool try_push_unbuffered_until(const timepoint &abs_time,
+                                   vargs &&...event_data) {
+        std::cerr
+          << "Trying to acquire write semaphore in try_push_buffered_until"
+          << std::endl;
+
+        if (!m_write_sem.try_acquire_until(abs_time)) {
+            std::cerr
+              << "Failed to acquire write semaphore in try_push_buffered_until"
+              << std::endl;
+
+            return false;
+        }
+
+        std::cerr
+          << "Managed to acquire write semaphore in try_push_buffered_until"
+          << std::endl;
+
+        do_push_unbuffered(std::forward<vargs>(event_data)...);
+        return true;
+    }
+
+    // See try_push_unbuffered_until. This is a wrapper so a duration
+    // can be passed instead of an time point.
+    template<class Rep, class Period, typename... vargs>
+    bool
+    try_push_unbuffered_for(const std::chrono::duration<Rep, Period> &rel_time,
+                            vargs &&...event_data) {
+        return try_push_unbuffered_until(std::chrono::steady_clock::now() +
+                                           rel_time,
+                                         std::forward<vargs>(event_data)...);
+    }
+
+    // This must only be called when m_write_sem has been acquired.
+    template<typename... vargs>
+    void do_push_unbuffered(vargs &&...event_data) {
+        lock_t l {m_mtx};
+
+        // if the payload is made up of multiple elements, treat it as a
+        // tuple. if constexpr (tarp::type_traits::is_tuple_v<types...>)
+        // {
+        if constexpr (is_tuple::value) {
+            m_event_data_items.emplace_back(
+              std::make_tuple(std::forward<vargs>(event_data)...));
+        }
+
+        // else it is a single element
+        else {
+            m_event_data_items.emplace_back(std::forward<vargs>(event_data)...);
+        }
+
+        // unblock a get().
+        m_read_sem.release();
+    }
+
+    // tuple overload.
+    template<typename T>
+    void do_push_unbuffered(T &&event_data) {
+        {
+            lock_t l {m_mtx};
+            m_event_data_items.emplace_back(std::forward<T>(event_data));
+        }
+        m_read_sem.release();
+    }
+
+    std::optional<payload_t> do_try_get(bool throw_if_empty) {
+        lock_t l {m_mtx};
+
+        if (throw_if_empty && m_event_data_items.empty()) {
+            throw std::logic_error(
+              "BUG: channel unexpectedly empty, failed get()");
         }
 
         std::optional<payload_t> data;
@@ -322,48 +675,514 @@ public:
         return data;
     }
 
-    // Return a deque of all data items currently in the channel.
-    // The data items are removed from the channel.
-    std::deque<payload_t> get_all() {
-        lock_t l {m_mtx};
-        decltype(m_event_data_items) events;
-        std::swap(events, m_event_data_items);
-        return events;
-    }
+    template<typename timepoint>
+    std::optional<payload_t>
+    try_get_unbuffered_until(const timepoint &abs_time) {
+        // unblock push()
+        std::cerr << "Releasing m_write_sem" << std::endl;
+        m_write_sem.release();
 
-    // More convenient and expressive overloads for enqueuing
-    // and dequeueing an element.
-    auto &operator<<(const payload_t &event) {
-        enqueue(event);
-        return *this;
-    }
+        std::this_thread::yield();
 
-    auto &operator<<(payload_t &&event) {
-        enqueue(std::move(event));
-        return *this;
-    }
-
-    auto &operator>>(std::optional<payload_t> &event) {
-        if constexpr (((std::is_copy_assignable_v<types> ||
-                        std::is_copy_constructible_v<types>) &&
-                       ...)) {
-            event = get();
-        } else {
-            event = std::move(get());
+        // if push actually happens.
+        std::cerr << "trying to acquire read_sem" << std::endl;
+        if (m_read_sem.try_acquire_until(abs_time)) {
+            std::cerr << "managed to acquire read_sem" << std::endl;
+            return do_try_get(true);
         }
-        return *this;
+
+        std::cerr << "failed to acquire read_sem" << std::endl;
+
+        // else if no push happened, decrement m_write_sem
+        // so no push actually ever happens, until we make
+        // *another* get() call -- since we are **unbuffered**.
+
+        std::cerr << "trying to decrement m_write_sem" << std::endl;
+        if (m_write_sem.try_acquire()) {
+            std::cerr << "managed to decrement m_write_sem" << std::endl;
+            return std::nullopt;
+        }
+
+        std::cerr << "failed to decrement m_write_sem" << std::endl;
+
+        // However, a push could've happened: that is the case
+        // if we failed to acquire m_write_sem above (a push() ,
+        // beat us to it).
+        m_read_sem.acquire();
+        return do_try_get(true);
+    }
+
+    template<class Rep, class Period>
+    std::optional<payload_t>
+    try_get_unbuffered_for(const std::chrono::duration<Rep, Period> &rel_time) {
+        return try_get_unbuffered_until(std::chrono::steady_clock::now() +
+                                        rel_time);
+    }
+
+    // Return a std::optional result; this is empty if there is
+    // nothing in the channel; otherwise it's the oldest data item
+    // in the channel. If the data item will be copied into the
+    // optional if copiable else moved if movable.
+    std::optional<payload_t> try_get_unbuffered() {
+        return try_get_unbuffered_until(m_past_tp);
+    }
+
+    payload_t get_unbuffered() {
+        std::optional<payload_t> res;
+
+        constexpr std::chrono::seconds WAIT_TIME {100};
+
+        while (!res.has_value()) {
+            res = try_get_unbuffered_for(WAIT_TIME);
+        }
+
+        return res.value();
+    }
+
+    void throw_on_empty() const {
+        lock_t l {m_mtx};
+        if (m_event_data_items.empty()) {
+            throw std::logic_error("BUG: channel unexpectedly empty");
+        }
+    }
+
+    void throw_on_not_empty() const {
+        lock_t l {m_mtx};
+        if (!m_event_data_items.empty()) {
+            throw std::logic_error("BUG: channel unexpectedly non-empty");
+        }
+    }
+
+    //
+    //
+    //
+    //
+
+    // A push is only possible when there is a corresponding get().
+    // Block waiting until that condition is satisfied.
+    template<typename... vargs>
+    void push_buffered(vargs &&...event_data) {
+        if (!m_circular) {
+            m_write_sem.acquire();
+            lock_t l {m_mtx};
+            do_push_buffered(l, std::forward<vargs>(event_data)...);
+            return;
+        }
+
+        lock_t l {m_mtx};
+
+        if (m_event_data_items.size() >= m_channel_capacity) {
+            m_event_data_items.pop_front();
+            do_push_buffered(l, std::forward<vargs>(event_data)...);
+            m_event_data_items.emplace_back(std::forward<vargs>(event_data)...);
+            return;
+        }
+
+        if (!m_write_sem.try_acquire()) {
+            throw std::logic_error(
+              "BUG: unexpectedly failed to acquire m_write_sem");
+        }
+
+        do_push_buffered(l, std::forward<vargs>(event_data)...);
+        m_read_sem.release();
+        return;
+    }
+
+    template<typename timepoint, typename... vargs>
+    bool try_push_buffered_until(const timepoint &abs_time,
+                                 vargs &&...event_data) {
+        if (m_read_sem.try_acquire_until(abs_time)) {
+            lock_t l {m_mtx};
+            if (m_event_data_items.size() >= m_channel_capacity) {
+                throw std::logic_error(
+                  "BUG: got semaphore, but max buffsz reached");
+            }
+            do_push_buffered(l, std::forward<vargs>(event_data)...);
+            m_read_sem.release();
+            return true;
+        }
+
+        if (!m_circular) {
+            return false;
+        }
+
+        lock_t l {m_mtx};
+        do_push_buffered(l, std::forward<vargs>(event_data)...);
+        m_event_data_items.pop_front();
+        if (!m_event_data_items.size() < m_channel_capacity) {
+            throw std::logic_error(
+              "BUG: failed to acquire semaphore even though buffsize < max");
+        }
+        return true;
+    }
+
+    // See try_push_unbuffered_until. This is a wrapper so a duration
+    // can be passed instead of an time point.
+    template<class Rep, class Period, typename... vargs>
+    bool
+    try_push_buffered_for(const std::chrono::duration<Rep, Period> &rel_time,
+                          vargs &&...event_data) {
+        return try_push_buffered_until(std::chrono::steady_clock::now() +
+                                         rel_time,
+                                       std::forward<vargs>(event_data)...);
+    }
+
+    // This must only be called when m_write_sem has been acquired.
+    template<typename... vargs>
+    void do_push_buffered(lock_t &, vargs &&...event_data) {
+        // if the payload is made up of multiple elements, treat it as a
+        // tuple. if constexpr (tarp::type_traits::is_tuple_v<types...>)
+        // {
+        if constexpr (is_tuple::value) {
+            m_event_data_items.emplace_back(
+              std::make_tuple(std::forward<vargs>(event_data)...));
+        }
+
+        // else it is a single element
+        else {
+            m_event_data_items.emplace_back(std::forward<vargs>(event_data)...);
+        }
+    }
+
+    // tuple overload.
+    template<typename T>
+    void do_push_buffered(lock_t &, T &&event_data) {
+        m_event_data_items.emplace_back(std::forward<T>(event_data));
+    }
+
+    //
+
+    template<typename timepoint>
+    std::optional<payload_t> try_get_buffered_until(const timepoint &abs_time) {
+        if (!m_read_sem.try_acquire_until(abs_time)) {
+            return std::nullopt;
+        }
+
+        auto res = do_try_get(true);
+        m_write_sem.release();
+        return res;
+    }
+
+    template<class Rep, class Period>
+    std::optional<payload_t>
+    try_get_buffered_for(const std::chrono::duration<Rep, Period> &rel_time) {
+        return try_get_unbuffered_until(std::chrono::steady_clock::now() +
+                                        rel_time);
+    }
+
+    std::optional<payload_t> try_get_buffered() {
+        return try_get_buffered_until(m_past_tp);
+    }
+
+    payload_t get_buffered() {
+        std::optional<payload_t> res;
+
+        constexpr std::chrono::seconds WAIT_TIME {100};
+
+        while (!res.has_value()) {
+            res = try_get_buffered_for(WAIT_TIME);
+        }
+
+        return res.value();
     }
 
 private:
-    static inline std::atomic<std::uint32_t> m_next_event_buffer_id {0};
+    static inline std::atomic<std::uint32_t> m_next_event_buffer_id = 0;
 
-    const std::uint32_t m_id {m_next_event_buffer_id++};
-    const std::optional<std::uint32_t> m_max_buffsz;
+    const std::uint32_t m_id = m_next_event_buffer_id++;
+    const bool m_buffered = false;
+    const bool m_circular = false;
+    const std::uint32_t m_channel_capacity = 0;
+
+    using CLOCK = std::chrono::steady_clock;
+    const CLOCK::time_point m_past_tp {CLOCK::now()};
 
     mutable mutex_t m_mtx;
     std::deque<payload_t> m_event_data_items;
 
-    std::shared_ptr<tarp::binary_semaphore> m_event_sink_notifier;
+    // std::shared_ptr<tarp::binary_semaphore> m_event_sink_notifier;
+    //  add here m_notifiers.
+
+    tarp::semaphore m_write_sem;
+    tarp::semaphore m_read_sem;
+};
+
+//
+
+template<typename... types>
+class trunk {
+    //
+    using is_tuple =
+      typename tarp::type_traits::type_or_tuple<types...>::is_tuple;
+    using this_type = event_channel<types...>;
+    using lock_t = std::unique_lock<std::mutex>;
+    using mutex_t = std::mutex;
+    using payload_type = tarp::type_traits::type_or_tuple_t<types...>;
+
+    struct operation {
+        template<typename... T>
+        operation(T &&...d) {
+            if constexpr (type_traits::is_tuple_v<T...>) {
+                data.emplace(std::make_tuple(std::forward<T>(d)...));
+            } else {
+                data.emplace(std::forward<T>(d)...);
+            }
+        }
+
+        operation() = default;
+
+        std::optional<payload_type> data;
+        bool done = false;
+    };
+
+public:
+    using payload_t = payload_type;
+    using Ts = std::tuple<types...>;
+
+    DISALLOW_COPY_AND_MOVE(trunk);
+    trunk() = default;
+
+    template<typename... T>
+    auto &operator<<(T &&...data) {
+        push(std::forward<T>(data)...);
+        return *this;
+    }
+
+    auto &operator>>(std::optional<payload_t> &event) {
+        event.emplace(get());
+        return *this;
+    }
+
+    void close() {
+        lock_t l {m_mtx};
+        m_closed = true;
+        m_recvq.clear();
+        m_sendq.clear();
+        m_send_cond_var.notify_all();
+        m_recv_cond_var.notify_all();
+    }
+
+    template<typename... T>
+    bool push(T &&...data) {
+        return do_try_push_until(m_past_tp, false, std::forward<T>(data)...);
+    }
+
+    template<typename... T>
+    bool try_push(T &&...data) {
+        lock_t l {m_mtx};
+
+        if (m_closed) {
+            return false;
+        }
+
+        if (!m_recvq.empty()) {
+            pass_data(l, std::forward<T>(data)...);
+            return true;
+        }
+
+        return false;
+    }
+
+    template<typename timepoint, typename... T>
+    bool try_push_until(const timepoint &abs_time, T &&...data) {
+        return do_try_push_until(abs_time, true, std::forward<T>(data)...);
+    }
+
+    template<class Rep, class Period, typename... T>
+    bool try_push_for(const std::chrono::duration<Rep, Period> &rel_time,
+                      T &&...data) {
+        auto deadline = CLOCK::now() + rel_time;
+        return try_push_until(deadline, std::forward<T>(data)...);
+    }
+
+    std::optional<payload_t> get() {
+        return do_try_get_until(m_past_tp, false);
+    }
+
+    std::optional<payload_t> try_get() {
+        lock_t l {m_mtx};
+
+        if (m_closed) {
+            return std::nullopt;
+        }
+
+        if (!m_sendq.empty()) {
+            return get_data(l);
+        }
+
+        std::cerr << "try_get(): m_sendq empty, impossible to get" << std::endl;
+        return std::nullopt;
+    }
+
+    template<typename timepoint>
+    std::optional<payload_t> try_get_until(const timepoint &abs_time) {
+        return do_try_get_until(abs_time, true);
+    }
+
+    template<class Rep, class Period>
+    std::optional<payload_t>
+    try_get_for(const std::chrono::duration<Rep, Period> &rel_time) {
+        auto deadline = CLOCK::now() + rel_time;
+        return try_get_until(deadline);
+    }
+
+private:
+    template<typename timepoint, typename... T>
+    bool do_try_push_until(const timepoint &abs_time,
+                           bool use_deadline,
+                           T &&...data) {
+        lock_t l {m_mtx};
+        std::cerr << "try_push got mutex " << std::endl;
+
+        if (m_closed) {
+            return false;
+        }
+
+        if (!m_recvq.empty()) {
+            pass_data(l, std::forward<T>(data)...);
+            return true;
+        }
+
+        struct operation op(std::forward<T>(data)...);
+        add_sender(l, op);
+
+        auto check = [this] {
+            return true;
+        };
+
+        while (true) {
+            // std::cerr << "[PUSH] will wait on condvar" << std::endl;
+            if (use_deadline) {
+                // m_send_cond_var.wait_until(l, abs_time, check);
+                m_send_cond_var.wait_until(l, abs_time);
+            } else {
+                // m_send_cond_var.wait(l, check);
+                m_send_cond_var.wait(l);
+            }
+            // std::cerr << "[PUSH] after wait on condvar" << std::endl;
+
+            if (op.done) {
+                return true;
+            }
+
+            if (m_closed) {
+                remove_sender(l, op);
+                return false;
+            }
+
+            if (use_deadline && abs_time <= CLOCK::now()) {
+                remove_sender(l, op);
+                return false;
+            }
+        }
+    }
+
+    template<typename timepoint>
+    std::optional<payload_t> do_try_get_until(const timepoint &abs_time,
+                                              bool use_deadline) {
+        lock_t l {m_mtx};
+        std::cerr << "Get got mutex" << std::endl;
+
+        if (m_closed) {
+            return std::nullopt;
+        }
+
+        if (!m_sendq.empty()) {
+            return get_data(l);
+        }
+
+        struct operation op;
+        add_receiver(l, op);
+
+        auto check = [this] {
+            return true;
+        };
+
+        while (true) {
+            // std::cerr << "[GET] will wait on condvar" << std::endl;
+            if (use_deadline) {
+                // m_recv_cond_var.wait_until(l, abs_time, check);
+                m_recv_cond_var.wait_until(l, abs_time);
+            } else {
+                // m_recv_cond_var.wait(l, check);
+                m_recv_cond_var.wait(l);
+            }
+            // std::cerr << "[GET] after wait on condvar" << std::endl;
+
+            if (op.done) {
+                return std::move(op.data);
+            }
+
+            if (m_closed) {
+                remove_receiver(l, op);
+                return std::nullopt;
+            }
+
+            if (use_deadline && abs_time < CLOCK::now()) {
+                remove_receiver(l, op);
+                return std::nullopt;
+            }
+        }
+    }
+
+    template<typename... T>
+    void pass_data(lock_t &, T &&...data) {
+        struct operation &receiver = m_recvq.front();
+        receiver.data.emplace(std::forward<T>(data)...);
+        receiver.done = true;
+        m_recvq.pop_front();
+        m_recv_cond_var.notify_all();
+    }
+
+    std::optional<payload_t> get_data(lock_t &) {
+        struct operation &sender = m_sendq.front();
+        auto data = std::move(sender.data);
+        sender.done = true;
+        m_sendq.pop_front();
+        m_send_cond_var.notify_all();
+        return data;
+    }
+
+    void add_receiver(lock_t &, struct operation &op) {
+        m_recvq.emplace_back(op);
+    }
+
+    void add_sender(lock_t &, struct operation &op) {
+        m_sendq.emplace_back(op);
+    }
+
+    void remove_sender(lock_t &, struct operation &op) {
+        m_sendq.remove_if([&op](auto &i) {
+            return std::addressof(i.get()) == std::addressof(op);
+        });
+        std::cerr << "sender removed" << std::endl;
+    }
+
+    void remove_receiver(lock_t &, struct operation &op) {
+        m_recvq.remove_if([&op](auto &i) {
+            return std::addressof(i.get()) == std::addressof(op);
+        });
+        std::cerr << "receiver removed" << std::endl;
+    }
+
+private:
+    using CLOCK = std::chrono::steady_clock;
+    const CLOCK::time_point m_past_tp {CLOCK::now()};
+
+    mutable mutex_t m_mtx;
+    bool m_closed {false};
+
+    // std::shared_ptr<tarp::binary_semaphore> m_event_sink_notifier;
+    //  add here m_notifiers.
+
+    std::condition_variable m_send_cond_var;
+    bool m_senders_signaled {false};
+
+    std::condition_variable m_recv_cond_var;
+    bool m_receivers_signaled {false};
+
+    std::list<std::reference_wrapper<struct operation>> m_sendq;
+    std::list<std::reference_wrapper<struct operation>> m_recvq;
 };
 
 //
@@ -398,20 +1217,20 @@ class event_broadcaster {
 public:
     DISALLOW_COPY_AND_MOVE(event_broadcaster);
 
-    // If autodispatch is enabled, then any event pushed to the brodacaster
-    // is immediately broadcast. OTOH if autodispatch=false, events are
-    // buffered into a first-stage queue and only get broadcast when
-    // .dispatch() is invoked.
+    // If autodispatch is enabled, then any event pushed to the
+    // brodacaster is immediately broadcast. OTOH if autodispatch=false,
+    // events are buffered into a first-stage queue and only get
+    // broadcast when .dispatch() is invoked.
     event_broadcaster(bool autodispatch = false)
         : m_autodispatch(autodispatch) {}
 
     // Enqueue an event, pending broadcast.
     template<typename... event_data_t>
-    void enqueue(event_data_t &&...data) {
-        m_event_buffer.enqueue(std::forward<event_data_t>(data)...);
+    void push(event_data_t &&...data) {
+        m_event_buffer.push(std::forward<event_data_t>(data)...);
 
-        // if autodispatch is enabled, then always flush immediately: do not
-        // buffer.
+        // if autodispatch is enabled, then always flush immediately: do
+        // not buffer.
         if (m_autodispatch) {
             dispatch();
         }
@@ -442,7 +1261,7 @@ public:
 
         for (auto &event : events) {
             for (std::size_t i = 0; i < num_channels; ++i) {
-                channels[i]->enqueue(event);
+                channels[i]->try_push(event);
             }
         }
     }
@@ -452,7 +1271,7 @@ public:
 
     template<typename... event_data_t>
     auto &operator<<(event_data_t &&...event_data) {
-        enqueue(std::forward<event_data_t>(event_data)...);
+        push(std::forward<event_data_t>(event_data)...);
         return *this;
     }
 
@@ -469,9 +1288,10 @@ public:
     }
 
 private:
+    static inline constexpr std::size_t m_BUFFSZ {1000};
     mutable mutex_t m_mtx;
     const bool m_autodispatch {false};
-    event_channel_t m_event_buffer;
+    event_channel_t m_event_buffer {m_BUFFSZ, true};
     std::vector<std::weak_ptr<wchan_t>> m_event_channels;
 };
 
@@ -493,25 +1313,28 @@ class event_rstream : public event_stream<event_rstream<ts_policy, types...>> {
     using this_type = event_rstream<ts_policy, types...>;
     //
 public:
-    event_rstream(bool autoflush = false) : m_autoflush(autoflush) {}
+    event_rstream(bool autoflush = false, std::size_t channel_capacity = 100)
+        : m_autoflush(autoflush)
+        , m_channel_capacity(channel_capacity)
+        , m_event_buffer(channel_capacity, true) {}
 
     // Enqueue an event to the stream channel. This buffers the event
     // until flush() is called, or if autoflush=true, it dispatches the
     // event immediately.
     template<typename... event_data_t>
-    void enqueue(event_data_t &&...data) {
+    void push(event_data_t &&...data) {
         // if autoflush enabled, then do not buffer.
         if (m_autoflush) {
             auto chan = m_stream_channel.lock();
             if (!chan) {
                 return;
             }
-            push_to_channel(data..., *chan);
+            push_to_channel(*chan, std::forward<event_data_t>(data)...);
             return;
         }
 
         // else buffer
-        m_event_buffer.enqueue(std::forward<event_data_t>(data)...);
+        push_to_channel(m_event_buffer, std::forward<event_data_t>(data)...);
     }
 
     // Send off all buffered events.
@@ -532,9 +1355,9 @@ public:
             if constexpr (((std::is_copy_assignable_v<types> ||
                             std::is_copy_constructible_v<types>) &&
                            ...)) {
-                chan->enqueue(events.front());
+                chan->push(events.front());
             } else {
-                chan->enqueue(std::move(events.front()));
+                chan->push(std::move(events.front()));
             }
             events.pop_front();
         }
@@ -545,7 +1368,7 @@ public:
 
     template<typename... event_data_t>
     auto &operator<<(event_data_t &&...event_data) {
-        enqueue(std::forward<event_data_t>(event_data)...);
+        push(std::forward<event_data_t>(event_data)...);
         return *this;
     }
 
@@ -555,7 +1378,7 @@ public:
             return chan;
         }
 
-        chan = std::make_shared<event_channel_t>();
+        chan = std::make_shared<event_channel_t>(m_channel_capacity, true);
         m_stream_channel = chan;
         return chan;
     }
@@ -568,19 +1391,14 @@ public:
     }
 
 private:
-    template<typename T, typename C>
-    void push_to_channel(T &&data, C &chan) {
-        if constexpr (((std::is_copy_assignable_v<types> ||
-                        std::is_copy_constructible_v<types>) &&
-                       ...)) {
-            chan.enqueue(data);
-        } else {
-            chan.enqueue(std::move(std::move(data)));
-        }
+    template<typename C, typename... T>
+    void push_to_channel(C &chan, T &&...data) {
+        chan.push(std::forward<T>(data)...);
     }
 
     mutable mutex_t m_mtx;
     const bool m_autoflush {false};
+    const std::size_t m_channel_capacity;
     event_channel_t m_event_buffer;
     std::weak_ptr<event_channel_t> m_stream_channel;
 };
@@ -598,13 +1416,17 @@ class event_wstream
     //
 public:
     // TODO: take notifier, propagate it to channel.
-    event_wstream() { m_stream_channel = std::make_shared<event_channel_t>(); }
+    event_wstream(std::size_t chancap = 100) {
+        m_stream_channel = std::make_shared<event_channel_t>(chancap, true);
+    }
 
-    std::optional<payload_t> get() { return m_stream_channel->get(); }
+    std::optional<payload_t> try_get() { return m_stream_channel->try_get(); }
+
+    payload_t get() { return m_stream_channel->get(); }
 
     std::deque<payload_t> get_all() { return m_stream_channel->get_all(); }
 
-    auto &operator>>(std::optional<payload_t> &event) {
+    auto &operator>>(payload_t &event) {
         m_stream_channel->operator>>(event);
         return *this;
     }
@@ -644,7 +1466,8 @@ public:
 
     event_aggregator() {};
 
-    std::shared_ptr<event_wchan_t> channel(const key_t &k) {
+    std::shared_ptr<event_wchan_t>
+    channel(const key_t &k, unsigned int chancap = m_DEFAULT_CHANCAP) {
         lock_t l {m_mtx};
 
         auto found = m_index.find(k);
@@ -655,7 +1478,7 @@ public:
             }
         }
 
-        auto chan = std::make_shared<event_channel_t>();
+        auto chan = std::make_shared<event_channel_t>(chancap, true);
         m_index[k] = chan;
         m_channels.push_back(chan);
         return chan;
@@ -685,7 +1508,7 @@ public:
         }
     }
 
-    std::optional<payload_t> get() {
+    std::optional<payload_t> try_get() {
         lock_t l {m_mtx};
         if (m_channels.empty()) {
             return std::nullopt;
@@ -695,7 +1518,7 @@ public:
         m_idx = m_idx % n;
 
         for (unsigned i = 0; i < n; ++i) {
-            auto res = m_channels[m_idx]->get();
+            auto res = m_channels[m_idx]->try_get();
             m_idx = (m_idx + 1) % n;
             if (res.has_value()) {
                 return res;
@@ -705,7 +1528,7 @@ public:
     }
 
     auto &operator>>(std::optional<payload_t> &event) {
-        event = get();
+        event = try_get();
         return *this;
     }
 
@@ -747,6 +1570,7 @@ public:
     }
 
 private:
+    static inline unsigned int m_DEFAULT_CHANCAP {100};
     mutable std::mutex m_mtx;
     std::size_t m_idx {0};
     std::vector<std::shared_ptr<event_channel_t>> m_channels;
