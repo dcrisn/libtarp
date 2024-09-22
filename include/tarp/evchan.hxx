@@ -92,7 +92,7 @@ public:
             throw std::invalid_argument(
               "unacceptable state specified for monitoring");
         }
-        return REAL->add_monitor(chanState::WRITABLE, notifier);
+        return REAL->add_monitor(notifier, chanState::WRITABLE);
     }
 
     auto closed() const { return CONST_REAL->closed(); }
@@ -138,7 +138,7 @@ public:
             throw std::invalid_argument(
               "unacceptable state specified for monitoring");
         }
-        return REAL->add_monitor(chanState::READABLE, notifier);
+        return REAL->add_monitor(notifier, chanState::READABLE);
     }
 
     auto closed() const { return CONST_REAL->closed(); }
