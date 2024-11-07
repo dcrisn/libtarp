@@ -357,6 +357,108 @@ std::string replace_char(const std::string &s, char a, char b) {
     return result;
 }
 
+std::string remove_substring( const std::string& input, const std::string& substring, int n_first_occurrences )
+{
+	auto split_positions = find_split_points( input, substring );
+
+	std::size_t n { 0 };
+
+	if( n_first_occurrences < 0 )
+	{
+		n = split_positions.size();
+	}
+	else if( n_first_occurrences > 0 )
+	{
+		n = std::min( static_cast< std::size_t >( n_first_occurrences ), split_positions.size() );
+	}
+	else if( n_first_occurrences == 0 )
+	{
+		return input; // unchanged
+	}
+
+	std::string output { input };
+	std::size_t n_chars_removed = 0;
+
+	std::size_t substring_len = substring.size();
+	for( unsigned i = 0; i < n; ++i )
+	{
+		std::size_t pos = split_positions[ i ] - n_chars_removed;
+		output.erase( pos, substring_len );
+		n_chars_removed += substring_len;
+	}
+
+	return output;
+}
+
+std::string remove_prefix( const std::string& s, const std::string& prefix, bool case_sensitive )
+{
+	auto check_equal_case_insensitive = []( auto a, auto b ) {
+		return ( tolower( static_cast< char >( a ) ) == tolower( static_cast< char >( b ) ) );
+	};
+
+	if( prefix.size() > s.size() )
+	{
+		return s;
+	}
+
+	auto substr = s.substr( 0, prefix.size() );
+
+	if( !case_sensitive )
+	{
+		bool matches = std::equal( prefix.begin(), prefix.end(), s.begin(), check_equal_case_insensitive );
+		if( matches )
+		{
+			return s.substr( prefix.size(), std::string::npos );
+		}
+	}
+	else
+	{
+		bool matches = ( substr == prefix );
+		if( matches )
+		{
+			return s.substr( prefix.size(), std::string::npos );
+		}
+	}
+
+	return s;
+}
+
+std::string remove_suffix( const std::string& s, const std::string& suffix, bool case_sensitive )
+{
+	auto check_equal_case_insensitive = []( auto a, auto b ) {
+		return ( tolower( static_cast< char >( a ) ) == tolower( static_cast< char >( b ) ) );
+	};
+
+	if( suffix.size() > s.size() )
+	{
+		return s;
+	}
+
+	auto substr = s.substr( s.size() - suffix.size(), suffix.size() );
+
+	if( !case_sensitive )
+	{
+		bool matches = std::equal( suffix.begin(), suffix.end(), s.begin(), check_equal_case_insensitive );
+		if( matches )
+		{
+			return s.substr( 0, s.size() - suffix.size() );
+		}
+	}
+
+	else
+	{
+		bool matches = ( substr == suffix );
+		if( matches )
+		{
+			return s.substr( 0, s.size() - suffix.size() );
+		}
+	}
+
+	return s;
+}
+
+
+
 }  // namespace string
 }  // namespace utils
 }  // namespace tarp

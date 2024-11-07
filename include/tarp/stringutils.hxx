@@ -3,10 +3,14 @@
 #include <algorithm>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
+#include <cmath>
 #include <cstdint>
+
+#include <tarp/math.h>
 
 namespace tarp::utils::string {
 
@@ -172,6 +176,70 @@ std::optional<T> to_integer(const std::string &input) {
 
     // converted does NOT fit into type T.
     return {};
+}
+
+// Clear num_digits_to_clear low-order digits from integer to base 10.
+// Example:
+// clear_lo_digits(1231245, 2) => 1231200.
+template<typename T>
+static inline T clear_lo_digits(T input, std::uint8_t num_digits_to_clear) {
+    std::string s {std::to_string(input)};
+
+    // clear all the digits --> avoid potential intpow wraparound
+    // if the value of num_digits_to_clear is gt
+    // std::numeric_limits<std::uint32_t>::max.
+    if (num_digits_to_clear > s.size()) {
+        return 0;
+    }
+
+    // Get number of bits needed to represent 10^m_num_digits.
+    // log_2(x) = log_10(x) / log_10(2); here log_10(x) is obviously
+    // simply m_num_digits, since log_10(10^m_num_digits) = m_num_digits.
+    double num_bits_needed = std::ceil(num_digits_to_clear / std::log10(2.0f));
+
+    double num_bits_avail = sizeof(T) * 8;
+    if (num_bits_needed > num_bits_avail) {
+        throw std::invalid_argument(
+          "Excessive input values would cause wraparound");
+    }
+
+    unsigned divisor = tarp::math::intpow(10, num_digits_to_clear);
+
+    // this will truncate the num_digits_to_clear leas-significant digits.
+    // The division removes these digits; the multiplication reinserts
+    // them, but zeroed.
+    input = (input / divisor) * divisor;
+    return input;
+}
+
+std::string remove_substring(const std::string &input,
+                             const std::string &substring,
+                             int n_first_occurrences);
+
+// Remove the prefix from the string if present.
+std::string remove_prefix(const std::string &s,
+                          const std::string &prefix,
+                          bool case_sensitive);
+
+// Remove the suffix from the string if present
+std::string remove_suffix(const std::string &s,
+                          const std::string &suffix,
+                          bool case_sensitive);
+
+// Return true if the string s only contains chars '1' and '0'.
+// NOTE: assumes there is not whitespace etc.
+inline bool is_bitstring( const std::string& s )
+{
+	auto* str = s.c_str();
+	for( unsigned i = 0; i < s.size(); ++i )
+	{
+		auto c = str[ i ];
+		if( c != '0' and c != '1' )
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 }  // namespace tarp::utils::string
