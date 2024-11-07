@@ -1,6 +1,13 @@
 #pragma once
 
 #include <functional>
+#include <string>
+#include <stdexcept>
+
+#include <cstdint>
+#include <cmath>
+
+#include <tarp/math.h>
 
 /*
  * This header defines various functions and classes that implement, among
@@ -185,5 +192,81 @@ R fold(const iterable<T> &inputs, T seed = {}) {
     }
     return r.get();
 }
+
+//
+
+/**
+ * Clears a specified number of low-order contiguous digits.
+ *
+ * @param T The type of the input. Must be integral type.
+ */
+template<typename T>
+class clear_digits {
+    static_assert(std::is_integral_v<T> or std::is_floating_point_v<T>,
+                  "invalid input type T, must be integral");
+
+public:
+    /**
+     * @param num_low_order_digits_to_clear How many digits
+     *  (starting from rightmost) to zero out.
+     */
+    clear_digits(std::uint8_t num_low_order_digits_to_clear)
+        : m_num_digits(num_low_order_digits_to_clear) {}
+
+    /**
+     * @param input Integer to transform
+     * @return input with num_low_order_digits_to_clear zeroed out.
+     *
+     * NOTE: this **will** wrap around and return unexpected results for
+     * large values of m_num_digits. Specifically, if 10^m_num_digits
+     * does not fit in the type T.
+     */
+    T operator()(T input) const {
+        std::string s {std::to_string(input)};
+
+        // clear all the digits --> avoid potential intpow wraparound
+        // if the value of num_digits_to_clear is gt
+        // std::numeric_limits<std::uint32_t>::max.
+        if (m_num_digits > s.size()) {
+            return 0;
+        }
+
+        // Get number of bits needed to represent 10^m_num_digits.
+        // log_2(x) = log_10(x) / log_10(2); here log_10(x) is obviously
+        // simply m_num_digits, since log_10(10^m_num_digits) = m_num_digits.
+        double num_bits_needed = std::ceil(m_num_digits / std::log10(2.0f));
+
+        double num_bits_avail = sizeof(T) * 8;
+        if (num_bits_needed > num_bits_avail) {
+            throw std::invalid_argument(
+              "Excessive input values would cause wraparound");
+        }
+
+        unsigned divisor = tarp::math::intpow(10, m_num_digits);
+
+        // this will truncate the num_digits_to_clear leas-significant digits.
+        // The division removes these digits; the multiplication reinserts
+        // them, but zeroed out.
+        input = (input / divisor) * divisor;
+        return input;
+    }
+
+private:
+    std::uint8_t m_num_digits;
+};
+
+// Multiply input by a scale value.
+template<typename T>
+class scaler {
+public:
+    scaler(T multiplier) : m_scaler(multiplier) {}
+
+    T operator()(T input) const { return input * m_scaler; }
+
+private:
+    T m_scaler;
+};
+
+
 
 } /* namespace tarp */
