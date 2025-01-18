@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
 
-SET(TARP_PACKAGE_FILES "${CMAKE_SOURCE_DIR}/package")
+SET(TARP_PACKAGE_FILES "${CMAKE_SOURCE_DIR}/cmake")
 
 project(
     "libtarp"
@@ -129,20 +129,26 @@ SET(libtarp_private_headers
     src/
     )
 
-add_library(tarp SHARED
+add_library(libtarp SHARED
     ${library_c_sources}
     ${library_cxx_sources}
     )
 
-add_library(tarp::tarp ALIAS tarp)
+add_library(tarp::misc ALIAS libtarp)
 
-set_target_properties(tarp PROPERTIES
+set_target_properties(libtarp PROPERTIES
     VERSION ${LIBTARP_VERSION_STRING}
     SOVERSION ${LIBTARP_MAJOR_VERSION}
+    LIBRARY_OUTPUT_NAME tarp
+)
+
+# the target for client projects will be tarp::misc.
+set_target_properties(libtarp PROPERTIES
+    EXPORT_NAME misc
 )
 
 # no distinction between interface and internal headers at the moment
-target_include_directories(tarp PUBLIC
+target_include_directories(libtarp PUBLIC
     $<INSTALL_INTERFACE:${libtarp_public_headers}>
     $<BUILD_INTERFACE:${libtarp_private_headers}>
     )
@@ -160,11 +166,11 @@ target_include_directories(md5hash PUBLIC
 ## Link-time dependencies #
 ###########################
 #
-target_link_libraries(tarp
+target_link_libraries(libtarp
     m)
 
 target_link_libraries(md5hash
-    tarp)
+    libtarp)
 
 ########################################
 ## Build artifact installation rules  #
@@ -172,7 +178,7 @@ target_link_libraries(md5hash
 #
 INSTALL(DIRECTORY ${libtarp_public_headers}/ DESTINATION include/)
 
-set_target_properties(tarp md5hash
+set_target_properties(libtarp md5hash
     PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
@@ -184,7 +190,7 @@ set_target_properties(tarp md5hash
 #################################################
 SET(TARP_CMAKE_EXPORT_FILE "libtarp-targets")
 
-INSTALL(TARGETS tarp md5hash
+INSTALL(TARGETS libtarp md5hash
     EXPORT ${TARP_CMAKE_EXPORT_FILE}
     LIBRARY DESTINATION lib/
     ARCHIVE DESTINATION lib/
@@ -194,7 +200,7 @@ INSTALL(TARGETS tarp md5hash
 # Create the exports file; other projects, when package_find-ing
 # this project, can then import this exports file and get all the
 # exported targets.
-export(TARGETS tarp NAMESPACE tarp::
+export(TARGETS libtarp NAMESPACE tarp::
     FILE ${PROJECT_BINARY_DIR}/${TARP_CMAKE_EXPORT_FILE}.cmake
     )
 
