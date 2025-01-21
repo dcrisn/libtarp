@@ -51,6 +51,7 @@ add_definitions(
     # add functions from endian.h. Note the header and function names are
     # slightly different on the BSDs */
     -D_DEFAULT_SOURCE  # Linux, GNU libc (but probably musl etc)
+    -D_BSD_SOURCE
     #-DAVL_NODES_WITH_HEIGHT_FIELD
     )
 
@@ -120,19 +121,50 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 # Target definitions #
 ######################
 #
-file(GLOB_RECURSE library_c_sources "src/*.c")
-file(GLOB_RECURSE library_cxx_sources "src/*.cxx")
 
 SET(libtarp_public_headers include)
+
 SET(libtarp_private_headers
     ${libtarp_public_headers}
     src/
     )
 
 add_library(libtarp SHARED
-    ${library_c_sources}
-    ${library_cxx_sources}
-    )
+    src/misc/bits.c
+    src/misc/bitarray.c
+    src/misc/cohort.c
+    src/misc/common.c
+    src/misc/error.c
+    src/misc/event.c
+    src/misc/floats.c
+    src/misc/hash.c
+    src/misc/ioutils.c
+    src/misc/linux-event.c
+    src/misc/log.c
+    src/misc/math.c
+    src/misc/process.c
+    src/misc/timeutils.c
+    src/misc/threading.cxx
+    src/misc/sched.cxx
+    src/misc/string_utils.cxx
+    src/misc/process.cxx
+    src/misc/posix_signal_helpers.cxx
+    src/misc/idman.cxx
+    src/misc/filters.cxx
+    src/misc/buffer.cxx
+    src/misc/event.cxx
+    src/hash/md5/md5sum.c
+    src/hash/checksum.cxx
+    src/mods/avltree/avl.c
+    src/mods/bst/bst.c
+    src/mods/dllist/dllist.c
+    src/mods/hasht/hasht.c
+    src/mods/heap/explicit.c
+    src/mods/heap/implicit.c
+    src/mods/staq/staq.c
+    src/mods/vector/vector.c
+    src/parsers/iniparse.c
+)
 
 add_library(tarp::misc ALIAS libtarp)
 
