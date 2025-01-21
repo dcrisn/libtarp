@@ -53,6 +53,10 @@ foreach(dir ${test_dirs})
         SET(test_runtg "test.${dir}")
 
         add_executable(${test_bin} ${sources})
+
+        target_include_directories(${test_bin} PRIVATE
+            ${PROJECT_SOURCE_DIR}/src/)
+
         target_link_libraries(${test_bin} tarp)
 
         set_target_properties(${test_bin} PROPERTIES
