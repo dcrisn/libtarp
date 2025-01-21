@@ -1,16 +1,10 @@
 #pragma once
 
-/*
- * C */
-#include <signal.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
+#include <csignal>
 
-/*
- * Cxx */
 #include <initializer_list>
+
+namespace tarp {
 
 /*
  * NOTE
@@ -31,22 +25,12 @@
  */
 static volatile sig_atomic_t signal_handler_flag = 0;
 
-inline bool signal_caught( void )
-{
-	return signal_handler_flag == 1;
+inline bool signal_caught(void) {
+    return signal_handler_flag == 1;
 }
 
-#define SET_SIGNAL_HANDLER( signal, sig_action_struct, exit_on_fail )                                                      \
-	if( sigaction( signal, sig_action_struct, NULL ) == -1 )                                                           \
-	{                                                                                                                  \
-		fprintf( stderr, "Failed to set %s signal handler: '%s'", strsignal( signal ), strerror( errno ) );            \
-		if( exit_on_fail )                                                                                             \
-			exit( EXIT_FAILURE );                                                                                      \
-	}
-
-inline void simple_flag_setting_signal_handler( int )
-{
-	signal_handler_flag = 1;
+inline void simple_flag_setting_signal_handler(int) {
+    signal_handler_flag = 1;
 }
 
 /**
@@ -66,23 +50,10 @@ inline void simple_flag_setting_signal_handler( int )
  * @param verbose whether to print out a message for each signal as the handler
  * is registered.
  */
-inline void set_up_signals( std::initializer_list< int > signals = { SIGINT, SIGTERM, SIGSEGV },
-							sighandler_t sighandler = simple_flag_setting_signal_handler,
-							bool exit_on_fail = true,
-							bool verbose = true )
-{
-	struct sigaction sa;
-	memset( &sa, 0, sizeof( sa ) );
-	sa.sa_handler = sighandler;
-	sigemptyset( &sa.sa_mask );
+void
+set_up_signals(std::initializer_list<int> signals = {SIGINT, SIGTERM, SIGSEGV},
+               sighandler_t sighandler = simple_flag_setting_signal_handler,
+               bool exit_on_fail = true,
+               bool verbose = true);
 
-	for( auto& sig : signals )
-	{
-		if( verbose )
-			fprintf( stderr, "setting up signal for: %s\n", strsignal( sig ) );
-		SET_SIGNAL_HANDLER( sig, &sa, exit_on_fail );
-	}
-}
-
-#undef SET_SIGNAL_HANDLER
-
+}  // namespace tarp
