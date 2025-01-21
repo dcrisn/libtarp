@@ -94,6 +94,16 @@ std::string remove_suffix(const std::string &s,
                           const std::string &suffix,
                           bool case_sensitive);
 
+// true if the string s starts with the given prefix.
+bool starts_with(const std::string &s,
+                 const std::string &prefix,
+                 bool case_sensitive);
+
+// true if the string s ends with the given suffix.
+bool ends_with(const std::string &s,
+               const std::string &suffix,
+               bool case_sensitive);
+
 // return the concatenation of n repetitions of input s;
 // i.e.  s * n, as typical of higher-level languages.
 // NOTE:

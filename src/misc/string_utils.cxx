@@ -823,6 +823,25 @@ std::pair<std::string, std::string> load(const std::string &path) {
     return {ss.str(), ""};
 }
 
+// true if the string s starts with the given prefix.
+bool starts_with(const std::string &s,
+                 const std::string &prefix,
+                 bool case_sensitive) {
+    std::string changed = remove_prefix(s, prefix, case_sensitive);
+
+    // if s does not start with prefix, it is left unchanged.
+    // Therefore this is only true if the prefix was in fact there.
+    return changed != s;
+}
+
+// true if the string s ends with the given suffix.
+bool ends_with(const std::string &s,
+               const std::string &suffix,
+               bool case_sensitive) {
+    std::string changed = remove_suffix(s, suffix, case_sensitive);
+    return changed != s;
+}
+
 
 }  // namespace string_utils
 }  // namespace utils
