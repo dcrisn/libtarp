@@ -37,6 +37,7 @@ static int waker_write;
 void reader(struct fd_event *fdev, int fd, uint32_t events, void *priv){
     UNUSED(priv);  /* could be used to pass any user data */
     UNUSED(events);
+    UNUSED(fdev);
 
     assert(fdev);
     assert(fd);

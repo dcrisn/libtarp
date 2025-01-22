@@ -82,7 +82,6 @@ int main(int, const char **) {
               passed, false, host_byte_order_input, expected_result, res);
         }
 
-#if 1
         {
             auto [passed, res] = test(
               [](auto in) {
@@ -93,7 +92,6 @@ int main(int, const char **) {
             print_passed_or_not(
               passed, true, network_byte_order_input, expected_result, res);
         }
-#endif
     }
 
     std::cerr << "Fletcher64 tests: \n";

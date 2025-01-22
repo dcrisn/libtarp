@@ -29,3 +29,4 @@ int main(int argc, char **argv){
     char *path = argv[1];
     return iniParse_parse(ctx, path, mycb, NULL);
 }
+
