@@ -7,6 +7,81 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <tarp/common.h>
+
+/*
+ * Wrapper around the poll() system call for waiting on a single descriptor.
+ *
+ * For monitoring multiple descriptors, call poll() directly: there is no
+ * advantage to having a wrapper.
+ *
+ * The timeout value must be in milliseconds and will be passed to poll() as is.
+ *
+ * <-- return
+ *     Whatever poll() returns*; errno is also set by poll().
+ *
+ *     *except on success; in that case, rather than returning the number of
+ * file descriptors that are ready (which would be meaningless because there is
+ *      only ONE descriptor), the .revents mask associated with that descriptor
+ *      is returned instead.
+ */
+int pollfd(int fd, int events, int timeout);
+
+
+// Create a listening unix domain socket bound to the specified
+// path. The socket will accept the specified backlog size.
+// If successful, the socket will be stored in socket_fd,
+// ready for calls to accept().
+// If stream_type is true, the socket created will be of
+// type SOCK_STREAM, otherwise SOCK_DGRAM.
+struct result make_server_uds(const char *path,
+                              unsigned backlog_len,
+                              int *socket_fd,
+                              bool stream_type);
+
+// Create a client unix domain socket and connect it to the server socket
+// that is bound to the specified path.
+// If stream_type==true, then the socket created will be of type SOCK_STREAM
+// and client_path is unused. Otherwise the socket type will be of type
+// SOCK_DGRAM and the client is also bound to client_path so that the server
+// will be able to send back messages if needed.
+// If successful, the socket will be stored in socket_fd, ready for calls to
+// writing to and reading from.
+struct result make_client_uds(const char *server_path,
+                              const char *client_path,
+                              int *socket_fd,
+                              bool stream_type);
+
+// Write msg, which has size msgsz, to the connected uds_dst_fd socket
+// descriptor. If fd is < 0, it is ignored. Otherwise it is sent as ancillary
+// data along with the message. In this case, uds_dst_fd must be a unix domain
+// socket descriptor. If blocking=true, then the function reattempts a number of
+// times to send all bytes in case of a partial write. If it fails, or
+// blocking=false, the number of bytes written is stored in num_bytes_written.
+struct result send_msg_with_fd(int uds_dst_fd,
+                               int fd,
+                               uint8_t *msg,
+                               size_t msgsz,
+                               bool blocking,
+                               size_t *num_bytes_written);
+
+// Try to read at least min_bytes_to_read from the connected uds_fd socket
+// descriptor into the buffer of size buffsz. min_bytes_to_read must be <=
+// buffsz. If blocking=true, the function reattempts to read all of
+// min_bytes_to_read in case of a partial read. If it fails to do that or if
+// blocking=false, then in case of a partial read the number of bytes read is
+// stored in num_bytes_read.
+//
+// If a file descriptor was sent as ancillary data, it will be stored in fd.
+// Otherwise -1 will be stored.
+struct result receive_msg_with_fd(int uds_fd,
+                                  int *fd,
+                                  uint8_t *buff,
+                                  size_t buffsz,
+                                  size_t min_bytes_to_read,
+                                  bool blocking,
+                                  size_t *num_bytes_read);
+
 /*
  * Try to write nbytes from the src buffer to the dst descriptor.
  *
@@ -71,25 +146,6 @@ struct pumped {
 };
 
 struct pumped pump(int src, int dst, uint8_t *buff, size_t buffsz);
-
-/*
- * Wrapper around the poll() system call for waiting on a single descriptor.
- *
- * For monitoring multiple descriptors, call poll() directly: there is no
- * advantage to having a wrapper.
- *
- * The timeout value must be in milliseconds and will be passed to poll() as is.
- *
- * <-- return
- *     Whatever poll() returns*; errno is also set by poll().
- *
- *     *except on success; in that case, rather than returning the number of
- * file descriptors that are ready (which would be meaningless because there is
- *      only ONE descriptor), the .revents mask associated with that descriptor
- *      is returned instead.
- */
-int pollfd(int fd, int events, int timeout);
-
 
 #ifdef __cplusplus
 } /* extern "C" */
