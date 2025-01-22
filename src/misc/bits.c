@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include <tarp/common.h>
 #include <tarp/bits.h>

@@ -5,6 +5,7 @@
 #include <memory>
 #include <stdexcept>
 #include <sstream>
+#include <cstring>
 
 #include <tarp/common.h>
 #include <tarp/error.h>

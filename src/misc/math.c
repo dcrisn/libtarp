@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 /* sieve of Eratosthenes */
 void find_primes(size_t limit, char *buff){

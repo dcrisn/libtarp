@@ -1,23 +1,25 @@
 #include <assert.h>
-#include <stdbool.h>
-#include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <string.h>
+#include <unistd.h>
+
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
 
 #include <tarp/common.h>
-#include <tarp/log.h>
 #include <tarp/container.h>
-#include <tarp/timeutils.h>
-#include <tarp/ioutils.h>
 #include <tarp/dllist.h>
-#include <tarp/staq.h>
 #include <tarp/error.h>
+#include <tarp/ioutils.h>
+#include <tarp/log.h>
+#include <tarp/staq.h>
+#include <tarp/timeutils.h>
 
-#include <tarp/event.h>
 #include "event_shared_defs.h"
+#include <tarp/event.h>
 
 #define EVP_DEFAULT_WAIT_TIME_SECS 36000
 
@@ -32,21 +34,20 @@
  * Ensure the inputs (secs, msecs, usecs -- as u32s) can always
  * be stored in a time_t without overflow. */
 static_assert(sizeof(uint32_t) < sizeof(time_t),
-        "sizeof uint32_t >= sizeof time_t");
-
+              "sizeof uint32_t >= sizeof time_t");
 
 // staqnode destructor
-void user_event_destructor(struct staqnode *node){
+void user_event_destructor(struct staqnode *node) {
     assert(node);
     salloc(0, get_container(node, struct user_event, link));
 }
 
 // NOTE the os api handle must have been initialized
-static inline int initialize_eventfd_semaphore(struct evp_handle *handle){
+static inline int initialize_eventfd_semaphore(struct evp_handle *handle) {
     assert(handle);
     int rc;
 
-    if ((rc = eventfd(0, EFD_CLOEXEC)) < 0){
+    if ((rc = eventfd(0, EFD_CLOEXEC)) < 0) {
         error("Failed to create eventfd: '%s'", strerror(errno));
         return -1;
     }
@@ -60,12 +61,12 @@ static inline int initialize_eventfd_semaphore(struct evp_handle *handle){
 }
 
 // NOTE the os api handle must have been initialized
-static inline int initialize_wait_timer(struct evp_handle *handle){
+static inline int initialize_wait_timer(struct evp_handle *handle) {
     assert(handle);
     int rc;
 
     rc = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
-    if (rc < 0){
+    if (rc < 0) {
         error("Failed to create timerfd: '%s'", strerror(errno));
         return -1;
     }
@@ -79,22 +80,23 @@ static inline int initialize_wait_timer(struct evp_handle *handle){
 }
 
 // NOTE that the pthread API does not normally set errno
-static int initialize_uevq_mutex(struct evp_handle *handle){
+static int initialize_uevq_mutex(struct evp_handle *handle) {
     int rc = 0;
     pthread_mutexattr_t attr;
 
-    if ((rc = pthread_mutexattr_init(&attr)) != 0){
+    if ((rc = pthread_mutexattr_init(&attr)) != 0) {
         error("pthread_attr_init error (%d)", rc);
         return rc;
     }
 
-    if ((rc = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK)) != 0){
+    if ((rc = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK)) !=
+        0) {
         error("pthread_mutexattr_settype error (%d)", rc);
         pthread_mutexattr_destroy(&attr);
         return rc;
     }
 
-    if ((rc = pthread_mutex_init(&handle->uev_mtx, &attr)) != 0){
+    if ((rc = pthread_mutex_init(&handle->uev_mtx, &attr)) != 0) {
         error("pthread_mutex_init error (%d)", rc);
         pthread_mutexattr_destroy(&attr);
         return rc;
@@ -104,7 +106,7 @@ static int initialize_uevq_mutex(struct evp_handle *handle){
     return 0;
 }
 
-static int initialize_event_pump_handle(struct evp_handle *handle){
+static int initialize_event_pump_handle(struct evp_handle *handle) {
     assert(handle);
 
     int rc = ERROR_RUNTIMEERROR;
@@ -123,15 +125,17 @@ static int initialize_event_pump_handle(struct evp_handle *handle){
     Dll_init(&handle->timers, NULL);
     Dll_init(&handle->evq, NULL);
     Staq_init(&handle->uevq, user_event_destructor);
-    memset(handle->watch, 0, sizeof(struct user_event_watch *) * ARRLEN(handle->watch));
+    memset(handle->watch,
+           0,
+           sizeof(struct user_event_watch *) * ARRLEN(handle->watch));
 
     return ERRORCODE_SUCCESS;
 }
 
-struct evp_handle *Evp_new(void){
+struct evp_handle *Evp_new(void) {
     struct evp_handle *handle = salloc(sizeof(struct evp_handle), NULL);
 
-    if (initialize_event_pump_handle(handle) != ERRORCODE_SUCCESS){
+    if (initialize_event_pump_handle(handle) != ERRORCODE_SUCCESS) {
         Evp_destroy(&handle);
     }
 
@@ -146,24 +150,23 @@ struct evp_handle *Evp_new(void){
  * since this gets updated/recomputed each time the main event pump loop
  * unblocks.
  */
-static inline void pick_shortest_wait_time(
-        struct timespec *tspec,
-        const struct dllist *timerq)
-{
+static inline void pick_shortest_wait_time(struct timespec *tspec,
+                                           const struct dllist *timerq) {
     assert(tspec);
     assert(timerq);
 
-    if (Dll_empty(timerq)){
+    if (Dll_empty(timerq)) {
         *tspec = time_now_monotonic();
         tspec->tv_sec += EVP_DEFAULT_WAIT_TIME_SECS;
-        if (tspec->tv_sec < EVP_DEFAULT_WAIT_TIME_SECS){
-            warn("timespec overflow after EVP_DEFAULT_BLOCK_TIME_SECS addition");
+        if (tspec->tv_sec < EVP_DEFAULT_WAIT_TIME_SECS) {
+            warn(
+              "timespec overflow after EVP_DEFAULT_BLOCK_TIME_SECS addition");
         }
         return;
     }
 
     struct timer_event *tev = Dll_front(timerq, struct timer_event, link);
-    if (tev && tspec) *tspec = tev->tspec;   /* already an absolute timepoint */
+    if (tev && tspec) *tspec = tev->tspec; /* already an absolute timepoint */
 }
 
 /*
@@ -173,14 +176,15 @@ static inline void pick_shortest_wait_time(
  *
  * Note if the timer is already set, re-arming it simply resets and updates
  * its state. */
-static int wake_on_first_timer(struct evp_handle *handle){
+static int wake_on_first_timer(struct evp_handle *handle) {
     struct itimerspec itspec;
     memset(&itspec, 0, sizeof(struct itimerspec));
     pick_shortest_wait_time(&itspec.it_value, &handle->timers);
     assert(itspec.it_value.tv_nsec < 999999999L);
 
-    int rc = timerfd_settime(handle->timerfd.fd, TFD_TIMER_ABSTIME, &itspec, NULL);
-    if (rc != 0){
+    int rc =
+      timerfd_settime(handle->timerfd.fd, TFD_TIMER_ABSTIME, &itspec, NULL);
+    if (rc != 0) {
         error("Failed to arm timerfd: '%s'", strerror(errno));
         return rc;
     }
@@ -190,11 +194,11 @@ static int wake_on_first_timer(struct evp_handle *handle){
 
 // true if ts <= reference (monotonic time).
 // if reference=NULL, NOW is used.
-static inline bool elapsed(struct timespec *ts, struct timespec *reference){
+static inline bool elapsed(struct timespec *ts, struct timespec *reference) {
     assert(ts);
 
     struct timespec now;
-    if (!reference){
+    if (!reference) {
         now = time_now_monotonic();
         reference = &now;
     }
@@ -208,16 +212,20 @@ static inline bool elapsed(struct timespec *ts, struct timespec *reference){
  * Recovery from this is a fool's errand. The problem needs to be fixed offline.
  * On failure, just exit (and fix the problem).
  */
-static inline void lock_mutex(pthread_mutex_t *mtx){
+static inline void lock_mutex(pthread_mutex_t *mtx) {
     int rc;
-    THROWS_ON((rc = pthread_mutex_lock(mtx)) != 0, ERROR_RUNTIMEERROR,
-            "pthread_mutex_lock error (%d)", rc);
+    THROWS_ON((rc = pthread_mutex_lock(mtx)) != 0,
+              ERROR_RUNTIMEERROR,
+              "pthread_mutex_lock error (%d)",
+              rc);
 }
 
-static inline void unlock_mutex(pthread_mutex_t *mtx){
+static inline void unlock_mutex(pthread_mutex_t *mtx) {
     int rc;
-    THROWS_ON((rc = pthread_mutex_unlock(mtx)) != 0, ERROR_RUNTIMEERROR,
-            "pthread_mutex_unlock error (%d)", rc);
+    THROWS_ON((rc = pthread_mutex_unlock(mtx)) != 0,
+              ERROR_RUNTIMEERROR,
+              "pthread_mutex_unlock error (%d)",
+              rc);
 }
 
 /*
@@ -233,9 +241,7 @@ static inline void unlock_mutex(pthread_mutex_t *mtx){
  * then the number of milliseconds that the function took to run is stored
  * in it (as a floating point number). This is useful for debugging etc.
  */
-static unsigned dispatch_events(
-        struct evp_handle *handle, double *time_taken)
-{
+static unsigned dispatch_events(struct evp_handle *handle, double *time_taken) {
     assert(handle);
 
     uint64_t buff;
@@ -261,7 +267,7 @@ static unsigned dispatch_events(
      * a few related callbacks where one of them can unregster all of them on
      * a certain event. This is a perfectly acceptable scenario and using
      * Dll_foreach in that case risks using already-freed memory! */
-    while ((tev = Dll_front(&handle->timers, struct timer_event, link))){
+    while ((tev = Dll_front(&handle->timers, struct timer_event, link))) {
         if (!elapsed(&tev->tspec, &now)) break;
         Dll_popnode(&handle->timers, tev, link);
         assert(tev->cb);
@@ -271,11 +277,11 @@ static unsigned dispatch_events(
     }
 
     /* Handle OS events */
-    while ((fdev = Dll_front(&handle->evq, struct fd_event, link))){
+    while ((fdev = Dll_front(&handle->evq, struct fd_event, link))) {
         Dll_popnode(&handle->evq, fdev, link);
 
         /* semaphore post or loop wait timer? reset to 0 and carry on; */
-        if (fdev->fd == handle->sem.fd || fdev->fd == handle->timerfd.fd){
+        if (fdev->fd == handle->sem.fd || fdev->fd == handle->timerfd.fd) {
             rc = read(fdev->fd, &buff, sizeof(buff));
             UNUSED(rc);
             continue;
@@ -284,23 +290,23 @@ static unsigned dispatch_events(
         /* else 'normal' fd event; dispatch by invoking callback */
         assert(fdev->cb);
         fdev->cb(fdev, fdev->fd, fdev->revents, fdev->priv);
-        fdev->revents = 0;  /* clear revents; assumed to have been handled */
+        fdev->revents = 0; /* clear revents; assumed to have been handled */
         num_handled++;
     }
 
     /* Handle user events */
     struct user_event_watch *watch;
-    while(true){
+    while (true) {
         lock_mutex(&handle->uev_mtx);
         uev = Staq_dq(&handle->uevq, struct user_event, link);
         unlock_mutex(&handle->uev_mtx);
 
-        if (!uev) break;   /* empty queue */
+        if (!uev) break; /* empty queue */
 
         assert(uev->event_type < MAX_USER_EVENT_TYPE_VALUE);
         watch = handle->watch[uev->event_type];
 
-        if (watch){
+        if (watch) {
             assert(watch->cb);
             assert(watch->event_type == uev->event_type);
             watch->cb(watch, watch->event_type, uev->data, watch->priv);
@@ -314,12 +320,12 @@ static unsigned dispatch_events(
     return num_handled;
 }
 
-void dummy_timer_callback(struct timer_event *tev, void *priv){
+void dummy_timer_callback(struct timer_event *tev, void *priv) {
     UNUSED(tev);
     UNUSED(priv);
 }
 
-void Evp_run(struct evp_handle *handle, int seconds){
+void Evp_run(struct evp_handle *handle, int seconds) {
     int rc = 0;
     double time;
     bool with_timeout = (seconds > -1);
@@ -328,21 +334,20 @@ void Evp_run(struct evp_handle *handle, int seconds){
 
     /* to terminate the run on specified seconds timeout */
     struct timer_event timeout;
-    if (with_timeout){
+    if (with_timeout) {
         Evp_init_timer_secs(&timeout, seconds, dummy_timer_callback, NULL);
         Evp_register_timer(handle, &timeout);
     }
 
-    for(;;){
-        if (wake_on_first_timer(handle) != 0)     break;
-        if (pump_os_events(handle) != 0)          break;
+    for (;;) {
+        if (wake_on_first_timer(handle) != 0) break;
+        if (pump_os_events(handle) != 0) break;
 
         rc = dispatch_events(handle, &time);
 
         debug("Event pump loop: handled %zu events in %f ms", rc, time);
 
-        if (with_timeout && time_now_monotonic_dbs() - start >= seconds)
-            break;
+        if (with_timeout && time_now_monotonic_dbs() - start >= seconds) break;
     }
 
     if (with_timeout) Evp_unregister_timer(handle, &timeout);
@@ -355,7 +360,7 @@ void Evp_run(struct evp_handle *handle, int seconds){
  * on the monotonic clock by adding the duration to NOW.
  *
  * The timer *must not* be currently registered. */
-static int timer_duration_to_timepoint(struct timer_event *tev){
+static int timer_duration_to_timepoint(struct timer_event *tev) {
     assert(tev);
 
     long seconds_before = tev->tspec.tv_sec;
@@ -364,7 +369,7 @@ static int timer_duration_to_timepoint(struct timer_event *tev){
     timespec_add(&now, &tev->tspec, &tev->tspec);
 
     // check for overflow
-    if (tev->tspec.tv_sec < seconds_before){
+    if (tev->tspec.tv_sec < seconds_before) {
         error("timespec overflow inside Evp_register_timer");
         return ERROR_OUTOFBOUNDS;
     }
@@ -376,7 +381,7 @@ static int timer_duration_to_timepoint(struct timer_event *tev){
  * Expects tev->tspec to have already been populated with an interval duration.
  * This function calls timer_duration_to_timepoint and if successful enqueues
  * the timer into the timer queue. */
-int Evp_register_timer(struct evp_handle *handle, struct timer_event *tev){
+int Evp_register_timer(struct evp_handle *handle, struct timer_event *tev) {
     assert(handle);
     assert(tev);
     assert(tev->cb);
@@ -388,15 +393,17 @@ int Evp_register_timer(struct evp_handle *handle, struct timer_event *tev){
 
     struct timer_event *timer;
 
-    if (Dll_empty(&handle->timers)){
+    if (Dll_empty(&handle->timers)) {
         Dll_pushfront(&handle->timers, tev, link);
-        tev->registered = true; return ERRORCODE_SUCCESS;
+        tev->registered = true;
+        return ERRORCODE_SUCCESS;
     }
 
-    Dll_foreach(&handle->timers, timer, struct timer_event, link){
-        if (gt(&timer->tspec, &tev->tspec, timespec_cmp)){
+    Dll_foreach(&handle->timers, timer, struct timer_event, link) {
+        if (gt(&timer->tspec, &tev->tspec, timespec_cmp)) {
             Dll_put_before(&handle->timers, timer, tev, link);
-            tev->registered = true; return ERRORCODE_SUCCESS;
+            tev->registered = true;
+            return ERRORCODE_SUCCESS;
         }
     }
 
@@ -407,100 +414,99 @@ int Evp_register_timer(struct evp_handle *handle, struct timer_event *tev){
     return ERRORCODE_SUCCESS;
 }
 
-void Evp_set_timer_interval_secs(struct timer_event *tev, uint32_t seconds){
+void Evp_set_timer_interval_secs(struct timer_event *tev, uint32_t seconds) {
     assert(tev);
     tev->tspec.tv_sec = seconds;
     tev->tspec.tv_nsec = 0;
 }
 
-void Evp_set_timer_interval_ms(struct timer_event *tev, uint32_t milliseconds){
+void Evp_set_timer_interval_ms(struct timer_event *tev, uint32_t milliseconds) {
     assert(tev);
     tev->tspec.tv_sec = milliseconds / MSECS_PER_SEC;
     tev->tspec.tv_nsec = (milliseconds % MSECS_PER_SEC) * NSECS_PER_MSEC;
 }
 
-void Evp_set_timer_interval_us(struct timer_event *tev, uint32_t microseconds){
+void Evp_set_timer_interval_us(struct timer_event *tev, uint32_t microseconds) {
     assert(tev);
     tev->tspec.tv_sec = microseconds / USECS_PER_SEC;
     tev->tspec.tv_nsec = (microseconds % USECS_PER_SEC) * NSECS_PER_USEC;
 }
 
-void Evp_set_timer_interval_fromtimespec(
-        struct timer_event *tev, struct timespec *tspec)
-{
-    assert(tev); assert(tspec);
+void Evp_set_timer_interval_fromtimespec(struct timer_event *tev,
+                                         struct timespec *tspec) {
+    assert(tev);
+    assert(tspec);
     tev->tspec.tv_sec = tspec->tv_sec;
     tev->tspec.tv_nsec = tspec->tv_nsec;
 }
 
-static inline void initialize_tev(
-        struct timer_event *tev, timer_callback cb, void *priv){
+static inline void
+initialize_tev(struct timer_event *tev, timer_callback cb, void *priv) {
     tev->priv = priv;
     tev->cb = cb;
     tev->registered = false;
 }
 
-void Evp_init_timer_secs(
-        struct timer_event *tev, uint32_t seconds,
-        timer_callback cb, void *priv)
-{
+void Evp_init_timer_secs(struct timer_event *tev,
+                         uint32_t seconds,
+                         timer_callback cb,
+                         void *priv) {
     Evp_set_timer_interval_secs(tev, seconds);
     initialize_tev(tev, cb, priv);
 }
 
-void Evp_init_timer_ms(
-        struct timer_event *tev, uint32_t milliseconds,
-        timer_callback cb, void *priv)
-{
+void Evp_init_timer_ms(struct timer_event *tev,
+                       uint32_t milliseconds,
+                       timer_callback cb,
+                       void *priv) {
     Evp_set_timer_interval_ms(tev, milliseconds);
     initialize_tev(tev, cb, priv);
 }
 
-void Evp_init_timer_us(
-        struct timer_event *tev, uint32_t microseconds,
-        timer_callback cb, void *priv)
-{
+void Evp_init_timer_us(struct timer_event *tev,
+                       uint32_t microseconds,
+                       timer_callback cb,
+                       void *priv) {
     Evp_set_timer_interval_us(tev, microseconds);
     initialize_tev(tev, cb, priv);
 }
 
-void Evp_init_timer_fromtimespec(
-        struct timer_event *tev, struct timespec *tspec,
-        timer_callback cb, void *priv)
-{
-    assert(tev); assert(tspec);
+void Evp_init_timer_fromtimespec(struct timer_event *tev,
+                                 struct timespec *tspec,
+                                 timer_callback cb,
+                                 void *priv) {
+    assert(tev);
+    assert(tspec);
     Evp_set_timer_interval_fromtimespec(tev, tspec);
     initialize_tev(tev, cb, priv);
 }
 
-void Evp_unregister_timer(struct evp_handle *handle, struct timer_event *tev){
+void Evp_unregister_timer(struct evp_handle *handle, struct timer_event *tev) {
     assert(handle);
     assert(tev);
 
-    if (tev->registered){
+    if (tev->registered) {
         Dll_popnode(&handle->timers, tev, link);
         tev->registered = false;
     }
 }
 
-int Evp_init_fdmon(
-        struct fd_event *fdev,
-        int fd,
-        uint32_t flags,
-        fd_event_callback cb,
-        void *priv)
-{
+int Evp_init_fdmon(struct fd_event *fdev,
+                   int fd,
+                   uint32_t flags,
+                   fd_event_callback cb,
+                   void *priv) {
     assert(fdev);
     assert(cb);
 
     if (fd < 0) return ERROR_INVALIDVALUE;
 
-    if (! (flags & FD_EVENT_READABLE || flags & FD_EVENT_WRITABLE)){
+    if (!(flags & FD_EVENT_READABLE || flags & FD_EVENT_WRITABLE)) {
         return ERROR_INVALIDVALUE;
     }
 
-    if (fdev->evmask & FD_NONBLOCKING){
-	    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    if (fdev->evmask & FD_NONBLOCKING) {
+        fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     }
 
     fdev->cb = cb;
@@ -512,12 +518,13 @@ int Evp_init_fdmon(
     return ERRORCODE_SUCCESS;
 }
 
-int Evp_register_fdmon(struct evp_handle *handle, struct fd_event *fdev){
+int Evp_register_fdmon(struct evp_handle *handle, struct fd_event *fdev) {
     assert(handle);
     assert(fdev);
     assert(fdev->cb);
     assert(fdev->fd >= 0);
-    assert(fdev->evmask & FD_EVENT_READABLE || fdev->evmask & FD_EVENT_WRITABLE);
+    assert(fdev->evmask & FD_EVENT_READABLE ||
+           fdev->evmask & FD_EVENT_WRITABLE);
 
     if (fdev->registered) return ERROR_INVALIDVALUE;
 
@@ -526,17 +533,17 @@ int Evp_register_fdmon(struct evp_handle *handle, struct fd_event *fdev){
     return rc;
 }
 
-void Evp_unregister_fdmon(struct evp_handle *handle, struct fd_event *fdev){
+void Evp_unregister_fdmon(struct evp_handle *handle, struct fd_event *fdev) {
     assert(handle);
     assert(fdev);
 
-    if (fdev->registered){
+    if (fdev->registered) {
         fdev->registered = false;
         remove_fd_event_monitor(handle->osapi, fdev);
     }
 }
 
-void Evp_destroy(struct evp_handle **handle){
+void Evp_destroy(struct evp_handle **handle) {
     assert(handle);
     assert(*handle);
 
@@ -557,12 +564,10 @@ void Evp_destroy(struct evp_handle **handle){
     *handle = NULL;
 }
 
-int Evp_init_uev_watch(
-        struct user_event_watch *uev,
-        unsigned event_type,
-        user_event_callback cb,
-        void *priv)
-{
+int Evp_init_uev_watch(struct user_event_watch *uev,
+                       unsigned event_type,
+                       user_event_callback cb,
+                       void *priv) {
     assert(uev);
     assert(cb);
 
@@ -576,8 +581,8 @@ int Evp_init_uev_watch(
     return ERRORCODE_SUCCESS;
 }
 
-int Evp_register_uev_watch(struct evp_handle *handle, struct user_event_watch *uev)
-{
+int Evp_register_uev_watch(struct evp_handle *handle,
+                           struct user_event_watch *uev) {
     assert(handle);
     assert(uev);
     assert(uev->cb);
@@ -594,9 +599,8 @@ int Evp_register_uev_watch(struct evp_handle *handle, struct user_event_watch *u
     return ERRORCODE_SUCCESS;
 }
 
-
-void Evp_unregister_uev_watch(struct evp_handle *handle, struct user_event_watch *uev)
-{
+void Evp_unregister_uev_watch(struct evp_handle *handle,
+                              struct user_event_watch *uev) {
     assert(handle);
     assert(uev);
 
@@ -608,14 +612,21 @@ void Evp_unregister_uev_watch(struct evp_handle *handle, struct user_event_watch
 }
 
 /* Unblock the main event loop via the eventfd */
-static inline int notify_event_pushlished(struct evp_handle *handle){
+static inline int notify_event_pushlished(struct evp_handle *handle) {
     assert(handle);
-    uint64_t buff = 1;  /* ~must~ write 8 bytes */
-    return full_write(handle->sem.fd, (uint8_t*)&buff, sizeof(uint64_t));
+    uint64_t buff = 1; /* ~must~ write 8 bytes */
+
+    ssize_t bytes_written =
+      try_write(handle->sem.fd, (uint8_t *)&buff, sizeof(uint64_t));
+
+    if (bytes_written != sizeof(uint64_t)) {
+        return ERROR_WRITE;
+    }
+
+    return ERRORCODE_SUCCESS;
 }
 
-int Evp_push_uev(struct evp_handle *handle, unsigned event_type, void *data)
-{
+int Evp_push_uev(struct evp_handle *handle, unsigned event_type, void *data) {
     assert(handle);
 
     if (event_type >= MAX_USER_EVENT_TYPE_VALUE) return ERROR_OUTOFBOUNDS;
@@ -630,4 +641,3 @@ int Evp_push_uev(struct evp_handle *handle, unsigned event_type, void *data)
 
     return notify_event_pushlished(handle);
 }
-

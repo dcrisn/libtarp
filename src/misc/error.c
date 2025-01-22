@@ -2,6 +2,8 @@
 #include <tarp/error.h>
 #include <tarp/log.h>
 
+#include <stdlib.h>
+
 static const char *error_codes[] = {
     [ERRORCODE_SUCCESS]      = "Success",
     [ERROR_BADALLOC]         = "Memory allocation failure",

@@ -1,5 +1,4 @@
-#ifndef TARP_IOUTILS_H
-#define TARP_IOUTILS_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,30 +8,44 @@ extern "C" {
 #include <stdlib.h>
 
 /*
- * Reliably write nbytes from the src buffer to the dst descriptor.
+ * Try to write nbytes from the src buffer to the dst descriptor.
  *
  * This function deals with partial writes which may occur due to
- * e.g. signal interrupts. Unless ERROR_WRITE is returned, then the whole
- * nbytes has been written to dst.
+ * e.g. intermittent failures. The number of bytes written is returned.
+ * If the result != nbytes, then only a partial write could be effected.
+ * The caller can then e.g. call the function again or give up.
  *
- * It also reattempts the write 5 times in a row when the write fails
- * with one of EINTR, EAGAIN or EWOULDBLOCK. If one of those reattempts
+ * The function reattempts the write 5 times in a row when the write fails
+ * with one of EAGAIN or EWOULDBLOCK. If one of those reattempts
  * actually succeeds, the reattempt counter is reset to 0 (meaning if
  * another error like this were to occur, another 5 reattempts would be
  * carried out). These 3 errors may be considered temporary nonfatal
  * conditions so reattempting a write makes sense.
  *
  * Other errors however are likely fatal so reattempting the write in
- * that case is likely pointless. The function in that case returns ERROR_WRITE,
- * as it's unlikely write() will succeed and there are probably more significant
- * issues with the system anyway.
+ * that case is likely pointless. The function in that case returns the number
+ * of bytes written so far, as it's unlikely write() will succeed and there
+ * are probably more significant issues with the system anyway.
  *
  * <-- return
- *     ERRORCODE_SUCCESS on success. Else WRITE_FAIL if write() has failed
- *     with an error considered to be fatal or if the maximum number of write
- *     reattempts has been reached without success.
+ *     the number of bytes written.
  */
-int full_write(int dst, uint8_t *src, int nbytes);
+ssize_t try_write(int dst, uint8_t *src, size_t nbytes);
+
+/*
+ * Try to read buffsz bytes into buff from the file descriptor src.
+ * buff must be of size >= buffsz.
+ *
+ * <-- return
+ *     the number of bytes read.
+ *
+ *  If the return value == buffsz, then the read was complete. Otherwise
+ *  the read was partial, and the caller is then free to give up or retry etc.
+ *  The function internally retries a number of times when one of EAGAIN
+ *  or EWOULDBLOCK are the causes of the partial read, but will give up if
+ *  another error occurs. The approach is as described above for try_write.
+ */
+ssize_t try_read(int src, uint8_t *buff, size_t buffsz);
 
 /*
  * Read buffsz bytes at a time from src until EOF or error and write to dst
@@ -41,22 +54,23 @@ int full_write(int dst, uint8_t *src, int nbytes);
  * the caller to be used internally by this function for carrying out
  * the transfer from src to dst.
  *
- * If read() returns:
- * a) -1: transfer() considers it to have failed
- * b) 0 : transfer() considers it to have succeeded but
- *    the internal loop never enters; this is when read
+ * We assume the following. If read() returns:
+ * a) -1: => failed
+ * b) 0 : => succeeded but the internal loop never enters; this is when read
  *    returns EOF. In other words, there is nothing to transfer.
- * c) a certain numbers of bytes that have been read;
+ * c) a certain number of bytes that have been read;
  *    In this case the internal loop is entered and write()
  *    will attempt to write that number of bytes to dst.
  *
  * The number of bytes read by `read()` will be written
  * by `write()` in an internal loop, as described above.
- *
- * The full_write() wrapper is used rather than the plain write()
- * in order to attempt recovery from partial writes.
  */
-int transfer(int src, int dst, uint8_t *buff, size_t buffsz);
+struct pumped {
+    size_t bytes_read;
+    size_t bytes_written;
+};
+
+struct pumped pump(int src, int dst, uint8_t *buff, size_t buffsz);
 
 /*
  * Wrapper around the poll() system call for waiting on a single descriptor.
@@ -69,8 +83,8 @@ int transfer(int src, int dst, uint8_t *buff, size_t buffsz);
  * <-- return
  *     Whatever poll() returns*; errno is also set by poll().
  *
- *     *except on success; in that case, rather than returning the number of file
- *      descriptors that are ready (which would be meaningless because there is
+ *     *except on success; in that case, rather than returning the number of
+ * file descriptors that are ready (which would be meaningless because there is
  *      only ONE descriptor), the .revents mask associated with that descriptor
  *      is returned instead.
  */
@@ -79,49 +93,4 @@ int pollfd(int fd, int events, int timeout);
 
 #ifdef __cplusplus
 } /* extern "C" */
-#endif
-
-
-
-#ifdef __cplusplus
-
-#include <stdexcept>
-#include <memory>
-#include <string>
-#include <iostream>
-
-/*
- * In c++ 20 there is python like string - format capability.
- * The below is a substitute for older versions.
- *
- * Adapted from
- * https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf.
- */
-template<typename ... Args>
-std::string sfmt(const std::string &fmt, Args ... vargs )
-{
-    /* get total number of characters that snprintf would've written; +1
-     * since the return value does not account for the terminating NULL */
-    int len = std::snprintf(nullptr, 0, fmt.c_str(), vargs ... ) + 1;
-    if( len <= 0 ){
-        throw std::runtime_error( "sfmt string formatting error" );
-    }
-
-    size_t buffsz = static_cast<size_t>(len);
-    std::unique_ptr<char[]> buff(new char[buffsz]);
-
-    std::snprintf(buff.get(),buffsz, fmt.c_str(), vargs ... );
-
-    /* -1 to leave out the terminating Null */
-    return std::string(buff.get(), buff.get() + buffsz - 1 );
-}
-
-template<typename ...Args>
-void println(Args&&... args) {
-    (std::cout << ... << std::forward<Args>(args)) << '\n';
-}
-
-#endif
-
-
 #endif

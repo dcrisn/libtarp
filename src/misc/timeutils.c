@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <time.h>
+#include <string.h>
 
 #include <tarp/floats.h>
 #include <tarp/log.h>

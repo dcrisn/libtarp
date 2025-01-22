@@ -1,15 +1,17 @@
-#include <sys/epoll.h>
 #include <fcntl.h>
-#include <tarp/error.h>
-#include <tarp/event_flags.h>
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 
+#include <sys/epoll.h>
+
+#include <tarp/error.h>
+#include <tarp/event_flags.h>
 #include <tarp/dllist.h>
 #include <tarp/common.h>
 #include <tarp/log.h>
-
 #include <tarp/event.h>
+
 #include "event_shared_defs.h"
 
 

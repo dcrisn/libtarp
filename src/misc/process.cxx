@@ -1,11 +1,12 @@
 #include <array>
 #include <stdexcept>
 #include <string>
+#include <cstring>
+
+#include <unistd.h>
 
 #include <tarp/common.h>
 #include <tarp/log.h>
-#include <unistd.h>
-
 #include <tarp/event.hxx>
 #include <tarp/process.h>
 #include <tarp/types.h>

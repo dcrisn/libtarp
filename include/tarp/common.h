@@ -7,12 +7,10 @@ extern "C" {
 #endif
 
 #include <assert.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 
 void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
@@ -44,10 +42,10 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  *  Casting to void will always work; using the unused attribute works
  *  with gcc and clang.
  */
-#define UNUSED(x) \
-  do {            \
-    (void)(x);    \
-  } while (0)
+#define UNUSED(x)  \
+    do {           \
+        (void)(x); \
+    } while (0)
 
 /*
  * Useful for namespacing enums i.e. prefixing all enum members
@@ -59,7 +57,7 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  */
 #define _do_add_enum_member_prefix(PREFIX, member) PREFIX##_##member
 #define enum_namespace(PREFIX, member) \
-  _do_add_enum_member_prefix(PREFIX, member)
+    _do_add_enum_member_prefix(PREFIX, member)
 
 /*
  * Safe allocation: exits the program if calloc/malloc/realloc return NULL;
@@ -72,10 +70,10 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 void *salloc(size_t size, void *ptr);
 
 // print n newlines.
-#define nl(n)                             \
-  do {                                    \
-    for (int i = n; i > 0; --i) puts(""); \
-  } while (0);
+#define nl(n)                                 \
+    do {                                      \
+        for (int i = n; i > 0; --i) puts(""); \
+    } while (0);
 
 #define match(a, b)     (strcmp(a, b) == 0)
 #define matchn(a, b, n) (strncmp(a, b, n) == 0)
@@ -94,6 +92,29 @@ void *salloc(size_t size, void *ptr);
 enum comparatorResult { LT = -1, EQ = 0, GT = 1 };
 typedef enum comparatorResult (*comparator)(const void *a, const void *b);
 
+// a triple that makes it convenient to build and print
+// informative error strings using perr() (see below).
+// ok: whether the function was successful or not.
+// e: an error string. Should only be looked at if !ok.
+// errnum: the value of errno. Should only be looked at if !ok and
+// should only be considered if != 0. Otherwise it should be ignored.
+struct result {
+    bool ok;
+    const char *e;
+    int errnum;
+};
+
+// clang-format off
+#ifdef __cplusplus
+#define RESULT(ok, errstr, errnum) result{ok, errstr, errnum}
+#else
+#define RESULT(ok, errstr, errnum)  (struct result) { ok, errstr, errnum }
+#endif
+// clang-format on
+
+// Print an error string based on the struct result input.
+// Thread safe.
+void perr(const struct result res);
 
 #ifndef __cplusplus
 /*
