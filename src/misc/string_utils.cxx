@@ -1,3 +1,4 @@
+#include <array>
 #include <cctype>
 #include <fstream>
 #include <iostream>
@@ -841,6 +842,26 @@ bool ends_with(const std::string &s,
     std::string changed = remove_suffix(s, suffix, case_sensitive);
     return changed != s;
 }
+
+std::string strerr(int errnum) {
+    // thread-safe strerror.
+    std::array<char, 256> buff {};
+
+#ifdef _GNU_SOURCE
+    // the GNU version of strerror_r rather than the XSI one
+    const char *errstr = strerror_r(errnum, &buff[0], buff.size());
+#else
+    strerror_r(res.errnum, buff, sizeof(buff));
+    const char *errstr = buff;
+#endif
+
+    return errstr;
+}
+
+std::string strerr() {
+    return strerr(errno);
+}
+
 
 
 }  // namespace string_utils

@@ -16,6 +16,11 @@
 
 namespace tarp::utils::string_utils {
 
+
+// thread-safe wrapper around strerror.
+std::string strerr(int errnum);
+std::string strerr();
+
 // Given an ascii character code, return its alias name as seen e.g. with `ascii
 // -x` on linux.
 std::optional<std::string>
