@@ -37,7 +37,7 @@ MACRO(CONFIGURE_TARGET tgname)
             ${PROJECT_SOURCE_DIR}/src/
     )
 
-    target_link_libraries(${tgname} tarp)
+    target_link_libraries(${tgname} libtarp)
 
     set_target_properties(${tgname} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${output_dir}"

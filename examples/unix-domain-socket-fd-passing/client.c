@@ -67,7 +67,7 @@ int main(int argc, const char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    char string[1024] = "mystring";
+    char string[1024] = "HELLO";
     fprintf(stderr, "writing to pipe\n");
     int written = write(pipefd[1], string, sizeof(string));
     if (written != sizeof(string)) {

@@ -42,10 +42,10 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  *  Casting to void will always work; using the unused attribute works
  *  with gcc and clang.
  */
-#define UNUSED(x)  \
-    do {           \
-        (void)(x); \
-    } while (0)
+#define UNUSED(x) \
+  do {            \
+    (void)(x);    \
+  } while (0)
 
 /*
  * Useful for namespacing enums i.e. prefixing all enum members
@@ -57,7 +57,7 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
  */
 #define _do_add_enum_member_prefix(PREFIX, member) PREFIX##_##member
 #define enum_namespace(PREFIX, member) \
-    _do_add_enum_member_prefix(PREFIX, member)
+  _do_add_enum_member_prefix(PREFIX, member)
 
 /*
  * Safe allocation: exits the program if calloc/malloc/realloc return NULL;
@@ -70,10 +70,10 @@ void _dbglog_(int line, const char *file, const char *func, char *fmt, ...);
 void *salloc(size_t size, void *ptr);
 
 // print n newlines.
-#define nl(n)                                 \
-    do {                                      \
-        for (int i = n; i > 0; --i) puts(""); \
-    } while (0);
+#define nl(n)                             \
+  do {                                    \
+    for (int i = n; i > 0; --i) puts(""); \
+  } while (0);
 
 #define match(a, b)     (strcmp(a, b) == 0)
 #define matchn(a, b, n) (strncmp(a, b, n) == 0)
@@ -150,5 +150,37 @@ void perr(const struct result res);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
+
+
+#ifdef __cplusplus
+#include <cstring>
+#include <string>
+inline std::string geterr(const struct result res) {
+    if (res.ok) {
+        return "ok";
+    }
+
+    std::string err = res.e;
+
+    if (res.errnum == 0) {
+        return err;
+    }
+
+    // thread-safe strerror.
+    char buff[256];
+    memset(buff, 0, sizeof(buff));
+
+#ifdef _GNU_SOURCE
+    // the GNU version of strerror_r rather than the XSI one
+    const char *errstr = strerror_r(res.errnum, buff, sizeof(buff));
+#else
+    strerror_r(res.errnum, buff, sizeof(buff));
+    const char *errstr = buff;
+#endif
+
+    return err + ": " + errstr;
+}
+#endif
+
 
 #endif

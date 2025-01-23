@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <tuple>
 
 template<typename cb_t, typename T>
 std::pair<bool, T> test(cb_t f, T expected_result, const std::string &input) {

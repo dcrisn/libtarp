@@ -126,7 +126,7 @@ SET(libtarp_public_headers include)
 
 SET(libtarp_private_headers
     ${libtarp_public_headers}
-    src/
+    ${PROJECT_SOURCE_DIR}/include/
     )
 
 add_library(libtarp SHARED
@@ -181,18 +181,14 @@ set_target_properties(libtarp PROPERTIES
 
 # no distinction between interface and internal headers at the moment
 target_include_directories(libtarp PUBLIC
-    $<INSTALL_INTERFACE:${libtarp_public_headers}>
-    $<BUILD_INTERFACE:${libtarp_private_headers}>
-    )
+    $<INSTALL_INTERFACE:include/>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
+)
 
 add_executable(md5hash
     src/hash/md5/md5sum-main.c
     src/hash/md5/md5sum.c
-    )
-
-target_include_directories(md5hash PUBLIC
-    ${public_headers}
-    )
+)
 
 ############################
 ## Link-time dependencies #

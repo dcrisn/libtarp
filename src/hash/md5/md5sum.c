@@ -99,6 +99,7 @@ static inline size_t find_padding(int len){
  * 2) 8 btes (a uint64) encoding the total length of preceding message
  * *in bits*. */
 static void *get_trailer(Md5Ctx *ctx, uint64_t *outlen){
+    if (!ctx) return NULL;
     int len = ctx->cursor; /* we have to pad from here */
 
     /* @RFC1321/3.1:
@@ -324,6 +325,10 @@ static void MD5_digest_part(Md5Ctx *ctx, uint8_t *message, uint64_t msglen){
  */
 void MD5_digest(Md5Ctx *ctx, uint8_t *message, size_t msglen, bool isfinal)
 {
+    if (!ctx){
+        return;
+    }
+
     if (msglen > 0){
         MD5_digest_part(ctx, message, msglen);
         ctx->input_len += msglen;

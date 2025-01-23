@@ -2,7 +2,7 @@ SET(output_dir "${CMAKE_BINARY_DIR}/examples")
 
 # configure the executable test target that has name tgname.
 MACRO(CONFIGURE_TARGET tgname)
-    target_link_libraries(${tgname} tarp)
+    target_link_libraries(${tgname} PRIVATE libtarp)
     set_target_properties(${tgname}
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${output_dir}

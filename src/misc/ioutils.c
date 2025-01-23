@@ -1,15 +1,18 @@
+#include <tarp/error.h>
+#include <tarp/ioutils.h>
+
 #include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <stdbool.h>
+#include <stdio.h>
 
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include <tarp/error.h>
-#include <tarp/ioutils.h>
 
 ssize_t try_write(int dst, uint8_t *src, size_t nbytes) {
     assert(src);
