@@ -131,6 +131,7 @@ SET(libtarp_private_headers
 
 add_library(libtarp SHARED
     src/misc/bits.c
+    src/misc/bits.cxx
     src/misc/bitarray.c
     src/misc/cohort.c
     src/misc/common.c

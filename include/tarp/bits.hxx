@@ -5,6 +5,7 @@
 
 // c stdlib
 #include <cstdint>
+#include <iostream>
 
 namespace tarp {
 namespace bits {
@@ -35,10 +36,27 @@ static inline std::uint8_t MSB(T input) {
     return (input >> n) & 0xFF;
 }
 
+namespace impl {
+extern std::uint8_t reflection[];
+
+inline std::uint8_t reflect_byte_fast(std::uint8_t byte) {
+    return reflection[byte];
+}
+}  // namespace impl
+
 // reverse the lowest n bits in input.
 // e.g. for n=4: 0b1010....1100 => 0b1010.....0011.
 template<typename T>
 inline T reflect_bits(T input, unsigned n) {
+    static_assert(std::is_integral_v<T>);
+
+    if constexpr (sizeof(T) == sizeof(std::uint8_t)) {
+        if (n == width_t<std::uint8_t>::value) {
+            // use lookup table.
+            return impl::reflect_byte_fast(static_cast<std::uint8_t>(input));
+        }
+    }
+
     // discard lower n bits.
     T output = (input >> n);
 
