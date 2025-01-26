@@ -155,6 +155,7 @@ add_library(libtarp SHARED
     src/misc/event.cxx
     src/hash/md5/md5sum.c
     src/hash/checksum.cxx
+    src/hash/crc/crc.cxx
     src/mods/avltree/avl.c
     src/mods/bst/bst.c
     src/mods/dllist/dllist.c
