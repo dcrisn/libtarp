@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <tuple>
+#include <vector>
 
 template<typename cb_t, typename T>
 std::pair<bool, T> test(cb_t f, T expected_result, const std::string &input) {
@@ -16,11 +17,11 @@ std::pair<bool, T> test(cb_t f, T expected_result, const std::string &input) {
     return {(res == expected_result), res};
 }
 
-using namespace tarp::hash;
+using namespace tarp::hash::checksum;
 
 int main(int, const char **) {
     // Columns: host-byte-order input string, network-byte-order input string,
-    // expected result. The expected result is the same in both cases but the
+    // expected result. The expected result is the same in both cases but
     // when handling the network byte order input, endianness conversion must be
     // performed by the algorithm (which is the point of the test).
 
@@ -56,17 +57,19 @@ int main(int, const char **) {
                     << ", actual=" << actual << std::endl;
       };
 
+#if 1
     std::cerr << "Fletcher16 tests: \n";
     for (const auto &[input, expected_result] : fletcher16_tests) {
         auto [passed, res] = test(
           [](auto in) {
-              return fletcher16<false>(in);
+              return fletcher16<false>(&in[0], in.size());
           },
           expected_result,
           input);
 
         print_passed_or_not(passed, false, input, expected_result, res);
     }
+#endif
 
     std::cerr << "Fletcher32 tests: \n";
     for (const auto &[host_byte_order_input,
@@ -75,7 +78,7 @@ int main(int, const char **) {
         {
             auto [passed, res] = test(
               [](auto in) {
-                  return fletcher32<false>(in);
+                  return fletcher32<false>(&in[0], in.size());
               },
               expected_result,
               host_byte_order_input);
@@ -86,7 +89,7 @@ int main(int, const char **) {
         {
             auto [passed, res] = test(
               [](auto in) {
-                  return fletcher32<true>(in);
+                  return fletcher32<true>(&in[0], in.size());
               },
               expected_result,
               network_byte_order_input);
@@ -95,6 +98,7 @@ int main(int, const char **) {
         }
     }
 
+#if 1
     std::cerr << "Fletcher64 tests: \n";
     for (const auto &[host_byte_order_input,
                       network_byte_order_input,
@@ -102,7 +106,7 @@ int main(int, const char **) {
         {
             auto [passed, res] = test(
               [](auto in) {
-                  return fletcher64<false>(in);
+                  return fletcher64<false>(&in[0], in.size());
               },
               expected_result,
               host_byte_order_input);
@@ -111,11 +115,10 @@ int main(int, const char **) {
               passed, false, host_byte_order_input, expected_result, res);
         }
 
-#if 1
         {
             auto [passed, res] = test(
               [](auto in) {
-                  return fletcher64<true>(in);
+                  return fletcher64<true>(&in[0], in.size());
               },
               expected_result,
               network_byte_order_input);
@@ -123,8 +126,8 @@ int main(int, const char **) {
             print_passed_or_not(
               passed, true, network_byte_order_input, expected_result, res);
         }
-#endif
     }
+#endif
 
     return 0;
 }

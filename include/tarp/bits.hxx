@@ -74,6 +74,24 @@ T reflect_bits(T input) {
     return reflect_bits(input, width_v<T>);
 }
 
+// Swap the bytes in value from network byte order (nbo) to
+// host byte order (hbo).
+template<typename T>
+T to_hbo(T value) {
+    static_assert(
+      std::is_same_v<T, std::uint8_t> || std::is_same_v<T, std::uint16_t> ||
+      std::is_same_v<T, std::uint32_t> || std::is_same_v<T, std::uint64_t>);
+
+    if constexpr (std::is_same_v<T, std::uint8_t>) {
+        return value;
+    } else if constexpr (std::is_same_v<T, std::uint16_t>) {
+        return be16toh(value);
+    } else if constexpr (std::is_same_v<T, std::uint32_t>) {
+        return be32toh(value);
+    } else if constexpr (std::is_same_v<T, std::uint64_t>) {
+        return be64toh(value);
+    }
+}
 
 }  // namespace bits
 }  // namespace tarp
