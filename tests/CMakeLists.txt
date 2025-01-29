@@ -112,10 +112,15 @@ add_executable(evchan
 )
 CONFIGURE_TARGET(evchan)
 
-add_executable(hash
-    hash/main.cxx
+add_executable(hash.fletcher
+    hash/fletcher.cxx
 )
-CONFIGURE_TARGET(hash)
+CONFIGURE_TARGET(hash.fletcher)
+
+add_executable(hash.crc
+    hash/crc.cxx
+)
+CONFIGURE_TARGET(hash.crc)
 
 add_executable(hasht
     hasht/hasht_tests.c
