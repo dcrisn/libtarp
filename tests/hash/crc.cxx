@@ -1,22 +1,3 @@
-
-#include <cmath>
-#if 0
-#include <cstdint>
-#include <fcntl.h>
-#include <fstream>
-#include <functional>
-#include <ios>
-#include <iostream>
-#include <map>
-#include <stdexcept>
-#include <stdio.h>
-#include <string>
-#include <tarp/bits.hxx>
-#include <tuple>
-#include <unistd.h>
-#include <vector>
-#endif
-
 #include <tarp/hash/crc.hxx>
 
 #include <functional>
