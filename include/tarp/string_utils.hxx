@@ -14,7 +14,9 @@
 
 #include <tarp/math.h>
 
-namespace tarp::utils::string_utils {
+namespace tarp {
+namespace utils {
+namespace string_utils {
 
 
 // thread-safe wrapper around strerror.
@@ -369,4 +371,11 @@ std::string hexstring_from_bytes(const T &bytes) {
     return s;
 }
 
-}  // namespace tarp::utils::string_utils
+}  // namespace string_utils
+
+namespace str {
+using namespace string_utils;
+}  // namespace str
+
+}  // namespace utils
+}  // namespace tarp
