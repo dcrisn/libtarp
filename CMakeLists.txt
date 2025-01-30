@@ -140,6 +140,7 @@ add_library(libtarp SHARED
     src/misc/floats.c
     src/misc/hash.c
     src/misc/ioutils.c
+    src/misc/ioutils.cxx
     src/misc/linux-event.c
     src/misc/log.c
     src/misc/math.c
