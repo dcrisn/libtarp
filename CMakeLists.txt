@@ -129,7 +129,7 @@ SET(libtarp_private_headers
     ${PROJECT_SOURCE_DIR}/include/
     )
 
-add_library(libtarp SHARED
+add_library(libtarp_objects OBJECT
     src/misc/bits.c
     src/misc/bits.cxx
     src/misc/bitarray.c
@@ -169,6 +169,18 @@ add_library(libtarp SHARED
     src/parsers/iniparse.c
 )
 
+set_target_properties(libtarp_objects PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# no distinction between interface and internal headers at the moment
+target_include_directories(libtarp_objects PUBLIC
+    $<INSTALL_INTERFACE:include/>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
+)
+
+add_library(libtarp SHARED)
+
 add_library(tarp::misc ALIAS libtarp)
 
 set_target_properties(libtarp PROPERTIES
@@ -182,7 +194,6 @@ set_target_properties(libtarp PROPERTIES
     EXPORT_NAME misc
 )
 
-# no distinction between interface and internal headers at the moment
 target_include_directories(libtarp PUBLIC
     $<INSTALL_INTERFACE:include/>
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
@@ -190,18 +201,21 @@ target_include_directories(libtarp PUBLIC
 
 add_executable(md5hash
     src/hash/md5/md5sum-main.c
-    src/hash/md5/md5sum.c
 )
 
-############################
-## Link-time dependencies #
-###########################
-#
-target_link_libraries(libtarp
+add_executable(checksum
+    src/hash/checksum-main.cxx
+)
+
+target_link_libraries(libtarp PRIVATE
+    libtarp_objects
     m)
 
 target_link_libraries(md5hash
-    libtarp)
+    libtarp_objects)
+
+target_link_libraries(checksum
+    libtarp_objects)
 
 ########################################
 ## Build artifact installation rules  #
@@ -209,7 +223,7 @@ target_link_libraries(md5hash
 #
 INSTALL(DIRECTORY ${libtarp_public_headers}/ DESTINATION include/)
 
-set_target_properties(libtarp md5hash
+set_target_properties(libtarp md5hash checksum
     PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
@@ -221,7 +235,7 @@ set_target_properties(libtarp md5hash
 #################################################
 SET(TARP_CMAKE_EXPORT_FILE "libtarp-targets")
 
-INSTALL(TARGETS libtarp md5hash
+INSTALL(TARGETS libtarp md5hash checksum
     EXPORT ${TARP_CMAKE_EXPORT_FILE}
     LIBRARY DESTINATION lib/
     ARCHIVE DESTINATION lib/
