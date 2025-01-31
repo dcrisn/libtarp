@@ -219,7 +219,7 @@ struct result make_client_uds(const char *server_path,
     }
 
     if (connect(fd, (const struct sockaddr *)&srvaddr, sizeof(srvaddr)) < 0) {
-        unsigned errnum = errno;
+        int errnum = errno;
         close(fd);
         return RESULT(false, "failed call to connect()", errnum);
     }
