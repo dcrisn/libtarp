@@ -122,8 +122,9 @@ generate_unum2bitarray_function(uint32_t, u32)
 generate_unum2bitarray_function(uint64_t, u64)
 
 struct bitarray *Bitr_clone(const struct bitarray *bitr){
-    assert(bitr);
+    assert_not_null(bitr);
     struct bitarray *new = Bitr_frombuff(NULL, bitr->bytes, bitr->size);
+    assert_not_null(new);
     new->size = bitr->size;
     new->width = bitr->width;
     return new;
@@ -131,7 +132,7 @@ struct bitarray *Bitr_clone(const struct bitarray *bitr){
 
 #define generate_bitarray2unum_function(type, postfix) \
     type Bitr_to##postfix(const struct bitarray *bitr){ \
-        assert(bitr); \
+        assert_not_null(bitr); \
         assert(bitr->width > 0); \
         type num = 0; \
         for (size_t i = 1; i < bytes2bits(sizeof(type))+1 && i <= bitr->width; ++i){ \
@@ -140,11 +141,13 @@ struct bitarray *Bitr_clone(const struct bitarray *bitr){
         return num; \
     }
 
+// clang-format off
 /* Bitr_tou<8,16,32,64> */
 generate_bitarray2unum_function(uint8_t, u8)
 generate_bitarray2unum_function(uint16_t, u16)
 generate_bitarray2unum_function(uint32_t, u32)
 generate_bitarray2unum_function(uint64_t, u64)
+// clang-format off
 
 /*
  * True if 0 < pos <= w, where w is the width of the bitarray, else false.
