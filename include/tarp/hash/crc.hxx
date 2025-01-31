@@ -4,7 +4,6 @@
 
 // cxx stdlib
 #include <array>
-#include <limits>
 
 // c stdlib
 #include <cstdint>
@@ -17,18 +16,150 @@ namespace crc {
 // Structure to maintain state so that we can buffer
 // and therefore be able to process data in blocks
 // as they arrive rather than all in one go.
-template <typename T> struct crc_context {
-  // crc register
-  T r = 0;
+template<typename T>
+struct crc_context {
+    // crc register
+    T r = 0;
 
-  // for idempotence.
-  bool initialized = false;
+    // for idempotence.
+    bool initialized = false;
 };
 
 using crc8_ctx = crc_context<std::uint8_t>;
 using crc16_ctx = crc_context<std::uint16_t>;
 using crc32_ctx = crc_context<std::uint32_t>;
 using crc64_ctx = crc_context<std::uint64_t>;
+
+//
+
+// Parameters for various CRCs.
+//
+// See the crc_1bit_aat_v2 function below fmi.
+//
+// G = polynomial generator aka 'poly'
+//
+// rinit = CRC register initilization value
+//
+// xor_out = value to XOR the final checksum with before returning.
+//
+// reflect_in = whether to bit-reverse every input byte as it is read.
+//
+// reflect_out = whether to reflect the entire checksum before XORing
+// it with xor_out.
+//
+namespace params {
+
+// CRC-16/DECT-X  (X-CRC-16).
+// NOTE: DECT = Digital Enhanced Cordless Telecommunications.
+// G=0x0589: x^16+x^10+x^8+x^7+x^3+1.
+namespace crc16_dectx {
+static inline constexpr uint16_t G = 0x0589;
+static inline constexpr uint16_t rinit = 0x0000;
+static inline constexpr uint16_t xor_out = 0x0000;
+static inline constexpr bool reflect_in = false;
+static inline constexpr bool reflect_out = false;
+}  // namespace crc16_dectx
+
+namespace crc16_usb {
+static inline constexpr uint16_t G = 0x8005;
+static inline constexpr uint16_t rinit = 0xffff;
+static inline constexpr uint16_t xor_out = 0xffff;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc16_usb
+
+namespace crc16_gsm {
+static inline constexpr uint16_t G = 0x1021;
+static inline constexpr uint16_t rinit = 0x0000;
+static inline constexpr uint16_t xor_out = 0xffff;
+static inline constexpr bool reflect_in = false;
+static inline constexpr bool reflect_out = false;
+}  // namespace crc16_gsm
+
+namespace crc16_kermit {
+static inline constexpr uint16_t G = 0x1021;
+static inline constexpr uint16_t rinit = 0x0000;
+static inline constexpr uint16_t xor_out = 0x0000;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc16_kermit
+
+namespace crc16_modbus {
+static inline constexpr uint16_t G = 0x8005;
+static inline constexpr uint16_t rinit = 0xFFFF;
+static inline constexpr uint16_t xor_out = 0x0000;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc16_modbus
+
+namespace crc8_bluetooth {
+static inline constexpr uint8_t G = 0xA7;
+static inline constexpr uint8_t rinit = 0x0000;
+static inline constexpr uint8_t xor_out = 0x0000;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc8_bluetooth
+
+// CRC-32/BZIP2
+namespace crc32_bzip2 {
+static inline constexpr uint32_t G = 0x04C11DB7;
+static inline constexpr uint32_t rinit = 0xFFFFFFFF;
+static inline constexpr uint32_t xor_out = 0xFFFFFFFF;
+static inline constexpr bool reflect_in = false;
+static inline constexpr bool reflect_out = false;
+}  // namespace crc32_bzip2
+
+// CRC-32/CKSUM aka CRC-32/POSIX. This is the crc32 algorithm used by
+// the cksum cli utility. Well... apparently according to:
+// https://reveng.sourceforge.io/crc-catalogue/17plus.htm#crc.cat-bits.32
+// https://crccalc.com.
+// In practice the cli (ubuntu 24) does not seem to actually produce a
+// checksum that matches the one listed as 'expected' for a given input!
+namespace crc32_cksum {
+static inline constexpr uint32_t G = 0x04C11DB7;
+static inline constexpr uint32_t rinit = 0x00000000;
+static inline constexpr uint32_t xor_out = 0xFFFFFFFF;
+static inline constexpr bool reflect_in = false;
+static inline constexpr bool reflect_out = false;
+}  // namespace crc32_cksum
+
+// CRC-32/CASTAGNOLI
+namespace crc32c {
+static inline constexpr uint32_t G = 0x1edc6f41;
+static inline constexpr uint32_t rinit = 0xFFFFFFFF;
+static inline constexpr uint32_t xor_out = 0xFFFFFFFF;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc32c
+
+// This is the crc used by the crc32 utility on Linux (ubuntu24).
+namespace crc32_hdlc {
+static inline constexpr uint32_t G = 0x04c11db7;
+static inline constexpr uint32_t rinit = 0xFFFFFFFF;
+static inline constexpr uint32_t xor_out = 0xFFFFFFFF;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc32_hdlc
+
+// The Go Authors, The Go Programming Language, package crc64 (as per reveng).
+namespace crc64_go {
+static inline constexpr uint64_t G = 0x000000000000001b;
+static inline constexpr uint64_t rinit = ~0;
+static inline constexpr uint64_t xor_out = ~0;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc64_go
+
+namespace crc64_xz {
+static inline constexpr uint64_t G = 0x42f0e1eba9ea3693;
+static inline constexpr uint64_t rinit = ~0;
+static inline constexpr uint64_t xor_out = ~0;
+static inline constexpr bool reflect_in = true;
+static inline constexpr bool reflect_out = true;
+}  // namespace crc64_xz
+}  // namespace params
+
+//
 
 // Bit-at-a-time implementations. These all read in the input data
 // one bit at a time.
@@ -74,14 +205,18 @@ std::uint32_t crc32_cksum(const uint8_t *msg, std::size_t len);
 std::uint32_t crc32_cksum(const uint8_t *msg, std::size_t len, crc32_ctx &ctx);
 
 std::uint32_t crc32_iso_hdlc(const uint8_t *msg, std::size_t len);
-std::uint32_t crc32_iso_hdlc(const uint8_t *msg, std::size_t len,
-                             crc32_ctx &ctx);
+std::uint32_t
+crc32_iso_hdlc(const uint8_t *msg, std::size_t len, crc32_ctx &ctx);
 
 std::uint64_t crc64_go(const uint8_t *msg, std::size_t len);
 std::uint64_t crc64_go(const uint8_t *msg, std::size_t len, crc64_ctx &ctx);
 
 std::uint64_t crc64_xz(const uint8_t *msg, std::size_t len);
 std::uint64_t crc64_xz(const uint8_t *msg, std::size_t len, crc64_ctx &ctx);
+
+}  // namespace bitaat
+
+//
 
 namespace impl {
 // Template model that can be instantiated to implement specific CRC algorithms.
@@ -118,59 +253,59 @@ namespace impl {
 // (but the processing is still bit by bit i.e. we still do something
 // _per bit_)
 // - no trailer is used and therefore w fewer iterations are made.
-template <typename T, T init, T xor_out, bool refin, bool refout>
+template<typename T, T init, T xor_out, bool refin, bool refout>
 T crc_1bit_aat_v2(T G, const uint8_t *msg, std::size_t len) {
-  const uint8_t *p = msg;
+    const uint8_t *p = msg;
 
-  // checksum register. Holds w bits, implementing a w-bit CRC.
-  T r = init;
+    // checksum register. Holds w bits, implementing a w-bit CRC.
+    T r = init;
 
-  // for each byte in the input message.
-  while (len--) {
-    std::uint8_t next_byte = *p++;
+    // for each byte in the input message.
+    while (len--) {
+        std::uint8_t next_byte = *p++;
 
-    // reflect bits in each individual input byte
-    if constexpr (refin) {
-      next_byte = bits::reflect_bits(next_byte);
+        // reflect bits in each individual input byte
+        if constexpr (refin) {
+            next_byte = bits::reflect_bits(next_byte);
+        }
+
+        r ^= (static_cast<T>(next_byte) << (bits::width_v<T> - 8));
+
+        // for each bit in the byte
+        for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
+            // if the most significant bit of the most significant byte in the
+            // register, before the left shift, is 1, then we perform the XOR.
+            // In concrete terms: if the (w+1)th bit in the w-bit register
+            // is 1, then the value (imagined as a (w+1)-bit value) in the
+            // register is >= to the (w+1)-bit divisor (the (w+1)-bit generator
+            // polynomial, 'poly'), according to the rules of MOD2 polynomial
+            // arithmetic. IOW the bit just shifted off extends the w-bit value
+            // in the register to a w+1-bit value, and is as such compared with
+            // the unwritten 'understood' bit (which is always a constant 1)
+            // that corresponds to the highest-power in the generator
+            // polynomial.
+            bool must_subtract = (bits::msb(bits::MSB(r)) == 1);
+            r <<= 1;
+
+            // In MOD2 polynomial arithmetic subtraction (and addition) are
+            // simply XOR since no carries are involved. Therefore here we
+            // (conceptually) subtract the divisor (the poly) from the value in
+            // the register (which has been determined to be >= the poly by the
+            // (w+1)-bit comparison above).
+            if (must_subtract) {
+                r = r ^ G;
+            }
+        }
     }
 
-    r ^= (static_cast<T>(next_byte) << (bits::width_v<T> - 8));
-
-    // for each bit in the byte
-    for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
-      // if the most significant bit of the most significant byte in the
-      // register, before the left shift, is 1, then we perform the XOR.
-      // In concrete terms: if the (w+1)th bit in the w-bit register
-      // is 1, then the value (imagined as a (w+1)-bit value) in the
-      // register is >= to the (w+1)-bit divisor (the (w+1)-bit generator
-      // polynomial, 'poly'), according to the rules of MOD2 polynomial
-      // arithmetic. IOW the bit just shifted off extends the w-bit value
-      // in the register to a w+1-bit value, and is as such compared with
-      // the unwritten 'understood' bit (which is always a constant 1)
-      // that corresponds to the highest-power in the generator
-      // polynomial.
-      bool must_subtract = (bits::msb(bits::MSB(r)) == 1);
-      r <<= 1;
-
-      // In MOD2 polynomial arithmetic subtraction (and addition) are
-      // simply XOR since no carries are involved. Therefore here we
-      // (conceptually) subtract the divisor (the poly) from the value in
-      // the register (which has been determined to be >= the poly by the
-      // (w+1)-bit comparison above).
-      if (must_subtract) {
-        r = r ^ G;
-      }
+    // reflect all bits in the output
+    if (refout) {
+        r = bits::reflect_bits(r);
     }
-  }
 
-  // reflect all bits in the output
-  if (refout) {
-    r = bits::reflect_bits(r);
-  }
-
-  // final output xor. NOTE: if xor_out is 0, then nothing happens
-  // since a XOR 0 = a.
-  return r ^ xor_out;
+    // final output xor. NOTE: if xor_out is 0, then nothing happens
+    // since a XOR 0 = a.
+    return r ^ xor_out;
 }
 
 // See crc_1bit_aat_v2.
@@ -178,94 +313,94 @@ T crc_1bit_aat_v2(T G, const uint8_t *msg, std::size_t len) {
 // It also appends a w-bit trailer to the message.
 // This implementation is essentially to most readable and basic
 // following of a CRC algorithm.
-template <typename T, T init, T xor_out, bool refin, bool refout>
+template<typename T, T init, T xor_out, bool refin, bool refout>
 T crc_1bit_aat_v1(T G, const uint8_t *msg, std::size_t len) {
-  const uint8_t *p = msg;
+    const uint8_t *p = msg;
 
-  // checksum register. Holds w bits, implementing a w-bit CRC.
-  T r = 0;
+    // checksum register. Holds w bits, implementing a w-bit CRC.
+    T r = 0;
 
-  // the XOR initializer for the first w bits (including the trailer, if
-  // the message proper has fewer bits than the register width).
-  T initializer = init;
+    // the XOR initializer for the first w bits (including the trailer, if
+    // the message proper has fewer bits than the register width).
+    T initializer = init;
 
-  // w all-0s bits get appended to the message.
-  std::uint8_t trailer[sizeof(T)];
-  std::memset(trailer, 0, sizeof(T));
-  bool trailer_added = false;
+    // w all-0s bits get appended to the message.
+    std::uint8_t trailer[sizeof(T)];
+    std::memset(trailer, 0, sizeof(T));
+    bool trailer_added = false;
 
 loop:
-  // for each byte in the input message.
-  while (len--) {
-    std::uint8_t next_byte = *p++;
+    // for each byte in the input message.
+    while (len--) {
+        std::uint8_t next_byte = *p++;
 
-    // reflect bits in each individual input byte
-    if constexpr (refin) {
-      next_byte = bits::reflect_bits(next_byte);
+        // reflect bits in each individual input byte
+        if constexpr (refin) {
+            next_byte = bits::reflect_bits(next_byte);
+        }
+
+        // If an XOR initializer was specified (and hasn't been used up)
+        if (initializer != 0) {
+            next_byte ^= (bits::MSB(initializer));
+            initializer <<= bits::BITS_IN_BYTE;
+        }
+
+        // for each bit in the byte
+        for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
+            // if the most significant bit of the most significant byte in the
+            // register, before the left shift, is 1, then we perform the XOR.
+            // In concrete terms: if the (w+1)th bit in the w-bit register
+            // is 1, then the value (imagined as a (w+1)-bit value) in the
+            // register is >= to the (w+1)-bit divisor (the (w+1)-bit generator
+            // polynomial, 'poly'), according to the rules of MOD2 polynomial
+            // arithmetic. IOW the bit just shifted off extends the w-bit value
+            // in the register to a w+1-bit value, and is therefore compared
+            // compared with the unwritten 'understood' bit (which is always a
+            // constant 1) that corresponds to the highest-power in the
+            // generator polynomial.
+            bool must_subtract = (bits::msb(bits::MSB(r)) == 1);
+            r <<= 1;
+
+            // shift into the register the next most-significant
+            // bit in the most-significant message byte remaining.
+            const uint8_t msg_bit = (next_byte >> (7 - i)) & 0x1;
+            r |= msg_bit;
+
+            // In MOD2 polynomial arithmetic subtraction (and addition) are
+            // simply XOR since no carries are involved. Therefore here we
+            // (conceptually) subtract the divisor (the poly) from the value in
+            // the register (which has been determined to be >= the poly by the
+            // (w+1)-bit comparison above).
+            if (must_subtract) {
+                r = r ^ G;
+            }
+        }
     }
 
-    // If an XOR initializer was specified (and hasn't been used up)
-    if (initializer != 0) {
-      next_byte ^= (bits::MSB(initializer));
-      initializer <<= bits::BITS_IN_BYTE;
+    // append a w-bit all-0s trailer to the message; notice how when the message
+    // is shorter than the register width, the xor-in initializer ends up being
+    // applied to (some of) these padding/trailer bytes.
+    if (!trailer_added) {
+        trailer_added = true;
+        p = trailer;
+        len = sizeof(trailer);
+        goto loop;
     }
 
-    // for each bit in the byte
-    for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
-      // if the most significant bit of the most significant byte in the
-      // register, before the left shift, is 1, then we perform the XOR.
-      // In concrete terms: if the (w+1)th bit in the w-bit register
-      // is 1, then the value (imagined as a (w+1)-bit value) in the
-      // register is >= to the (w+1)-bit divisor (the (w+1)-bit generator
-      // polynomial, 'poly'), according to the rules of MOD2 polynomial
-      // arithmetic. IOW the bit just shifted off extends the w-bit value
-      // in the register to a w+1-bit value, and is therefore compared
-      // compared with the unwritten 'understood' bit (which is always a
-      // constant 1) that corresponds to the highest-power in the
-      // generator polynomial.
-      bool must_subtract = (bits::msb(bits::MSB(r)) == 1);
-      r <<= 1;
-
-      // shift into the register the next most-significant
-      // bit in the most-significant message byte remaining.
-      const uint8_t msg_bit = (next_byte >> (7 - i)) & 0x1;
-      r |= msg_bit;
-
-      // In MOD2 polynomial arithmetic subtraction (and addition) are
-      // simply XOR since no carries are involved. Therefore here we
-      // (conceptually) subtract the divisor (the poly) from the value in
-      // the register (which has been determined to be >= the poly by the
-      // (w+1)-bit comparison above).
-      if (must_subtract) {
-        r = r ^ G;
-      }
+    // reflect all bits in the output
+    if (refout) {
+        r = reflect_bits(r);
     }
-  }
 
-  // append a w-bit all-0s trailer to the message; notice how when the message
-  // is shorter than the register width, the xor-in initializer ends up being
-  // applied to (some of) these padding/trailer bytes.
-  if (!trailer_added) {
-    trailer_added = true;
-    p = trailer;
-    len = sizeof(trailer);
-    goto loop;
-  }
-
-  // reflect all bits in the output
-  if (refout) {
-    r = reflect_bits(r);
-  }
-
-  // final output xor. NOTE: if xor_out is 0, then nothing happens
-  // since a XOR 0 = a.
-  return r ^ xor_out;
+    // final output xor. NOTE: if xor_out is 0, then nothing happens
+    // since a XOR 0 = a.
+    return r ^ xor_out;
 }
-} // namespace impl
+}  // namespace impl
 
-template <typename T, T init, T xor_out, bool refin, bool refout>
+template<typename T, T init, T xor_out, bool refin, bool refout>
 T crc_1bit_aat(T G, const uint8_t *msg, std::size_t len) {
-  return impl::crc_1bit_aat_v2<T, init, xor_out, refin, refout>(G, msg, len);
+    return impl::crc_1bit_aat_v2<T, init, xor_out, refin, refout>(G, msg, len);
 }
 
 // Function that can be called on data that arrives in blocks.
@@ -275,149 +410,147 @@ T crc_1bit_aat(T G, const uint8_t *msg, std::size_t len) {
 // To simply retrieve the latest CRC without processing any data,
 // specify len=0 (msg is ignored in that case).
 // Uses the bitaat v2 function code from above.
-template <typename T, T init, T xor_out, bool refin, bool refout>
-T make_crc_1bit_aat(T G, const uint8_t *msg, std::size_t len,
+template<typename T, T init, T xor_out, bool refin, bool refout>
+T make_crc_1bit_aat(T G,
+                    const uint8_t *msg,
+                    std::size_t len,
                     struct crc_context<T> &ctx) {
-  const uint8_t *p = msg;
+    const uint8_t *p = msg;
 
-  if (!ctx.initialized) {
-    ctx.initialized = true;
-    ctx.r = init;
-  }
-
-  // for each byte in the input message.
-  while (len--) {
-    std::uint8_t next_byte = *p++;
-
-    // reflect bits in each individual input byte
-    if constexpr (refin) {
-      next_byte = bits::reflect_bits(next_byte);
+    if (!ctx.initialized) {
+        ctx.initialized = true;
+        ctx.r = init;
     }
 
-    ctx.r ^= (static_cast<T>(next_byte) << (bits::width_v<T> - 8));
+    // for each byte in the input message.
+    while (len--) {
+        std::uint8_t next_byte = *p++;
 
-    // for each bit in the byte
-    for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
-      // if the most significant bit of the most significant byte in the
-      // register, before the left shift, is 1, then we perform the XOR.
-      // In concrete terms: if the (w+1)th bit in the w-bit register
-      // is 1, then the value (imagined as a (w+1)-bit value) in the
-      // register is >= to the (w+1)-bit divisor (the (w+1)-bit generator
-      // polynomial, 'poly'), according to the rules of MOD2 polynomial
-      // arithmetic. IOW the bit just shifted off extends the w-bit value
-      // in the register to a w+1-bit value, and is as such compared with
-      // the unwritten 'understood' bit (which is always a constant 1)
-      // that corresponds to the highest-power in the generator
-      // polynomial.
-      bool must_subtract = (bits::msb(bits::MSB(ctx.r)) == 1);
-      ctx.r <<= 1;
+        // reflect bits in each individual input byte
+        if constexpr (refin) {
+            next_byte = bits::reflect_bits(next_byte);
+        }
 
-      // In MOD2 polynomial arithmetic subtraction (and addition) are
-      // simply XOR since no carries are involved. Therefore here we
-      // (conceptually) subtract the divisor (the poly) from the value in
-      // the register (which has been determined to be >= the poly by the
-      // (w+1)-bit comparison above).
-      if (must_subtract) {
-        ctx.r = ctx.r ^ G;
-      }
+        ctx.r ^= (static_cast<T>(next_byte) << (bits::width_v<T> - 8));
+
+        // for each bit in the byte
+        for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
+            // if the most significant bit of the most significant byte in the
+            // register, before the left shift, is 1, then we perform the XOR.
+            // In concrete terms: if the (w+1)th bit in the w-bit register
+            // is 1, then the value (imagined as a (w+1)-bit value) in the
+            // register is >= to the (w+1)-bit divisor (the (w+1)-bit generator
+            // polynomial, 'poly'), according to the rules of MOD2 polynomial
+            // arithmetic. IOW the bit just shifted off extends the w-bit value
+            // in the register to a w+1-bit value, and is as such compared with
+            // the unwritten 'understood' bit (which is always a constant 1)
+            // that corresponds to the highest-power in the generator
+            // polynomial.
+            bool must_subtract = (bits::msb(bits::MSB(ctx.r)) == 1);
+            ctx.r <<= 1;
+
+            // In MOD2 polynomial arithmetic subtraction (and addition) are
+            // simply XOR since no carries are involved. Therefore here we
+            // (conceptually) subtract the divisor (the poly) from the value in
+            // the register (which has been determined to be >= the poly by the
+            // (w+1)-bit comparison above).
+            if (must_subtract) {
+                ctx.r = ctx.r ^ G;
+            }
+        }
     }
-  }
 
-  // Here we perform these final changes on the copy returned
-  // to the caller, not the actual register, since we don't
-  // know if this is the last block of data!
-  T r = ctx.r;
+    // Here we perform these final changes on the copy returned
+    // to the caller, not the actual register, since we don't
+    // know if this is the last block of data!
+    T r = ctx.r;
 
-  // reflect all bits in the output
-  if (refout) {
-    r = bits::reflect_bits(ctx.r);
-  }
+    // reflect all bits in the output
+    if (refout) {
+        r = bits::reflect_bits(ctx.r);
+    }
 
-  // final output xor. NOTE: if xor_out is 0, then nothing happens
-  // since a XOR 0 = a.
-  return r ^ xor_out;
+    // final output xor. NOTE: if xor_out is 0, then nothing happens
+    // since a XOR 0 = a.
+    return r ^ xor_out;
 }
 
-} // namespace bitaat
-
-namespace byteaat {
-
-// Sarwate algorithm/optimization. Read the input one byte at a time,
+// D.Sarwate algorithm/optimization. Read the input one byte at a time,
 // instead of bit by bit, and use the byte as a key in a precomputed
 // lookup table. The lookup replaces the equivalent 8-pass loop
 // (for each bit in a byte). See also make_lookup_table() below.
-template <typename T, T init, T xor_out, bool refin, bool refout>
-T make_crc_1byte_aat(const uint8_t *msg, std::size_t len,
-                     struct crc_context<T> &ctx, const std::array<T, 256> &t) {
-  if (!ctx.initialized) {
-    ctx.initialized = true;
-    ctx.r = init;
-  }
-
-  static constexpr unsigned shift = bits::width_v<T> - 8;
-
-  // for each byte in the input message.
-  while (len--) {
-    std::uint8_t next_byte = *msg++;
-
-    // reflect bits in each individual input byte
-    if constexpr (refin) {
-      next_byte = bits::reflect_bits(next_byte);
+template<typename T, T init, T xor_out, bool refin, bool refout>
+T make_crc_1byte_aat(const uint8_t *msg,
+                     std::size_t len,
+                     struct crc_context<T> &ctx,
+                     const std::array<T, 256> &t) {
+    if (!ctx.initialized) {
+        ctx.initialized = true;
+        ctx.r = init;
     }
 
-    ctx.r = (ctx.r << 8) ^ t[next_byte ^ (ctx.r >> shift)];
-  }
+    static constexpr unsigned shift = bits::width_v<T> - 8;
 
-  // Here we perform these final changes on the copy returned
-  // to the caller, not the actual register, since we don't
-  // know if this is the last block of data!
-  T r = ctx.r;
+    // for each byte in the input message.
+    while (len--) {
+        std::uint8_t next_byte = *msg++;
 
-  // reflect all bits in the output
-  if (refout) {
-    r = bits::reflect_bits(ctx.r);
-  }
+        // reflect bits in each individual input byte
+        if constexpr (refin) {
+            next_byte = bits::reflect_bits(next_byte);
+        }
 
-  // final output xor. NOTE: if xor_out is 0, then nothing happens
-  // since a XOR 0 = a.
-  return r ^ xor_out;
+        ctx.r = (ctx.r << 8) ^ t[next_byte ^ (ctx.r >> shift)];
+    }
+
+    // Here we perform these final changes on the copy returned
+    // to the caller, not the actual register, since we don't
+    // know if this is the last block of data!
+    T r = ctx.r;
+
+    // reflect all bits in the output
+    if (refout) {
+        r = bits::reflect_bits(ctx.r);
+    }
+
+    // final output xor. NOTE: if xor_out is 0, then nothing happens
+    // since a XOR 0 = a.
+    return r ^ xor_out;
 }
-
-} // namespace byteaat
 
 // Populate a lookup table to be used for a CRCX
 // (e.g. CRC32 (with T=std::uint32_t)) with poly=G.
 // The lookup table is byte-indexed and therefore
 // it stores 2^8=256 entries.
 // The lookup table can then be fed to make_crc_1byte_aat().
-template <typename T> void make_lookup_table(T G, std::array<T, 256> &t) {
-  // for each possible 8-bit value
-  for (unsigned byte = 0; byte < 256; ++byte) {
+template<typename T>
+void make_lookup_table(T G, std::array<T, 256> &t) {
+    // for each possible 8-bit value
+    for (unsigned byte = 0; byte < 256; ++byte) {
+        // the CRC register starts as all-0s;
+        // put the byte in the MSB of the CRC register;
+        T r = (static_cast<T>(byte) << (bits::width_v<T> - 8));
 
-    // the CRC register starts as all-0s;
-    // put the byte in the MSB of the CRC register;
-    T r = (static_cast<T>(byte) << (bits::width_v<T> - 8));
+        // we run the usual loop for each bit in the byte,
+        // XORing the poly into the register as appropriate.
+        // After the 8-pass loop, the register contains
+        // a value resulting from all the XORs; this value
+        // therefore is equivalent to the 8-pass loop
+        // and we store it in the lookup table, thereby replacing
+        // the loop with a lookup. This is the
+        // idea behind this optimization (V. Sarwate algorithm).
+        for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
+            bool must_subtract = (bits::msb(bits::MSB(r)) == 1);
+            r <<= 1;
+            if (must_subtract) {
+                r = r ^ G;
+            }
+        }
 
-    // we run the usual loop for each bit in the byte,
-    // XORing the poly into the register as appropriate.
-    // After the 8-pass loop, the register contains
-    // a value resulting from all the XORs; this value
-    // therefore is equivalent to the 8-pass loop
-    // and we store it in the lookup table, thereby replacing
-    // the loop with a lookup. This is the
-    // idea behind this optimization (V. Sarwate algorithm).
-    for (unsigned i = 0; i < bits::BITS_IN_BYTE; ++i) {
-      bool must_subtract = (bits::msb(bits::MSB(r)) == 1);
-      r <<= 1;
-      if (must_subtract) {
-        r = r ^ G;
-      }
+        t[byte] = r;
     }
-
-    t[byte] = r;
-  }
 }
 
-} // namespace crc
-} // namespace hash
-} // namespace tarp
+}  // namespace crc
+}  // namespace hash
+}  // namespace tarp

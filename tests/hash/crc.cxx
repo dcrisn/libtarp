@@ -15,54 +15,42 @@ namespace crc = tarp::hash::crc;
 // the bit-at-a-time analogues.
 namespace byte_aat {
 uint16_t crc16_modbus(const uint8_t *msg, size_t len) {
-    constexpr uint16_t G = 0x8005;
-    constexpr uint16_t rinit = 0xFFFF;
-    constexpr uint16_t xor_out = 0x0000;
-    constexpr bool reflect_in = true;
-    constexpr bool reflect_out = true;
-
     crc::crc16_ctx ctx;
     std::array<std::uint16_t, 256> t;
+
+    using namespace crc::params::crc16_modbus;
     crc::make_lookup_table<std::uint16_t>(G, t);
 
-    return crc::byteaat::make_crc_1byte_aat<std::uint16_t,
-                                            rinit,
-                                            xor_out,
-                                            reflect_in,
-                                            reflect_out>(msg, len, ctx, t);
+    return crc::make_crc_1byte_aat<std::uint16_t,
+                                   rinit,
+                                   xor_out,
+                                   reflect_in,
+                                   reflect_out>(msg, len, ctx, t);
 }
 
 std::uint8_t crc8_bluetooth(const uint8_t *msg, std::size_t len) {
-    constexpr uint8_t G = 0xA7;
-    constexpr uint8_t rinit = 0x0000;
-    constexpr uint8_t xor_out = 0x0000;
-    constexpr bool reflect_in = true;
-    constexpr bool reflect_out = true;
-
     crc::crc8_ctx ctx;
     std::array<std::uint8_t, 256> t;
+
+    using namespace crc::params::crc8_bluetooth;
     crc::make_lookup_table<std::uint8_t>(G, t);
 
-    return crc::byteaat::
+    return crc::
       make_crc_1byte_aat<std::uint8_t, rinit, xor_out, reflect_in, reflect_out>(
         msg, len, ctx, t);
 }
 
 std::uint32_t crc32c(const uint8_t *msg, std::size_t len) {
-    constexpr uint32_t G = 0x1edc6f41;
-    constexpr uint32_t rinit = 0xFFFFFFFF;
-    constexpr uint32_t xor_out = 0xFFFFFFFF;
-    constexpr bool reflect_in = true;
-    constexpr bool reflect_out = true;
-
     crc::crc32_ctx ctx;
     std::array<std::uint32_t, 256> t;
+
+    using namespace crc::params::crc32c;
     crc::make_lookup_table<std::uint32_t>(G, t);
-    return crc::byteaat::make_crc_1byte_aat<std::uint32_t,
-                                            rinit,
-                                            xor_out,
-                                            reflect_in,
-                                            reflect_out>(msg, len, ctx, t);
+    return crc::make_crc_1byte_aat<std::uint32_t,
+                                   rinit,
+                                   xor_out,
+                                   reflect_in,
+                                   reflect_out>(msg, len, ctx, t);
 }
 }  // namespace byte_aat
 

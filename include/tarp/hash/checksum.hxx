@@ -159,17 +159,12 @@ std::uint32_t process_chunks(fletcher_ctx<sum_t> &ctx,
 // appropriate byte swapping can be performed as the data is read.
 //
 // If last_block=false, then the function stops when the number of
-// bytes remaining in the buffer is < sizeof(J). If this is the case,
-// the second parameter returned is the index following the last byte
-// that was processed. This allows the caller to correctly build up the
-// next block.
+// bytes remaining in the buffer is < sizeof(J). The index returned
+// will be < len.
 //
-// Otherwise if final=true, all of data is consumed and padding is
+// Otherwise if last_block=true, all of data is consumed and padding is
 // automatically added as required. In this case the index returned
 // will always be equal to len and can be ignored.
-//
-// To simply retrieve the checksum from the context, without processing any
-// data, specify len=0.
 //
 // Return:
 // - the index in data after the last byte that was processed; when all the
