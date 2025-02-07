@@ -62,8 +62,8 @@ void do_throwc(msg &&...vargs) {
 #if __cplusplus >= 202002L
 
 template<typename exception_t, typename... msg>
-void do_throw(msg &&...vargs) {
-    throw exception_t(std::format(std::forward<msg>(vargs)...));
+[[noreturn]] void do_throw(std::format_string<msg...> fmt, msg &&...vargs) {
+    throw exception_t(std::vformat(fmt.get(), std::make_format_args(vargs...)));
 }
 
 #endif
