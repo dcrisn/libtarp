@@ -371,6 +371,29 @@ std::string hexstring_from_bytes(const T &bytes) {
     return s;
 }
 
+// Convert the contents of a list/vector-like type to a string.
+// Return a string of the form
+//  {prefix + {l[i], l[i+1], ..., l[n]} + postfix}.
+template<template<typename> class list_t, typename T>
+std::string to_string(const list_t<T> &l,
+                      const std::string &prefix = "",
+                      const std::string &postfix = "") {
+    std::string s = prefix;
+    for (unsigned i = 0; i < l.size(); ++i) {
+        if constexpr (std::is_arithmetic_v<T>) {
+            s += std::to_string(l[i]);
+        } else {
+            s += std::string {l[i]};
+        }
+
+        if (i + 1 < l.size()) {
+            s += ", ";
+        }
+    }
+    s += postfix;
+    return s;
+}
+
 }  // namespace string_utils
 
 namespace str {
