@@ -316,7 +316,7 @@ public:
 template<typename result_type, typename callable_type>
 class task : public sched::interfaces::task {
 public:
-    task(callable_type &&func, const std::string &name = "");
+    task(callable_type func, const std::string &name = "");
     ~task() override {};
 
     void execute() override;
@@ -327,7 +327,7 @@ public:
 private:
     std::string m_name;
     std::promise<result_type> m_result;
-    callable_type m_f;
+    std::remove_reference_t<callable_type> m_f;
 };
 
 /* Create and store a task in a unique_ptr to a task or one of its parent
@@ -335,22 +335,22 @@ private:
 template<typename abc, typename callable_type>
 std::pair<std::unique_ptr<abc>,
           std::future<std::invoke_result_t<callable_type>>>
-make_task_as(callable_type &&f) {
+make_task_as(callable_type f) {
     using return_type = std::invoke_result_t<callable_type>;
     using task_type = sched::task<return_type, callable_type>;
 
     static_assert(std::is_base_of_v<abc, task_type>);
 
-    auto task = new task_type(std::forward<decltype(f)>(f));
+    auto task = new task_type(std::move(f));
     auto future = task->get_future();
 
     return std::make_pair(std::unique_ptr<abc>(task), std::move(future));
 }
 
 template<typename result_type, typename callable_type>
-task<result_type, callable_type>::task(callable_type &&func,
+task<result_type, callable_type>::task(callable_type func,
                                        const std::string &name)
-    : m_f(func), m_name(name) {
+    : m_f(std::move(func)), m_name(name) {
 }
 
 template<typename result_type, typename callable_type>
@@ -448,11 +448,10 @@ public:
     auto &signal_result() { return m_result; }
 
 private:
-    using signal_signature =
-      type_traits::signature_comp_t<void, result_type>;
+    using signal_signature = type_traits::signature_comp_t<void, result_type>;
     tarp::signal<signal_signature> m_result;
 
-    callable_type m_f;
+    std::remove_reference_t<callable_type> m_f;
 };
 
 /* Return a unique_ptr to an abc (abstract base class) that stores a command. */
@@ -461,7 +460,7 @@ std::unique_ptr<abc>
 make_interval_task_as(std::chrono::milliseconds interval,
                       std::optional<std::size_t> max_num_expirations,
                       bool starts_expired,
-                      callable_type &&f) {
+                      callable_type f) {
     using return_type = std::invoke_result_t<callable_type>;
     using interval_command_type =
       sched::interval_task<return_type, callable_type>;
@@ -471,7 +470,7 @@ make_interval_task_as(std::chrono::milliseconds interval,
     auto *ptr = (new interval_command_type(interval,
                                            max_num_expirations,
                                            starts_expired,
-                                           std::forward<decltype(f)>(f)));
+                                           std::move(f)));
 
     return std::unique_ptr<abc>(ptr);
 }
@@ -506,7 +505,7 @@ public:
     // use std::future here; this is semantically a one-shot so that will work
     // fine.
 private:
-    callable_type m_f;
+    std::remove_reference_t<callable_type> m_f;
     std::promise<result_type> m_result;
 };
 
@@ -515,13 +514,13 @@ private:
 template<typename abc, typename callable_type>
 std::future<std::invoke_result_t<callable_type>>
 make_deadline_task_as(std::chrono::milliseconds expires_from_now,
-                      callable_type &&f) {
+                      callable_type f) {
     using return_type = std::invoke_result_t<callable_type>;
     using task_t = sched::deadline_task<return_type, callable_type>;
 
     static_assert(std::is_base_of_v<abc, task_t>);
 
-    auto *ptr = new task_t(expires_from_now, std::forward<decltype(f)>(f));
+    auto *ptr = new task_t(expires_from_now, std::move(f));
     auto future = ptr->get_future();
 
     return std::make_pair(std::unique_ptr<abc>(ptr), std::move(future));
