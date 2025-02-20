@@ -31,7 +31,7 @@ public:
     cancellation_token(const cancellation_token &) = default;
     cancellation_token(cancellation_token &&) = default;
     cancellation_token &operator=(cancellation_token &&) = default;
-    cancellation_token &operator=(cancellation_token &) = default;
+    cancellation_token &operator=(const cancellation_token &) = default;
 
     // check if the token has been signaled.
     bool canceled() const { return m_token->canceled(); }
