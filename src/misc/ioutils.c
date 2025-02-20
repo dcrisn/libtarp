@@ -1,18 +1,18 @@
+#include "tarp/common.h"
 #include <tarp/error.h>
 #include <tarp/ioutils.h>
 
 #include <assert.h>
 #include <errno.h>
 #include <poll.h>
-#include <stdint.h>
-#include <unistd.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-
 
 ssize_t try_write(int dst, uint8_t *src, size_t nbytes) {
     assert(src);
@@ -249,6 +249,11 @@ struct result send_msg_with_fd(int uds_dst_fd,
         return RESULT(false, "empty message", 0);
     }
 
+    if (num_bytes_written == NULL) {
+        return RESULT(false, "NULL num_bytes_written", 0);
+    }
+    *num_bytes_written = 0;
+
     // buffer for ancillary data;
     union {
         // space for a single fd -- i.e. a single ancillary data
@@ -279,11 +284,11 @@ struct result send_msg_with_fd(int uds_dst_fd,
     msgh.msg_iov = &iov;
     msgh.msg_iovlen = 1;  // a single iovec
 
-    // specify the ancillary data to send (the fd).
-    msgh.msg_control = ancillary_data.buff;
-    msgh.msg_controllen = sizeof(ancillary_data.buff);
-
     if (fd >= 0) {
+        // specify the ancillary data to send (the fd).
+        msgh.msg_control = ancillary_data.buff;
+        msgh.msg_controllen = sizeof(ancillary_data.buff);
+
         //--------------------------
         // Each ancillary data item is stored as a cmsghdr inside
         // the msghdr passed to sendmsg(). We populate that here.
@@ -332,10 +337,12 @@ struct result send_msg_with_fd(int uds_dst_fd,
     }
 
     if ((size_t)ret == msgsz) {
+        *num_bytes_written = msgsz;
         return RESULT(true, "", 0);
     }
 
     if ((size_t)ret > msgsz) {
+        *num_bytes_written = (size_t)ret;
         return RESULT(false, "BUG: more bytes written than expected (?)", 0);
     }
 
@@ -371,14 +378,13 @@ struct result send_msg_with_fd(int uds_dst_fd,
 // sent along with the data as ancillary data, it is stored in fd.
 // This function assumes the descriptor points to
 // an already configured socket that a message can be read from.
-
 struct result receive_msg_with_fd(int uds_fd,
-                          int *fd,
-                          uint8_t *buff,
-                          size_t buffsz,
-                          size_t min_bytes_to_read,
-                          bool blocking,
-                          size_t *num_bytes_read) {
+                                  int *fd,
+                                  uint8_t *buff,
+                                  size_t buffsz,
+                                  size_t min_bytes_to_read,
+                                  bool blocking,
+                                  size_t *num_bytes_read) {
     if (buffsz == 0 || buff == NULL) {
         return RESULT(false, "null buffer", 0);
     }
@@ -386,6 +392,17 @@ struct result receive_msg_with_fd(int uds_fd,
     if (min_bytes_to_read > buffsz) {
         return RESULT(false, "min_bytes_to_read < buffsz", 0);
     }
+
+    if (num_bytes_read == NULL) {
+        return RESULT(false, "null num_bytes_read", 0);
+    }
+
+    if (fd == NULL) {
+        return RESULT(false, "null fd buffer", 0);
+    }
+
+    *num_bytes_read = 0;
+    *fd = -1;
 
     // buffer for ancillary data;
     union {
@@ -451,17 +468,20 @@ struct result receive_msg_with_fd(int uds_fd,
         return RESULT(false, "failed recvmsg", errno);
     }
 
+    *num_bytes_read = ret;
+
     // Otherwise we've got a partial read. So we assume we have read the
-    // ancillary data and therefore we start by extacting that here.
+    // ancillary data and therefore we start by extracting that here.
     // printf("recvmsg() returned %zd\n", ret);
 
     //--------------------------
     // Each ancillary data item is stored as a cmsghdr inside
     // the msghdr passed to sendmsg().
-    // We only expect one single ancillary data item, so we only
+    // We only expect (at most) one single ancillary data item, so we only
     // look at the first buffer.
     struct cmsghdr *ancillary_data_buffer = CMSG_FIRSTHDR(&msgh);
 
+    // there is ancillary data, so validate it.
     if (ancillary_data_buffer != NULL) {
         // check if valid. We expect a single fd as ancillary data.
         if (ancillary_data_buffer->cmsg_len != CMSG_LEN(sizeof(int))) {
@@ -487,8 +507,6 @@ struct result receive_msg_with_fd(int uds_fd,
         *fd = fd_received;
         // printf("Received FD %d\n", fd_received);
     }
-
-    *num_bytes_read = ret;
 
     // read complete, nothing else left to do.
     if ((size_t)ret == buffsz || (size_t)ret >= min_bytes_to_read) {
