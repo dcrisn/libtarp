@@ -1,15 +1,18 @@
+#include <tarp/cancellation_token.hxx>
 #include <tarp/sched.hxx>
 
 namespace tarp::sched {
 using namespace std;
 
-using T = interval_task_mixin;
+using T = periodic_task_mixin;
 
-interval_task_mixin::interval_task_mixin(
+periodic_task_mixin::periodic_task_mixin(
   std::chrono::milliseconds interval,
   std::optional<std::size_t> max_num_renewals,
-  bool starts_expired)
-    : m_interval(interval)
+  bool starts_expired,
+  std::optional<cancellation_token> token)
+    : m_cancellation_token(std::move(token))
+    , m_interval(interval)
     , m_max_num_renewals(max_num_renewals)
     , m_num_renewals(0)
     , m_start_expired(starts_expired) {
@@ -34,6 +37,10 @@ void T::delay(std::chrono::microseconds delay) {
 }
 
 bool T::renewable() const {
+    if (canceled()) {
+        return false;
+    }
+
     // no upper limit to the number of times we can expire.
     if (!m_max_num_renewals.has_value()) {
         return true;
@@ -49,6 +56,10 @@ bool T::renewable() const {
 }
 
 void T::renew() {
+    if (canceled()) {
+        return;
+    }
+
     if (!expired()) {
         throw std::logic_error("Illegal attempt to renew before deadline");
     }
