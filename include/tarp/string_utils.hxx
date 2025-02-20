@@ -6,6 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <cmath>
@@ -56,6 +57,7 @@ std::vector<std::size_t> find_needle_positions(const std::string &haystack,
 // empty strings, then they are discarded and only non-empty strings tokens are
 // kept. Otherwise if drop_empty_tokens=false, all tokens, empty or not, are
 // kept.
+// If sep is not found in s, then s is returned unchanged.
 std::vector<std::string>
 split(const std::string &s, const std::string &sep, bool drop_empty_tokens);
 
@@ -347,6 +349,7 @@ std::string int_to_hexstring(T i) {
     // explicitly cast it to an int for std::hex to actually give us what we
     // want!
     constexpr std::size_t width = sizeof(T) * 2;
+    static_assert(std::is_integral_v<T>);
     static_assert(sizeof(T) <= sizeof(std::uint64_t));
 
     stream << std::setfill('0') << std::setw(width) << std::hex
@@ -374,21 +377,23 @@ std::string hexstring_from_bytes(const T &bytes) {
 // Convert the contents of a list/vector-like type to a string.
 // Return a string of the form
 //  {prefix + {l[i], l[i+1], ..., l[n]} + postfix}.
-template<template<typename> class list_t, typename T>
-std::string to_string(const list_t<T> &l,
+template<typename T>
+std::string to_string(const T &l,
                       const std::string &prefix = "",
                       const std::string &postfix = "") {
     std::string s = prefix;
-    for (unsigned i = 0; i < l.size(); ++i) {
-        if constexpr (std::is_arithmetic_v<T>) {
-            s += std::to_string(l[i]);
+    unsigned i = 0;
+    for (auto x : l) {
+        if constexpr (std::is_arithmetic_v<decltype(x)>) {
+            s += std::to_string(x);
         } else {
-            s += std::string {l[i]};
+            s += std::string {x};
         }
 
         if (i + 1 < l.size()) {
             s += ", ";
         }
+        ++i;
     }
     s += postfix;
     return s;
