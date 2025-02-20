@@ -56,8 +56,9 @@ struct result make_client_uds(const char *server_path,
 // descriptor. If fd is < 0, it is ignored. Otherwise it is sent as ancillary
 // data along with the message. In this case, uds_dst_fd must be a unix domain
 // socket descriptor. If blocking=true, then the function reattempts a number of
-// times to send all bytes in case of a partial write. If it fails, or
-// blocking=false, the number of bytes written is stored in num_bytes_written.
+// times to send all bytes in case of a partial write and returns false if
+// that fails.
+// The number of bytes written is always stored in num_bytes_written.
 struct result send_msg_with_fd(int uds_dst_fd,
                                int fd,
                                uint8_t *msg,
@@ -65,13 +66,15 @@ struct result send_msg_with_fd(int uds_dst_fd,
                                bool blocking,
                                size_t *num_bytes_written);
 
-// Try to read at least min_bytes_to_read from the connected uds_fd socket
-// descriptor into the buffer of size buffsz. min_bytes_to_read must be <=
-// buffsz. If blocking=true, the function reattempts to read all of
-// min_bytes_to_read in case of a partial read. If it fails to do that or if
-// blocking=false, then in case of a partial read the number of bytes read is
-// stored in num_bytes_read.
+// Try to read buffsz bytes into buff from the file descriptor uds_fd.
 //
+// If fewer bytes than min_bytes_to_read are read and blocking=true, then the
+// function makes a number of attempts to read min_bytes_to_read and returns
+// false if that fails.
+//
+// min_bytes_to_read must be <= buffsz.
+// none of the pointer arguments may be NULL.
+// The number of bytes read is stored in num_bytes_read.
 // If a file descriptor was sent as ancillary data, it will be stored in fd.
 // Otherwise -1 will be stored.
 struct result receive_msg_with_fd(int uds_fd,
