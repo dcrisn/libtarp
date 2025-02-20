@@ -16,8 +16,15 @@ namespace tarp {
 class ByteBuffer {
 public:
     ByteBuffer(void) = default;
+
+    // Make a copy of the specified buffer.
     ByteBuffer(const std::vector<std::byte> &bytes);
+
+    // Make a copy of the specified buffer.
     ByteBuffer(const std::byte *bytes, std::size_t len);
+
+    // Read num_bytes (or until EOF if num_bytes==-1)
+    // from fd.
     ByteBuffer(int fd, std::int32_t num_bytes = -1);
 
     /*
@@ -65,6 +72,7 @@ private:
     void swap(ByteBuffer &other);
 
     std::vector<std::byte> m_buff;
+
     mutable std::size_t m_buff_offset = 0;
 };
 
