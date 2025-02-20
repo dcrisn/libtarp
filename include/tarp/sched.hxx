@@ -423,14 +423,16 @@ private:
 // That is best avoided (both because of unnecessary overhead and more complex
 // behavior), so keep these as two separate inheritance hierarchies.
 template<typename result_type, typename callable_type>
-class interval_task : public interval_task_mixin {
+class deadline_task : public interval_task_mixin {
 public:
-    explicit interval_task(std::chrono::milliseconds interval,
+    explicit deadline_task(std::chrono::milliseconds interval,
                            std::optional<std::size_t> max_num_expirations,
                            bool starts_expired,
                            callable_type f)
         : interval_task_mixin(interval, max_num_expirations, starts_expired)
         , m_f(std::move(f)) {}
+
+    ~deadline_task() = default;
 
     void execute() override;
 
