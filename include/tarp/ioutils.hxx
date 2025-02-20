@@ -5,6 +5,10 @@
 #include <stdexcept>
 #include <string>
 
+#if __cplusplus >= 202002L
+#include <format>
+#endif
+
 namespace tarp {
 namespace utils {
 namespace io {
@@ -38,6 +42,19 @@ template<typename... Args>
 void println(Args &&...args) {
     (std::cout << ... << std::forward<Args>(args)) << '\n';
 }
+
+#if __cplusplus >= 202002L
+
+// C++23 introduces std::print, but this is missing in c++20.
+// C++20 does have std::format however. The below provides a
+// wrapper around std::format to subtitute for the lack of
+// std::print.
+template<typename... msg>
+void print(std::format_string<msg...> fmt, msg &&...vargs) {
+    std::cout << std::vformat(fmt.get(), std::make_format_args(vargs...))
+              << std::endl;
+}
+#endif
 
 // Create the file on the specified path if it does not exist.
 // The permissions will be as specified by fopen()
