@@ -498,6 +498,24 @@ bool match(const std::string input, const std::string re, bool case_sensitive) {
     }
 }
 
+std::string to_upper(const std::string &s) {
+    std::string result = s;
+    for (auto &c : result) {
+        c = std::toupper(c);
+    }
+
+    return result;
+}
+
+std::string to_lower(const std::string &s) {
+    std::string result = s;
+    for (auto &c : result) {
+        c = std::tolower(c);
+    }
+
+    return result;
+}
+
 std::string rstrip(const std::string &input,
                    const std::optional<std::string> &characters) {
     auto [starti, endi] = find_nonmatching_slice(input, characters);
@@ -592,22 +610,6 @@ std::optional<bool> to_boolean(const std::string &s) {
 
 bool is_boolean(const std::string &s) {
     return to_boolean(s).has_value();
-}
-
-std::string to_lower(const std::string &s) {
-    std::string result {s};
-    std::transform(s.begin(), s.end(), result.begin(), [](unsigned char c) {
-        return std::tolower(c);
-    });
-    return result;
-}
-
-std::string to_upper(const std::string &s) {
-    std::string result {s};
-    std::transform(s.begin(), s.end(), result.begin(), [](unsigned char c) {
-        return std::toupper(c);
-    });
-    return result;
 }
 
 std::optional<std::string> replace(const std::string &input,
