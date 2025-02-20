@@ -1,6 +1,7 @@
 #pragma once
 
 // cxx stdlib
+#include <endian.h>
 #include <type_traits>
 
 // c stdlib
@@ -91,6 +92,40 @@ T to_hbo(T value) {
     } else if constexpr (std::is_same_v<T, std::uint64_t>) {
         return be64toh(value);
     }
+}
+
+// Swap the bytes in value from host byte order (hbo) to
+// network byte order (nbo).
+template<typename T>
+T to_nbo(T value) {
+    static_assert(
+      std::is_same_v<T, std::uint8_t> || std::is_same_v<T, std::uint16_t> ||
+      std::is_same_v<T, std::uint32_t> || std::is_same_v<T, std::uint64_t>);
+
+    if constexpr (std::is_same_v<T, std::uint8_t>) {
+        return value;
+    } else if constexpr (std::is_same_v<T, std::uint16_t>) {
+        return htobe16(value);
+    } else if constexpr (std::is_same_v<T, std::uint32_t>) {
+        return htobe32(value);
+    } else if constexpr (std::is_same_v<T, std::uint64_t>) {
+        return htobe64(value);
+    }
+}
+
+// C++ type-safe rewrites of the equivalent implementations in tarp/bits.h.
+// See tarp/bits.h for details.
+// The rightmost bit is considered to be at pos 1 here.
+template<typename T>
+T get_bits(T num, unsigned pos, unsigned nbits) {
+    // get the nbits low-order bits all turned on.
+    const T mask = ~((~T {0}) << nbits);
+
+    const unsigned shift = pos - nbits;
+
+    // apply mask and shift back down.
+    const T masked = num & (mask << shift);
+    return (masked >> shift);
 }
 
 }  // namespace bits
