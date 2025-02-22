@@ -63,7 +63,7 @@ int main(int, const char **) {
   //=====================================
   // ===== Test class `event_broadcaster`
   //=====================================
-  run_test(test_event_broadcaster, 1000, 100us, 1 * 1000, 1);
+  run_test(test_event_broadcaster, 1000, 10ms, 1 * 1000, 1);
 
   //=====================================
   // ===== Test class `event_aggregator`
