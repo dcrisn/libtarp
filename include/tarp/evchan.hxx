@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <iostream>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -11,8 +12,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-#include <iostream>
 
 #include <tarp/cxxcommon.hxx>
 #include <tarp/semaphore.hxx>
@@ -62,6 +61,10 @@ namespace interfaces {
 // The arguments can be used as event flags or masks, ids etc or whatever makes
 // sense for the respective notification mechanism. I.e. they can store any
 // information that can be encoded into 64 bits.
+//
+// The return value of the notifier should be False if the notifier should be
+// removed from the list of monitors after the current call, and True otherwise
+// if it should remain in the list.
 class notifier {
 public:
     virtual ~notifier() = default;
@@ -84,14 +87,9 @@ public:
     wchan() = default;
     virtual ~wchan() = default;
 
-    // The monitor can only be added for state=WRITABLE (and implicitly
+    // The monitor is added for state=WRITABLE (and implicitly
     // state=CLOSED).
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
-                              std::uint32_t states = chanState::WRITABLE) {
-        if (!(states & chanState::WRITABLE)) {
-            throw std::invalid_argument(
-              "unacceptable state specified for monitoring");
-        }
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
         return REAL->add_monitor(notifier, chanState::WRITABLE);
     }
 
@@ -130,14 +128,9 @@ public:
     rchan() = default;
     virtual ~rchan() = default;
 
-    // The monitor can only be added for state=READABLE (and implicitly
+    // The monitor is added for state=READABLE (and implicitly
     // state=CLOSED).
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
-                              std::uint32_t states = chanState::READABLE) {
-        if (!(states & chanState::READABLE)) {
-            throw std::invalid_argument(
-              "unacceptable state specified for monitoring");
-        }
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
         return REAL->add_monitor(notifier, chanState::READABLE);
     }
 
@@ -175,14 +168,9 @@ public:
     wtrunk() = default;
     virtual ~wtrunk() = default;
 
-    // The monitor can only be added for state=WRITABLE (and implicitly
+    // The monitor is added for state=WRITABLE (and implicitly
     // state=CLOSED).
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
-                              std::uint32_t states = chanState::WRITABLE) {
-        if (!(states & chanState::WRITABLE)) {
-            throw std::invalid_argument(
-              "unacceptable state specified for monitoring");
-        }
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
         return REAL->add_monitor(chanState::WRITABLE, notifier);
     }
 
@@ -233,12 +221,8 @@ public:
     rtrunk() = default;
     virtual ~rtrunk() = default;
 
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
-                              std::uint32_t states = chanState::READABLE) {
-        if (!(states & chanState::READABLE)) {
-            throw std::invalid_argument(
-              "unacceptable state specified for monitoring");
-        }
+    // The monitor is added for state=READABLE (and implicitly state=CLOSED).
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
         return REAL->add_monitor(chanState::READABLE, notifier);
     }
 
@@ -458,7 +442,7 @@ public:
     // Add a monitor for the states specified in states. Note notifications
     // have edge-triggered semantics and are only emitted on the rising and
     // falling edge, respectively, of a state change. I.e. notifier.notify()
-    // only gets called when the channel _becomes_ {un}readable/writable.
+    // only gets called when the channel _becomes_ readable/writable.
     // See trunk::add_monitor fmi.
     std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
                               std::uint32_t states) {
@@ -552,7 +536,7 @@ public:
 
         // [[unlikely]] (c++20).
         if (m_closed) {
-            //std::cerr << "Failed try_push --> closed\n";
+            // std::cerr << "Failed try_push --> closed\n";
             return {false, opt_payload(std::forward<T>(data)...)};
         }
 
@@ -1034,9 +1018,9 @@ public:
         lock_t l {m_mtx};
 
         if (m_closed or m_recv_waitq.empty()) {
-            //std::cerr << "Failed try_push --> closed=" << m_closed
-            //          << " recv_waitq size=" << m_recv_waitq.size()
-            //          << std::endl;
+            // std::cerr << "Failed try_push --> closed=" << m_closed
+            //           << " recv_waitq size=" << m_recv_waitq.size()
+            //           << std::endl;
             return {false, opt_payload(std::forward<T>(data)...)};
         }
 
@@ -1714,7 +1698,7 @@ public:
     // Flush the event buffer: broadcast all buffered events.
     // Note this is lossy, i.e. reliable delivery cannot be guaranteed: maybe
     // there are no channels, maybe some channels have been closed, maybe the
-    // channels are overfilled and do not use ring-buffer semantics.
+    // channels are overfilled and do not (or do!) use ring-buffer semantics.
     void dispatch() {
         lock_t l {m_mtx};
 
