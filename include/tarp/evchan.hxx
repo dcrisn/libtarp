@@ -390,7 +390,8 @@ static constexpr std::uint8_t CLEAR = 0;
 template<typename ts_policy, typename... types>
 class event_channel
     : public wchan<event_channel<ts_policy, types...>, types...>
-    , public rchan<event_channel<ts_policy, types...>, types...> {
+    , public rchan<event_channel<ts_policy, types...>, types...>
+    , public std::enable_shared_from_this<event_channel<ts_policy, types...>> {
     //
     using is_tuple =
       typename tarp::type_traits::type_or_tuple<types...>::is_tuple;
@@ -436,8 +437,22 @@ public:
     // return a wchan interface reference.
     interfaces::wchan<this_type, types...> &as_wchan() { return *this; }
 
+    // return a wchan interface shared ptr. NOTE: this may only be called
+    // if the event_channel has been constructed as a std::shared_ptr.
+    std::shared_ptr<interfaces::wchan<this_type, types...>>
+    as_wchan_sharedptr() {
+        return this->shared_from_this();
+    }
+
     // return an rchan interface reference.
     interfaces::rchan<this_type, types...> &as_rchan() { return *this; }
+
+    // return a wchan interface shared ptr. NOTE: this may only be called
+    // if the event_channel has been constructed as a std::shared_ptr.
+    std::shared_ptr<interfaces::rchan<this_type, types...>>
+    as_rchan_sharedptr() {
+        return this->shared_from_this();
+    }
 
     // Add a monitor for the states specified in states. Note notifications
     // have edge-triggered semantics and are only emitted on the rising and
