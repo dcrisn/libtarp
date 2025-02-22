@@ -168,8 +168,10 @@ public:
         token->cancel(cancellation_token::cancellation_key {});
     }
 
-    // Discard the current cancellation token, if any, and create a new one.
+    // Cancel and discard the current cancellation token, if any,
+    // and create a new one.
     void reset() {
+        cancel();
         std::unique_lock l {m_mtx};
         m_token.reset();
         m_token = std::make_shared<cancellation_token>();
