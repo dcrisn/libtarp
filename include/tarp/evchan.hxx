@@ -87,9 +87,14 @@ public:
     wchan() = default;
     virtual ~wchan() = default;
 
-    // The monitor is added for state=WRITABLE (and implicitly
+    // The monitor can only be added for state=WRITABLE (and implicitly
     // state=CLOSED).
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
+                              std::uint32_t states = chanState::WRITABLE) {
+        if (!(states & chanState::WRITABLE)) {
+            throw std::invalid_argument(
+              "unacceptable state specified for monitoring");
+        }
         return REAL->add_monitor(notifier, chanState::WRITABLE);
     }
 
@@ -128,9 +133,14 @@ public:
     rchan() = default;
     virtual ~rchan() = default;
 
-    // The monitor is added for state=READABLE (and implicitly
+    // The monitor can only be added for state=READABLE (and implicitly
     // state=CLOSED).
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
+                              std::uint32_t states = chanState::READABLE) {
+        if (!(states & chanState::READABLE)) {
+            throw std::invalid_argument(
+              "unacceptable state specified for monitoring");
+        }
         return REAL->add_monitor(notifier, chanState::READABLE);
     }
 
@@ -168,9 +178,14 @@ public:
     wtrunk() = default;
     virtual ~wtrunk() = default;
 
-    // The monitor is added for state=WRITABLE (and implicitly
+    // The monitor can only be added for state=WRITABLE (and implicitly
     // state=CLOSED).
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
+                              std::uint32_t states = chanState::WRITABLE) {
+        if (!(states & chanState::WRITABLE)) {
+            throw std::invalid_argument(
+              "unacceptable state specified for monitoring");
+        }
         return REAL->add_monitor(chanState::WRITABLE, notifier);
     }
 
@@ -221,8 +236,12 @@ public:
     rtrunk() = default;
     virtual ~rtrunk() = default;
 
-    // The monitor is added for state=READABLE (and implicitly state=CLOSED).
-    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier) {
+    std::uint32_t add_monitor(std::shared_ptr<notifier> notifier,
+                              std::uint32_t states = chanState::READABLE) {
+        if (!(states & chanState::READABLE)) {
+            throw std::invalid_argument(
+              "unacceptable state specified for monitoring");
+        }
         return REAL->add_monitor(chanState::READABLE, notifier);
     }
 
