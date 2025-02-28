@@ -17,21 +17,27 @@ class cancellation_token_source;
 // accessed by different threads at the same time.
 // Using one single copy in multiple threads without synchronization
 // is not thread safe.
+//
+// NOTE: when a copy is made, any notifier registered is **not** copied.
+// The notifier is therefore _per copy_. A copy automatically removes
+// its notifier in the destructor.
 class cancellation_token final {
 public:
-    explicit cancellation_token();
+    explicit cancellation_token() { m_token = std::make_shared<token>(); }
 
     ~cancellation_token() {
-        if (m_observer_id.has_value()) {
-            m_token->remove_observer(*m_observer_id);
+        // the class might've been moved from, in which case
+        // m_token will be null!
+        if (!m_token) {
+            return;
         }
     }
 
     // cheap to copy and move. Meant to be passed by copy.
-    cancellation_token(const cancellation_token &) = default;
-    cancellation_token(cancellation_token &&) = default;
-    cancellation_token &operator=(cancellation_token &&) = default;
-    cancellation_token &operator=(const cancellation_token &) = default;
+    cancellation_token(const cancellation_token &);
+    cancellation_token(cancellation_token &&);
+    cancellation_token &operator=(cancellation_token &&);
+    cancellation_token &operator=(const cancellation_token &);
 
     // check if the token has been signaled.
     bool canceled() const { return m_token->canceled(); }
@@ -88,8 +94,8 @@ private:
 
             if (!already_canceled) {
                 // NOTE: risk of deadlock here; the callbacks must never,
-                // directly or indirectly, call back into the token such that
-                // this mutex gets locked again.
+                // directly or indirectly, call back into the token such
+                // that this mutex gets locked again.
                 invoke_observers();
             }
 
@@ -126,10 +132,10 @@ private:
         mutable std::mutex m_mtx;
     };
 
-    // The cancellation_token class is cheap to copy since it merely involves
-    // a std::shared_ptr copy. However, it is thread-unsafe since neither
-    // of these member fields are thread-safe. I.e. importantly, std::shared_ptr
-    // itself is **not** thread-safe.
+    // The cancellation_token class is cheap to copy since it merely
+    // involves a std::shared_ptr copy. However, it is thread-unsafe since
+    // neither of these member fields are thread-safe. I.e. importantly,
+    // std::shared_ptr itself is **not** thread-safe.
     std::shared_ptr<token> m_token;
     std::optional<std::uint32_t> m_observer_id = 0;
 };

@@ -151,6 +151,7 @@ add_library(libtarp_objects OBJECT
     src/misc/string_utils.cxx
     src/misc/process.cxx
     src/misc/posix_signal_helpers.cxx
+    src/misc/cancellation_token.cxx
     src/misc/idman.cxx
     src/misc/filters.cxx
     src/misc/buffer.cxx
