@@ -1,18 +1,18 @@
 #include <tarp/ioutils.hxx>
 #include <tarp/string_utils.hxx>
 
+#include <filesystem>
 #include <fstream>
 #include <random>
-#include <filesystem>
 
 #include <cerrno>
 #include <cstring>
 
 extern "C" {
 #include <fcntl.h>
-#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 }
 
 namespace tarp {
@@ -219,6 +219,19 @@ std::pair<bool, std::string> touch(const std::string &fpath) {
 
     return {true, ""};
 }
+
+std::vector<std::uint8_t> get_random_bytes(unsigned num) {
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<std::mt19937::result_type> dist(0, 255);
+    std::vector<std::uint8_t> bytes;
+
+    for (unsigned i = 0; i < num; ++i) {
+        bytes.push_back(dist(rng));
+    }
+    return bytes;
+}
+
 }  // namespace io
 }  // namespace utils
 }  // namespace tarp

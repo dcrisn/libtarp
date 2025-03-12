@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #if __cplusplus >= 202002L
 #include <format>
@@ -97,6 +99,9 @@ std::pair<bool, std::string> files_identical(const std::string &fpath_a,
 // picked at random from the [0, 255] range.
 bool generate_file_random_bytes(const std::string &abspath,
                                 std::size_t num_bytes);
+
+// Get a vector with NUM random bytes.
+std::vector<std::uint8_t> get_random_bytes(unsigned num);
 
 }  // namespace io
 }  // namespace utils
