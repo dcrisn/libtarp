@@ -864,6 +864,28 @@ std::string strerr() {
     return strerr(errno);
 }
 
+void make_chunks_from_bytes(std::vector<std::vector<std::uint8_t>> &chunks,
+                            const std::vector<std::uint8_t> &bytes,
+                            std::size_t max_bytes_per_chunk) {
+    // udebug( "num bytes: ", unsigned( bytes.size() ) );
+    const auto BYTES_PER_CHUNK = max_bytes_per_chunk;
+    auto full_chunks = bytes.size() / BYTES_PER_CHUNK;
+    bool has_partial_chunk = bytes.size() % BYTES_PER_CHUNK;
+
+    unsigned idx = 0;
+    for (unsigned i = 0; i < full_chunks; ++i) {
+        auto start = bytes.begin() + idx;
+        auto end = start + BYTES_PER_CHUNK;
+        std::vector<std::uint8_t> data {start, end};
+        chunks.push_back(std::move(data));
+        idx += BYTES_PER_CHUNK;
+    }
+
+    if (has_partial_chunk) {
+        std::vector<std::uint8_t> data {bytes.begin() + idx, bytes.end()};
+        chunks.push_back(std::move(data));
+    }
+}
 
 
 }  // namespace string_utils

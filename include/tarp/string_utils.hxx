@@ -399,6 +399,15 @@ std::string to_string(const T &l,
     return s;
 }
 
+// Eagerly break bytes into a non-overlapping set of chunks. Each chunk
+// contains max_bytes_per_chunk with the possible exception of the last chunk
+// which will have fewer bytes if chunks.size() is not a perfect multiple of
+// max_bytes_per_chunk. The chunks are appended, in order to 'chunks'.
+void make_chunks_from_bytes(std::vector<std::vector<std::uint8_t>> &chunks,
+                            const std::vector<std::uint8_t> &bytes,
+                            std::size_t max_bytes_per_chunk);
+
+
 }  // namespace string_utils
 
 namespace str {
