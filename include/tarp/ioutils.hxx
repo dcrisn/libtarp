@@ -103,6 +103,25 @@ bool generate_file_random_bytes(const std::string &abspath,
 // Get a vector with NUM random bytes.
 std::vector<std::uint8_t> get_random_bytes(unsigned num);
 
+// Get a vector with NUM bytes, with each byte being i
+// in 0..255; when 255 is reached, we wrap around.
+std::vector<std::uint8_t> get_cycling_bytes(unsigned num);
+
+// Get a vector of n bytes, with each element == byte.
+std::vector<std::uint8_t> repeat(std::uint8_t byte, unsigned n);
+
+// Creates a file under the given directory path
+// with a name that starts with file_name_prefix.
+// This is followed by '.' and then a unique suffix at most
+// 6 characters long.
+//
+// @return {a,b} where a is the filename, if created, and b is
+// an error string, if there was an error. Only one of a and b is
+// non-empty.
+std::pair<std::string, std::string>
+make_unique_file(const std::string &dirpath,
+                 const std::string &file_name_prefix);
+
 }  // namespace io
 }  // namespace utils
 }  // namespace tarp

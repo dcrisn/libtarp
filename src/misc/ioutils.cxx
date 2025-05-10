@@ -207,6 +207,40 @@ std::vector<std::uint8_t> get_random_bytes(unsigned num) {
     return bytes;
 }
 
+std::vector<std::uint8_t> get_cycling_bytes(unsigned num) {
+    std::vector<std::uint8_t> bytes;
+    for (unsigned i = 0; i < num; ++i) {
+        bytes.push_back(i);
+    }
+    return bytes;
+}
+
+std::vector<std::uint8_t> repeat(std::uint8_t byte, unsigned n) {
+    std::vector<std::uint8_t> bytes;
+
+    for (unsigned i = 0; i < n; ++i) {
+        bytes.push_back(byte);
+    }
+    return bytes;
+}
+
+std::pair<std::string, std::string>
+make_unique_file(const std::string &dirpath,
+                 const std::string &file_name_prefix) {
+    auto constexpr template_suffix = "XXXXXX";
+    std::string path = dirpath + "/" + file_name_prefix + "." + template_suffix;
+    std::vector<char> buff(path.begin(), path.end());
+    buff.push_back('\0');
+    int ret = mkstemp(buff.data());  // creates and opens a unique temp file
+    if (ret < 0) {
+        return {"", strerror(errno)};
+    }
+
+    close(ret);
+    path.assign(buff.data());
+    return {path, ""};
+}
+
 }  // namespace io
 }  // namespace utils
 }  // namespace tarp
