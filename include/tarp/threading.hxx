@@ -148,7 +148,7 @@ private:
     virtual void prepare_resume(void) override final;
 
     std::unique_ptr<tarp::TimeGuard<T>> m_guard;
-    tarp::signal<void(void)> m_timeout_signal;
+    tarp::ts::signal<void(void)> m_timeout_signal;
 };
 
 template<typename T>
@@ -239,7 +239,7 @@ private:
     mutable std::shared_mutex m_mtx;
     std::chrono::microseconds m_period {c_default_period};
     std::chrono::steady_clock::time_point m_prev_tick_tp;
-    tarp::signal<void(void)> m_tick_signal;
+    tarp::ts::signal<void(void)> m_tick_signal;
 };
 
 /*
@@ -379,7 +379,7 @@ private:
 
     mutable std::mutex m_mtx;
     const std::uint32_t m_worker_id;
-    tarp::signal<void(std::uint32_t id)> m_sig_work_done;
+    tarp::ts::signal<void(std::uint32_t id)> m_sig_work_done;
 };
 
 /*

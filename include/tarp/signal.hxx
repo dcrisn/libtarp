@@ -1,9 +1,11 @@
 #pragma once
 
 #include <functional>
+#include <iostream>
 #include <memory>
-#include <mutex>
+#include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 #include <tarp/cxxcommon.hxx>
@@ -11,29 +13,6 @@
 #include <tarp/type_traits.hxx>
 
 namespace tarp {
-
-template<typename callback_signature,
-         typename signal_output =
-           tarp::type_traits::signature_decomp_return_t<callback_signature>,
-         template<typename output, typename input> typename reducer =
-           tarp::reduce::last>
-class signal;
-
-template<typename callback_signature,
-         typename signal_output =
-           tarp::type_traits::signature_decomp_return_t<callback_signature>,
-         template<typename output, typename input> typename reducer =
-           tarp::reduce::last>
-using hook = signal<callback_signature, signal_output, reducer>;
-
-/*
- * Means to safely synchronize disconnection of a signal consumer
- * with a signal provider, even when the two run in different threads.
- */
-struct signal_token {
-    bool valid {true};
-    std::mutex mtx;
-};
 
 /*
  * Interface that allows disconnection of a signal consumer from
@@ -46,9 +25,38 @@ public:
     virtual ~signal_connection() noexcept(false) = default;
 };
 
+namespace impl {
+// non-specialized signal class
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
+         template<typename output, typename input> typename reducer =
+           tarp::reduce::last,
+         typename ts_policy = tarp::type_traits::thread_safe>
+class signal;
+
+// non-specialized monosignal class
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
+         typename ts_policy = tarp::type_traits::thread_safe>
+class monosignal;
+
+/*
+ * Means to safely synchronize disconnection of a signal consumer
+ * with a signal provider, even when the two run in different threads.
+ */
+template<typename ts_policy>
+struct signal_token {
+    bool valid {true};
+
+    using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
+    mutex_t mtx;
+};
+
 /*
  * The following class implements a signal -- and more generally, the
- * publish-subscribe aka observer design pattern.
+ * observer design pattern aka signals-and-slots.
  *
  * NOTE: this implementation is largely inspired by the libsigc++ signals
  * library. For anything more robust or complex, refer to that. This
@@ -79,7 +87,8 @@ public:
  *
  * disconnecting from a signal
  * -----------------------------
- * Disconnection from is more tricky than connection to a signal.
+ * Disconnection from is more tricky than connection to a signal. This is
+ * a well-known aspect of the observer pattern.
  * There are two cases:
  * - the signal consumer outlives the signal provider and no disconnection is
  *   needed. Use the connect_detached() method if you can guarantee this and
@@ -167,10 +176,11 @@ public:
    typename R,                                                \
    typename... vargs,                                         \
    typename signal_output,                                    \
-   template<typename output, typename input> class reducer
+   template<typename output, typename input> class reducer, \
+   typename ts_policy
 
 #define SIGNAL_TEMPLATE_INSTANCE    \
-   R(vargs...), signal_output, reducer
+   R(vargs...), signal_output, reducer, ts_policy
 //clang-format on
 
 /*
@@ -180,6 +190,17 @@ public:
  */
 template<SIGNAL_TEMPLATE_SPEC>
 class signal<SIGNAL_TEMPLATE_INSTANCE> {
+    // since there can be multiple observers, the parameters must
+    // be copy-assignable and they must not be r-value references!
+    // Otherwise e.g. given 3 observers and a unique_ptr param,
+    // only the first observer will get the unique ptr and the
+    // subsequent ones a moved-from unique_ptr i.e. nullptr.
+    static_assert((!std::is_rvalue_reference_v<vargs> && ...));
+
+    // each parameter must either be a (possibly const) l-value
+    // reference, or otherwise copy-assignable.
+    static_assert(((std::is_reference_v<vargs> or std::is_copy_assignable_v<std::remove_cv_t<
+       vargs>>) && ...));
 public:
     DISALLOW_COPY_AND_MOVE(signal);
 
@@ -199,7 +220,7 @@ public:
      * NOTE: one single copy of the connection object must ever exist and the
      * sole copy must reside at all times with the signal consumer such that
      * the connection object does not outlive it. */
-    std::unique_ptr<tarp::signal_connection>
+    std::unique_ptr<signal_connection>
     connect(std::function<R(vargs...)> callback);
 
     /*
@@ -219,31 +240,34 @@ public:
 
 private:
     using observer_callback_t = std::function<R(vargs...)>;
+    using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
+    using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
+    using signal_token_t = signal_token<ts_policy>;
 
     struct connection : public signal_connection {
-        connection(std::shared_ptr<tarp::signal_token> &tkn);
+        connection(std::shared_ptr<signal_token<ts_policy>> tkn);
         virtual void disconnect(void) override;
         ~connection(void);
 
-        std::shared_ptr<tarp::signal_token> m_token;
+        std::shared_ptr<signal_token<ts_policy>> m_token;
     };
 
     struct observer {
         observer(bool detached,
-                 std::shared_ptr<tarp::signal_token> &tkn,
+                 std::shared_ptr<signal_token_t> &tkn,
                  std::function<R(vargs...)> f);
-        std::shared_ptr<tarp::signal_token> check(void) const;
+        std::shared_ptr<signal_token_t> check(void) const;
 
         std::function<R(vargs...)> notify;
         bool m_detached;
-        std::weak_ptr<tarp::signal_token> m_link;
+        std::weak_ptr<signal_token_t> m_link;
     };
 
-    std::unique_ptr<tarp::signal_connection>
+    std::unique_ptr<signal_connection>
     register_observer(std::function<R(vargs...)> callback, bool detached);
 
     std::vector<observer> m_observers;
-    std::mutex m_mtx;
+    mutex_t m_mtx;
 };
 
 /*
@@ -251,7 +275,7 @@ private:
  * from within a signal handler. Doing so will produce a deadlock.
  */
 template<SIGNAL_TEMPLATE_SPEC>
-signal_output tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
+signal_output signal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
     /* If the return type of the signal is not void, then create the specified
      * reducer, which takes that type as input (R) and produces a final output
      * of the specified type (signal_output). Otherwise there would be a compile
@@ -266,7 +290,7 @@ signal_output tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
                                 reducer<signal_output, R>>::type;
     reducer_type r;
 
-    LOCK(m_mtx);
+    lock_t lock{m_mtx};
 
     for (auto it = m_observers.begin(); it != m_observers.end();) {
         auto token = it->check();
@@ -281,12 +305,17 @@ signal_output tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
         /* NOTE: CRITICAL SECTION.
          * The validity check and callback invocation must be mutex-protected.
          * see signal_connection comments. */
-        std::unique_lock l(token->mtx);
+        lock_t l(token->mtx);
         if (!token->valid) continue;
 
-        if constexpr (std::is_void_v<R>) std::invoke(it->notify, params...);
-        else r.process(std::invoke(it->notify, params...));
-
+        // we use std::forward here to _cast_ the arguments passed to emit()
+        // to the parameter types specified in the signal signature.
+        if constexpr((std::is_void_v<R>)){
+            std::invoke(it->notify, std::forward<vargs>(params)...);
+        }
+        else {
+            r.process(std::invoke(it->notify, std::forward<vargs>(params)...));
+        }
         ++it;
     }
 
@@ -294,25 +323,25 @@ signal_output tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-std::size_t tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::count() {
-    LOCK(m_mtx);
+std::size_t signal<SIGNAL_TEMPLATE_INSTANCE>::count() {
+    lock_t l{m_mtx};
     return m_observers.size();
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-bool tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::empty() {
+bool signal<SIGNAL_TEMPLATE_INSTANCE>::empty() {
     return count() == 0;
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-std::unique_ptr<tarp::signal_connection>
-tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connect(
+std::unique_ptr<signal_connection>
+signal<SIGNAL_TEMPLATE_INSTANCE>::connect(
   std::function<R(vargs...)> callback) {
     return register_observer(callback, false);
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connect_detached(
+void signal<SIGNAL_TEMPLATE_INSTANCE>::connect_detached(
   std::function<R(vargs...)> callback) {
     auto conn = register_observer(callback, true);
 
@@ -324,21 +353,21 @@ void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connect_detached(
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-std::unique_ptr<tarp::signal_connection>
-tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::register_observer(observer_callback_t f,
+std::unique_ptr<signal_connection>
+signal<SIGNAL_TEMPLATE_INSTANCE>::register_observer(observer_callback_t f,
                                                           bool detached) {
-    auto token = std::make_shared<tarp::signal_token>();
+    auto token = std::make_shared<signal_token_t>();
 
-    LOCK(m_mtx);
+    lock_t l{m_mtx};
 
     m_observers.emplace_back(observer({detached, token, f}));
-    return std::make_unique<tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection>(
+    return std::make_unique<signal<SIGNAL_TEMPLATE_INSTANCE>::connection>(
       token);
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::connection(
-  std::shared_ptr<tarp::signal_token> &tkn)
+signal<SIGNAL_TEMPLATE_INSTANCE>::connection::connection(
+  std::shared_ptr<signal_token_t> tkn)
     : m_token(tkn) {
 }
 
@@ -398,7 +427,7 @@ tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::connection(
  * of the signal_connection object if this is found not to have been done.
  */
 template<SIGNAL_TEMPLATE_SPEC>
-void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
+void signal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
     /* make copy in case m_token is reset by some other thread */
     auto token = m_token;
     if (!token){
@@ -406,7 +435,7 @@ void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
     }
 
     {
-        LOCK(token->mtx);
+        lock_t l{token->mtx};
         token->valid = false;
     }
 
@@ -414,12 +443,12 @@ void tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void){
+signal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void){
     // make copy in case m_token gets reset by some other thread.
     auto token = m_token;
     if (!token) return;
 
-    LOCK(token->mtx);
+    lock_t l{token->mtx};
     if (token->valid) {
         throw std::logic_error(
           "signal_connection destructed without being disconnected");
@@ -427,25 +456,405 @@ tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void){
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::observer::observer(
+signal<SIGNAL_TEMPLATE_INSTANCE>::observer::observer(
   bool detached,
-  std::shared_ptr<tarp::signal_token> &ref,
+  std::shared_ptr<signal_token_t> &ref,
   std::function<R(vargs...)> f)
     : notify(f), m_detached(detached), m_link(ref) {
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
-std::shared_ptr<tarp::signal_token>
-tarp::signal<SIGNAL_TEMPLATE_INSTANCE>::observer::check(void) const {
+std::shared_ptr<typename signal<SIGNAL_TEMPLATE_INSTANCE>::signal_token_t>
+signal<SIGNAL_TEMPLATE_INSTANCE>::observer::check(void) const {
     // a detached observer is deemed perpetually alive. User
     // must ensure that is the case (i.e. that the signal consumer
     // outlives the signal provider)
-    if (m_detached) return std::make_shared<tarp::signal_token>();
+    if (m_detached) return std::make_shared<signal_token_t>();
 
     return m_link.lock();
 }
 
 #undef SIGNAL_TEMPLATE_SPEC
 #undef SIGNAL_TEMPLATE_INSTANCE
+
+////////////////////////////////////////////////////////
+
+#define SIGNAL_TEMPLATE_SPEC                                  \
+   typename R,                                                \
+   typename... vargs,                                         \
+   typename signal_output,                                    \
+   typename ts_policy
+
+#define SIGNAL_TEMPLATE_INSTANCE    \
+   R(vargs...), signal_output, ts_policy
+//clang-format on
+
+/*
+ * Partial template specialization to make it possible to use an
+ * INVOKE-type signature for the first template parameter;
+ * the non-specialized signal class is left undefined.
+ */
+template<SIGNAL_TEMPLATE_SPEC>
+class monosignal<SIGNAL_TEMPLATE_INSTANCE> {
+public:
+    DISALLOW_COPY_AND_MOVE(monosignal);
+
+    monosignal(void) = default;
+
+    /* same as .emit(...) */
+    signal_output operator()(vargs... params) { return emit(params...); }
+
+    /* Invoke all connected callbacks in the order of their connection. */
+    signal_output emit(vargs... params);
+
+    /*
+     * Connect the given callback to the signal and return a connection object.
+     * A signal consumer can disconnect from the signal by calling .disconnect()
+     * on the connection object.
+     * NOTE: if the connection object is destructed without having been
+     * explicitly disconnected, an exception is thrown.
+     * NOTE: one single copy of the connection object must ever exist and the
+     * sole copy must reside at all times with the signal consumer such that
+     * the connection object does not outlive it.
+     *
+     * NOTE: if more than one connect() call is made in a row (i.e. without
+     * an intervening disconnect() call), an exception is thrown since the
+     * monosignal only accepts one signal consumer. */
+    std::unique_ptr<signal_connection>
+    connect(std::function<R(vargs...)> callback);
+
+    /*
+     * Connect the given callback to the signal.
+     * NOTE: this is a convenience function that asks the signal provider
+     * to consider the signal consumer to always exist. The signal consumer
+     * has no way to disconnect from the signal and no connection object
+     * is therefore necessary. NOTE: the user must ensure the signal
+     * consumer does in fact outlive the signal provider. */
+    void connect_detached(std::function<R(vargs...)> callback);
+
+    /* True if the signal currently has a handler connected. */
+    bool connected(void);
+
+private:
+    using observer_callback_t = std::function<R(vargs...)>;
+    using mutex_t = typename tarp::type_traits::ts_types<ts_policy>::mutex_t;
+    using lock_t = typename tarp::type_traits::ts_types<ts_policy>::lock_t;
+    using signal_token_t = signal_token<ts_policy>;
+
+    struct connection : public signal_connection {
+        connection(std::shared_ptr<signal_token<ts_policy>> tkn);
+        virtual void disconnect(void) override;
+        ~connection(void);
+
+        std::shared_ptr<signal_token<ts_policy>> m_token;
+    };
+
+    struct observer {
+        observer(bool detached,
+                 std::shared_ptr<signal_token_t> &tkn,
+                 std::function<R(vargs...)> f);
+        std::shared_ptr<signal_token_t> check(void) const;
+
+        std::function<R(vargs...)> notify;
+        bool m_detached;
+        std::weak_ptr<signal_token_t> m_link;
+    };
+
+    static inline constexpr auto size = sizeof(observer);
+
+    std::unique_ptr<signal_connection>
+    register_observer(std::function<R(vargs...)> callback, bool detached);
+
+    std::unique_ptr<observer> m_observer;
+    mutex_t m_mtx;
+};
+
+/*
+ * WARNING: connection to/disconnection from a signal is not allowed
+ * from within a signal handler. Doing so will produce a deadlock.
+ */
+template<SIGNAL_TEMPLATE_SPEC>
+signal_output monosignal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
+    lock_t lock{m_mtx};
+
+    // we use a reducer here to deal with the case when the return result
+    // is void vs an actual value.
+    using reducer_type =
+      typename std::conditional<std::is_void_v<R>,
+                                tarp::reduce::void_reducer<signal_output, R>,
+                                tarp::reduce::last<signal_output, R>>::type;
+    reducer_type r;
+
+    if (m_observer == nullptr){
+        return r.get();
+    }
+
+    auto token = m_observer->check();
+
+    // remove if broken link (observer no longer alive)
+    if (!token) {
+        m_observer.reset();
+        return r.get();
+    }
+
+    /* NOTE: CRITICAL SECTION.
+    * The validity check and callback invocation must be mutex-protected.
+    * see signal_connection comments. */
+    lock_t l(token->mtx);
+    if (!token->valid){
+        m_observer.reset();
+        return r.get();
+    }
+
+    // we use std::forward here to _cast_ the arguments passed to emit()
+    // to the parameter types specified in the signal signature.
+    if constexpr (!std::is_void_v<R>){
+       return std::invoke(m_observer->notify, std::forward<vargs>(params)...);
+    }
+
+    std::invoke(m_observer->notify, std::forward<vargs>(params)...);
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+bool monosignal<SIGNAL_TEMPLATE_INSTANCE>::connected() {
+    lock_t l{m_mtx};
+
+    if (!m_observer){
+        return false;
+    }
+
+    auto tkn = m_observer->check();
+    
+    // remove if broken link (observer no longer alive)
+    if (!tkn) {
+        m_observer.reset();
+        return false;
+    }
+
+    /* NOTE: CRITICAL SECTION.
+     * The validity check and callback invocation must be mutex-protected.
+     * see signal_connection comments. */
+    lock_t lock(tkn->mtx);
+    if (!tkn->valid){
+        m_observer.reset();
+        return false;
+    }
+
+    return true;
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+std::unique_ptr<signal_connection>
+monosignal<SIGNAL_TEMPLATE_INSTANCE>::connect(
+  std::function<R(vargs...)> callback) {
+    return register_observer(callback, false);
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+void monosignal<SIGNAL_TEMPLATE_INSTANCE>::connect_detached(
+  std::function<R(vargs...)> callback) {
+    auto conn = register_observer(callback, true);
+
+    // when connecting in detached mode, 'disconnect()' does nothing.
+    // However, the connection object requires us to invoke this method
+    // otherwise it will throw an exception in the dtor. So we're doing
+    // it here before the object is destructed.
+    conn->disconnect();
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+std::unique_ptr<signal_connection>
+monosignal<SIGNAL_TEMPLATE_INSTANCE>::register_observer(observer_callback_t f,
+                                                          bool detached) {
+    auto token = std::make_shared<signal_token_t>();
+
+    lock_t l{m_mtx};
+
+    // if observer, see if it is still alive
+    if (m_observer != nullptr){
+        auto token_tmp = m_observer->check();
+
+        // remove if broken link (observer no longer alive)
+        if (!token_tmp) {
+            m_observer.reset();
+        } else{
+            /* NOTE: CRITICAL SECTION.
+            * The validity check and callback invocation must be mutex-protected.
+            * see signal_connection comments. */
+            lock_t lock(token->mtx);
+            if (!token_tmp->valid){
+                m_observer.reset();
+            }
+        }
+
+        // if still alive and kicking, then illegal.
+        if  (m_observer != nullptr){
+            throw std::logic_error("Illegal attempt at more than 1 connection to monosignal");
+        }
+    }
+
+    m_observer = std::make_unique<observer>(detached, token, f);
+    return std::make_unique<monosignal<SIGNAL_TEMPLATE_INSTANCE>::connection>(
+      token);
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+monosignal<SIGNAL_TEMPLATE_INSTANCE>::connection::connection(
+  std::shared_ptr<signal_token_t> tkn)
+    : m_token(tkn) {
+}
+
+/*
+ * Reset the shared pointer to break the link with the
+ * signal provider. The signal provider will lazily
+ * clean up its state when it gets around to noticing
+ * that its link to the the observer (signal consumer)
+ * is broken.
+ *
+ * NOTE: the mutex is needed to avoid race conditions
+ * on disconnection when the signal provider and signal consumer
+ * run in parallel in separate threads. Specifically, if the
+ * the signal provider somehow manages to get a shared pointer
+ * to the token before the token has been destructed, then there
+ * is a race condition since the signal provider uses the token
+ * as an indication that the signal consumer still exists. However,
+ * the signal consumer can be destructed between the point where
+ * the signal provider gets the shared pointer to the token and
+ * the point where the signal provider invokes a callback on
+ * the signal consumer:
+ * 1. Inside signal consumer destructor (token not yet destructed)
+ * 2. signal provider gets shared pointer to token
+ * 3. signal consumer destructed
+ * 4. signal provider calls callback (BAD: dangling references etc)
+ *
+ * Another, mutex-protected, flag is needed to ensure serialization
+ * and avoid this race condition:
+ * 1. Inside signal consumer destructor (token not yet destructed)
+ * 2. signal provider gets shared pointer to token
+ * 3. signal consumer locks the mutex and invalidates the token
+ * 4. signal consumer destructed
+ * 5. signal provider locks the mutex and checks the token
+ * 6. signal provider sees token is invalid, does not invoke callback
+ *
+ * OR:
+ * 3. signal provider locks the mutex and checks the token
+ * 4. signal provider sees token is valid
+ * 5. signal provider invokes callback
+ * 6. callback is invoked on valid, not yet destructed, signal consumer
+ * 6. signal consumer locks the mutex and invalidates the token
+ * 7. signal consumer destructed
+ *
+ * NOTE: it is fundamental (see point 6. above: 'callback is invoked on valid,
+ * not-yet destructed signal consumer') that the signal consumer explicitly
+ * call .disconnect() in its destructor. This is because this way it can be
+ * guaranteed that if a callback is invoked at this point, the signal consumer
+ * object is in a valid state as any member objects will not yet have been
+ * destructed. Otherwise, if .disconnect() is not called and the token is simply
+ * destructed along with the other member variables, then the callback may be
+ * invoked on the signal consumer at a point partway through its destruction. At
+ * that point dangling references may be used, leading to a crash, depending on
+ * the order in which member variables in the signal consumer get destructed.
+ *
+ * To avoid this scenario and to ensure the signal consumer properly calls
+ * .disconnect() in its destructor, an exception is thrown in the destructor
+ * of the signal_connection object if this is found not to have been done.
+ */
+template<SIGNAL_TEMPLATE_SPEC>
+void monosignal<SIGNAL_TEMPLATE_INSTANCE>::connection::disconnect(void) {
+    /* make copy in case m_token is reset by some other thread */
+    auto token = m_token;
+    if (!token){
+        return;
+    }
+
+    {
+        lock_t l{token->mtx};
+        token->valid = false;
+    }
+
+    m_token.reset();
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+monosignal<SIGNAL_TEMPLATE_INSTANCE>::connection::~connection(void){
+    // make copy in case m_token gets reset by some other thread.
+    auto token = m_token;
+    if (!token) return;
+
+    lock_t l{token->mtx};
+    if (token->valid) {
+        throw std::logic_error(
+          "signal_connection destructed without being disconnected");
+    }
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+monosignal<SIGNAL_TEMPLATE_INSTANCE>::observer::observer(
+  bool detached,
+  std::shared_ptr<signal_token_t> &ref,
+  std::function<R(vargs...)> f)
+    : notify(f), m_detached(detached), m_link(ref) {
+}
+
+template<SIGNAL_TEMPLATE_SPEC>
+std::shared_ptr<typename monosignal<SIGNAL_TEMPLATE_INSTANCE>::signal_token_t>
+monosignal<SIGNAL_TEMPLATE_INSTANCE>::observer::check(void) const {
+    // a detached observer is deemed perpetually alive. User
+    // must ensure that this is the case (i.e. that the signal consumer
+    // outlives the signal provider)
+    if (m_detached) return std::make_shared<signal_token_t>();
+
+    return m_link.lock();
+}
+
+}
+
+namespace ts{
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
+         template<typename output, typename input> typename reducer =
+           tarp::reduce::last>
+using signal = impl::signal<callback_signature, signal_output, reducer,
+tarp::type_traits::thread_safe>;
+
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
+         template<typename output, typename input> typename reducer =
+           tarp::reduce::last>
+using hook = signal<callback_signature, signal_output, reducer>;
+
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>>
+using monosignal = impl::monosignal<callback_signature, signal_output,
+                                     tarp::type_traits::thread_safe>;
+}
+
+namespace tu{
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
+         template<typename output, typename input> typename reducer =
+           tarp::reduce::last>
+using signal = impl::signal<callback_signature, signal_output, reducer,
+tarp::type_traits::thread_unsafe>;
+
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>,
+         template<typename output, typename input> typename reducer =
+           tarp::reduce::last>
+using hook = signal<callback_signature, signal_output, reducer>;
+
+template<typename callback_signature,
+         typename signal_output =
+           tarp::type_traits::signature_decomp_return_t<callback_signature>>
+using monosignal = impl::monosignal<callback_signature, signal_output,
+                                 tarp::type_traits::thread_unsafe>;
+
+};
+
 
 }  // namespace tarp

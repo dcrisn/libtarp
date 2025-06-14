@@ -161,3 +161,9 @@ add_executable(vector
 )
 CONFIGURE_TARGET(vector)
 
+add_executable(signals
+    signals/tests.cxx
+)
+CONFIGURE_TARGET(signals)
+
+
