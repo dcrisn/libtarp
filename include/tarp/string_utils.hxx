@@ -399,6 +399,36 @@ std::string to_string(const T &l,
     return s;
 }
 
+template<typename T,
+         typename cb_t,
+         /* valid if the callback can be called with a reference to an element
+          * and it produces a string as a return type */
+         typename = std::void_t<std::is_same<
+           std::string,
+           std::invoke_result_t<cb_t, decltype(*std::declval<T>().begin())>>>>
+std::string to_string(const T &l,
+                      cb_t &&f,
+                      const std::string &prefix = "",
+                      const std::string &postfix = "") {
+    std::string s = prefix;
+    unsigned i = 0;
+    for (auto elem : l) {
+        const auto x = f(elem);
+        if constexpr (std::is_arithmetic_v<decltype(x)>) {
+            s += std::to_string(x);
+        } else {
+            s += std::string {x};
+        }
+
+        if (i + 1 < l.size()) {
+            s += ", ";
+        }
+        ++i;
+    }
+    s += postfix;
+    return s;
+}
+
 // Eagerly break bytes into a non-overlapping set of chunks. Each chunk
 // contains max_bytes_per_chunk with the possible exception of the last chunk
 // which will have fewer bytes if chunks.size() is not a perfect multiple of
