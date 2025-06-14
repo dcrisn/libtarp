@@ -100,9 +100,9 @@ public:
 
     auto closed() const { return CONST_REAL->closed(); }
 
-    bool empty() const { return REAL->empty(); }
+    bool empty() const { return CONST_REAL->empty(); }
 
-    std::size_t size() const { return REAL->size(); }
+    std::size_t size() const { return CONST_REAL->size(); }
 
     auto operator<<(const payload_t &event) { return REAL->operator<<(event); }
 
@@ -146,9 +146,9 @@ public:
 
     auto closed() const { return CONST_REAL->closed(); }
 
-    bool empty() const { return REAL->empty(); }
+    bool empty() const { return CONST_REAL->empty(); }
 
-    std::size_t size() const { return REAL->size(); }
+    std::size_t size() const { return CONST_REAL->size(); }
 
     std::optional<payload_t> try_get() { return REAL->try_get(); }
 
@@ -570,7 +570,7 @@ public:
 
         // [[unlikely]] (c++20).
         if (m_closed) {
-            // std::cerr << "Failed try_push --> closed\n";
+            //std::cerr << "Failed try_push --> closed\n";
             return {false, opt_payload(std::forward<T>(data)...)};
         }
 
