@@ -51,7 +51,9 @@ void get_fd_over_uds(int *fd_received, bool use_sock_stream) {
                               sizeof(buff),
                               MIN_MSZ_SZ_EXPECTED,
                               true,
-                              &num_bytes_read);
+                              &num_bytes_read,
+                              NULL
+                              );
     if (!res.ok) {
         perr(res);
         exit(EXIT_FAILURE);

@@ -6,6 +6,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/un.h>
 
 #include <tarp/common.h>
 
@@ -59,12 +60,16 @@ struct result make_client_uds(const char *server_path,
 // times to send all bytes in case of a partial write and returns false if
 // that fails.
 // The number of bytes written is always stored in num_bytes_written.
+// If dst is not NULL, then it will be used as the destination socket to send
+// the message to. NOTE: this may only be specified for SOCK_DGRAM sockets.
 struct result send_msg_with_fd(int uds_dst_fd,
                                int fd,
                                uint8_t *msg,
                                size_t msgsz,
                                bool blocking,
-                               size_t *num_bytes_written);
+                               size_t *num_bytes_written,
+                               struct sockaddr_un *dst
+                               );
 
 // Try to read buffsz bytes into buff from the file descriptor uds_fd.
 //
@@ -77,13 +82,20 @@ struct result send_msg_with_fd(int uds_dst_fd,
 // The number of bytes read is stored in num_bytes_read.
 // If a file descriptor was sent as ancillary data, it will be stored in fd.
 // Otherwise -1 will be stored.
+//
+// If src is not NULL, then it will be pointed to a dynamically
+// allocated sockaddr_un structure containing the address of sender.
+// The caller is responsible for free()-ing the memory.
+// NOTE this should only be non-null for unconnected server-side SOCK_DGRAM
+// sockets.
 struct result receive_msg_with_fd(int uds_fd,
                                   int *fd,
                                   uint8_t *buff,
                                   size_t buffsz,
                                   size_t min_bytes_to_read,
                                   bool blocking,
-                                  size_t *num_bytes_read);
+                                  size_t *num_bytes_read,
+                                  struct sockaddr_un **src);
 
 /*
  * Try to write nbytes from the src buffer to the dst descriptor.

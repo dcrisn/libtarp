@@ -1,6 +1,5 @@
 #include "tarp/common.h"
-#include <tarp/error.h>
-#include <tarp/ioutils.h>
+#include "tarp/ioutils.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -242,7 +241,8 @@ struct result send_msg_with_fd(int uds_dst_fd,
                                uint8_t *msg,
                                size_t msgsz,
                                bool blocking,
-                               size_t *num_bytes_written) {
+                               size_t *num_bytes_written,
+                               struct sockaddr_un *dst) {
     // Can't send ancillary data without sending
     // at least 1 byte of real data (on Linux).
     if (msgsz == 0 || msg == NULL) {
@@ -283,6 +283,11 @@ struct result send_msg_with_fd(int uds_dst_fd,
     iov.iov_len = msgsz;
     msgh.msg_iov = &iov;
     msgh.msg_iovlen = 1;  // a single iovec
+
+    if (dst) {
+        msgh.msg_name = dst;
+        msgh.msg_namelen = sizeof(struct sockaddr_un);
+    }
 
     if (fd >= 0) {
         // specify the ancillary data to send (the fd).
@@ -328,6 +333,7 @@ struct result send_msg_with_fd(int uds_dst_fd,
     // just have to send the rest of the user data.
     int retries = 5;
     do {
+        errno = 0;
         ret = sendmsg(uds_dst_fd, &msgh, 0);
     } while (ret == -1 && retries-- > 0 &&
              (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR));
@@ -384,7 +390,8 @@ struct result receive_msg_with_fd(int uds_fd,
                                   size_t buffsz,
                                   size_t min_bytes_to_read,
                                   bool blocking,
-                                  size_t *num_bytes_read) {
+                                  size_t *num_bytes_read,
+                                  struct sockaddr_un **src) {
     if (buffsz == 0 || buff == NULL) {
         return RESULT(false, "null buffer", 0);
     }
@@ -399,6 +406,16 @@ struct result receive_msg_with_fd(int uds_fd,
 
     if (fd == NULL) {
         return RESULT(false, "null fd buffer", 0);
+    }
+
+    struct sockaddr_un *srcaddr = calloc(1, sizeof(struct sockaddr_un));
+    if (!srcaddr) {
+        return RESULT(false, "memory allocation failure", 0);
+    }
+
+    if (src != NULL) {
+        // caller will have to free this.
+        *src = srcaddr;
     }
 
     *num_bytes_read = 0;
@@ -438,6 +455,10 @@ struct result receive_msg_with_fd(int uds_fd,
     msgh.msg_iov = &iov;
     msgh.msg_iovlen = 1;  // a single iovec
 
+    // specify src address structure to populate
+    msgh.msg_name = srcaddr;
+    msgh.msg_namelen = sizeof(struct sockaddr_un);
+
     int fd_received = -1;
 
     // specify where to extract the ancillary data (the fd).
@@ -457,11 +478,17 @@ struct result receive_msg_with_fd(int uds_fd,
     // ancillary data has been read. If the read was partial, then we then
     // just have to read the rest of the user data.
     int retries = 5;
-    ssize_t ret;
+    ssize_t ret = -1;
     do {
+        errno = 0;
         ret = recvmsg(uds_fd, &msgh, 0);
     } while (ret == -1 && retries-- > 0 &&
              (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR));
+
+    // free the src addr here if not expected by caller
+    if (!src) {
+        free(srcaddr);
+    }
 
     // nothing read.
     if (ret < 0) {
@@ -469,10 +496,6 @@ struct result receive_msg_with_fd(int uds_fd,
     }
 
     *num_bytes_read = ret;
-
-    // Otherwise we've got a partial read. So we assume we have read the
-    // ancillary data and therefore we start by extracting that here.
-    // printf("recvmsg() returned %zd\n", ret);
 
     //--------------------------
     // Each ancillary data item is stored as a cmsghdr inside
