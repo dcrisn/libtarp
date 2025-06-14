@@ -78,7 +78,7 @@ T reflect_bits(T input) {
 // Swap the bytes in value from network byte order (nbo) to
 // host byte order (hbo).
 template<typename T>
-T to_hbo(T value) {
+std::enable_if_t<std::is_integral_v<T>, T> to_hbo(T value) {
     static_assert(
       std::is_same_v<T, std::uint8_t> || std::is_same_v<T, std::uint16_t> ||
       std::is_same_v<T, std::uint32_t> || std::is_same_v<T, std::uint64_t>);
@@ -94,10 +94,16 @@ T to_hbo(T value) {
     }
 }
 
+template<typename T>
+std::enable_if_t<std::is_enum_v<T>, T> to_hbo(T value) {
+    using underlying_t = std::underlying_type_t<T>;
+    return static_cast<T>(to_hbo(static_cast<underlying_t>(value)));
+}
+
 // Swap the bytes in value from host byte order (hbo) to
 // network byte order (nbo).
 template<typename T>
-T to_nbo(T value) {
+std::enable_if_t<std::is_integral_v<T>, T> to_nbo(T value) {
     static_assert(
       std::is_same_v<T, std::uint8_t> || std::is_same_v<T, std::uint16_t> ||
       std::is_same_v<T, std::uint32_t> || std::is_same_v<T, std::uint64_t>);
@@ -111,6 +117,12 @@ T to_nbo(T value) {
     } else if constexpr (std::is_same_v<T, std::uint64_t>) {
         return htobe64(value);
     }
+}
+
+template<typename T>
+std::enable_if_t<std::is_enum_v<T>, T> to_nbo(T value) {
+    using underlying_t = std::underlying_type_t<T>;
+    return static_cast<T>(to_nbo(static_cast<underlying_t>(value)));
 }
 
 // C++ type-safe rewrites of the equivalent implementations in tarp/bits.h.

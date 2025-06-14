@@ -207,6 +207,9 @@ add_executable(md5hash
 add_executable(checksum
     src/hash/checksum-main.cxx
 )
+target_compile_options(checksum PUBLIC
+    -Wno-unused-parameter
+)
 
 target_link_libraries(libtarp PRIVATE
     libtarp_objects
