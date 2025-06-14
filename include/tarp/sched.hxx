@@ -427,7 +427,12 @@ protected:
 
     std::optional<std::size_t> get_max_num_renewals() const;
 
-    bool canceled() const { return m_cancellation_token->canceled(); }
+    bool canceled() const {
+        if (!m_cancellation_token.has_value()) {
+            return false;
+        }
+        return m_cancellation_token->canceled();
+    }
 
 private:
     std::optional<cancellation_token> m_cancellation_token;
@@ -475,7 +480,7 @@ public:
 
 private:
     using signal_signature = type_traits::signature_comp_t<void, result_type>;
-    tarp::signal<signal_signature> m_result;
+    tarp::ts::signal<signal_signature> m_result;
 
     std::remove_reference_t<callable_type> m_f;
 };
@@ -527,8 +532,8 @@ public:
     explicit deadline_task(std::chrono::milliseconds expires_from_now,
                            callable_type f,
                            std::optional<cancellation_token> token = {})
-        : periodic_task_mixin(expires_from_now, 0, false)
-        , m_f(std::move(f), std::move(token)) {}
+        : periodic_task_mixin(expires_from_now, 0, false, std::move(token))
+        , m_f(std::move(f)) {}
 
     void execute() override;
     std::future<result_type> get_future();
@@ -541,7 +546,8 @@ private:
 /* Return a unique_ptr to an abc (abstract base class) that stores a deadline
  * task. */
 template<typename abc, typename callable_type>
-std::future<std::invoke_result_t<callable_type>>
+std::pair<std::unique_ptr<abc>,
+          std::future<std::invoke_result_t<callable_type>>>
 make_deadline_task_as(std::chrono::milliseconds expires_from_now,
                       callable_type f,
                       std::optional<cancellation_token> token = {}) {

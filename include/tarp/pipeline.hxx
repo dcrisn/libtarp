@@ -71,7 +71,7 @@ template<typename output_t>
 class PipelineStageOutputInterface {
 public:
     // hook for subsequent stages (or any arbitrary sink) to connect to
-    tarp::signal<void(output_t)> output;
+    tarp::tu::signal<void(output_t)> output;
 };
 
 template<typename input_t, typename output_t = input_t>
