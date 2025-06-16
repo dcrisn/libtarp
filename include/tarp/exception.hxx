@@ -56,6 +56,20 @@ protected:
     std::string m_errstring;
 };
 
+class serialization_error : public std::exception {
+public:
+    explicit serialization_error(const char *message) : m_errstring(message) {}
+
+    explicit serialization_error(const std::string &message)
+        : m_errstring(message) {}
+
+    virtual ~serialization_error() noexcept {}
+
+    virtual const char *what() const noexcept { return m_errstring.c_str(); }
+
+protected:
+    std::string m_errstring;
+};
 
 
 #ifdef DISABLE_NULL_POINTER_DEREFERENCE_EXCEPTIONS
