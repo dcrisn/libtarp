@@ -399,6 +399,26 @@ std::string to_string(const T &l,
     return s;
 }
 
+// Copy std::min(n, list.size()) elems out of list into a separate vector.
+template<typename T>
+auto copy_n(const T &list, std::uint32_t n) {
+    using elem_t =
+      std::remove_cv_t<std::remove_reference_t<decltype(*list.begin())>>;
+
+    std::vector<elem_t> v;
+
+    std::uint32_t i = 0;
+    for (const auto &x : list) {
+        v.push_back(x);
+        ++i;
+        if (i >= n) {
+            break;
+        }
+    }
+
+    return v;
+}
+
 template<typename T,
          typename cb_t,
          /* valid if the callback can be called with a reference to an element
@@ -437,6 +457,15 @@ void make_chunks_from_bytes(std::vector<std::vector<std::uint8_t>> &chunks,
                             const std::vector<std::uint8_t> &bytes,
                             std::size_t max_bytes_per_chunk);
 
+// return x if a>b, else return y.
+template<typename T>
+std::string
+if_greater_then_else(T a, T b, const std::string &x, const std::string &y) {
+    if (a > b) {
+        return x;
+    }
+    return y;
+}
 
 }  // namespace string_utils
 
