@@ -71,6 +71,22 @@ protected:
     std::string m_errstring;
 };
 
+class misconfiguration : public std::exception {
+public:
+    explicit misconfiguration(const char *message) : m_errstring(message) {}
+
+    explicit misconfiguration(const std::string &message)
+        : m_errstring(message) {}
+
+    virtual ~misconfiguration() noexcept {}
+
+    virtual const char *what() const noexcept { return m_errstring.c_str(); }
+
+protected:
+    std::string m_errstring;
+};
+
+
 
 #ifdef DISABLE_NULL_POINTER_DEREFERENCE_EXCEPTIONS
 #define throw_on_nullptr(ptr) \
