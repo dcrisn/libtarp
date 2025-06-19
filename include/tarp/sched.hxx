@@ -336,7 +336,7 @@ public:
 
 private:
     const std::string m_name;
-    std::optional<cancellation_token> m_cancellation_token;
+    std::unique_ptr<cancellation_token> m_cancellation_token;
     std::promise<result_type> m_result;
     std::remove_reference_t<callable_type> m_f;
 };
@@ -362,9 +362,11 @@ template<typename result_type, typename callable_type>
 task<result_type, callable_type>::task(callable_type func,
                                        const std::string &name,
                                        std::optional<cancellation_token> token)
-    : m_f(std::move(func))
-    , m_name(name)
-    , m_cancellation_token(std::move(token)) {
+    : m_f(std::move(func)), m_name(name) {
+    if (token.has_value()) {
+        m_cancellation_token =
+          std::make_unique<cancellation_token>(std::move(*token));
+    }
 }
 
 template<typename result_type, typename callable_type>
@@ -374,7 +376,7 @@ std::string task<result_type, callable_type>::get_name() const {
 
 template<typename return_type, typename callable_type>
 void task<return_type, callable_type>::execute(void) {
-    if (m_cancellation_token->canceled()) {
+    if (m_cancellation_token and m_cancellation_token->canceled()) {
         return;
     }
 
@@ -428,14 +430,14 @@ protected:
     std::optional<std::size_t> get_max_num_renewals() const;
 
     bool canceled() const {
-        if (!m_cancellation_token.has_value()) {
+        if (!m_cancellation_token) {
             return false;
         }
         return m_cancellation_token->canceled();
     }
 
 private:
-    std::optional<cancellation_token> m_cancellation_token;
+    std::unique_ptr<cancellation_token> m_cancellation_token;
     std::chrono::system_clock::time_point m_next_deadline;
     std::chrono::milliseconds m_interval;
     std::optional<std::size_t> m_max_num_renewals;

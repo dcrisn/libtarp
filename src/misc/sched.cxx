@@ -11,11 +11,15 @@ periodic_task_mixin::periodic_task_mixin(
   std::optional<std::size_t> max_num_renewals,
   bool starts_expired,
   std::optional<cancellation_token> token)
-    : m_cancellation_token(std::move(token))
-    , m_interval(interval)
+    : m_interval(interval)
     , m_max_num_renewals(max_num_renewals)
     , m_num_renewals(0)
     , m_start_expired(starts_expired) {
+    if (token) {
+        m_cancellation_token =
+          std::make_unique<cancellation_token>(std::move(*token));
+    }
+
     if (starts_expired) {
         m_next_deadline = time_now();
     } else {
