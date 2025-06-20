@@ -2109,7 +2109,7 @@ class event_aggregator final {
                                  std::uint32_t action) {
         for (auto it = ls.begin(); it != ls.end();) {
             auto &notifier = *it;
-            bool must_remove = notifier->notify(flags, action);
+            bool must_remove = !notifier->notify(flags, action);
             if (must_remove) {
                 it = ls.erase(it);
                 continue;
