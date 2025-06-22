@@ -83,3 +83,36 @@ private:
     std::optional<T> m_ok_value;
     std::optional<ERR> m_error_value;
 };
+
+// ============================
+// Specialization for T=void.
+// ============================
+template<typename ERR>
+class expected<void, ERR> {
+public:
+    // Success constructor
+    expected() : m_ok(true) {}
+
+    // Error constructors
+    expected(const ERR &error) : m_error_value(error) {}
+
+    expected(ERR &&error) : m_error_value(std::move(error)) {}
+
+    static auto OK() { return expected(); }
+
+    static auto E(const ERR &error) { return expected(error); }
+
+    static auto E(ERR &&error) { return expected(std::move(error)); }
+
+    bool has_value() const noexcept { return m_ok.has_value(); }
+
+    operator bool() const noexcept { return has_value(); }
+
+    bool ok() const noexcept { return has_value(); }
+
+    const ERR &e() const { return m_error_value.value(); }
+
+private:
+    std::optional<bool> m_ok;
+    std::optional<ERR> m_error_value;
+};
