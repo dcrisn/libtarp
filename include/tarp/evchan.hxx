@@ -104,6 +104,8 @@ public:
 
     std::size_t size() const { return CONST_REAL->size(); }
 
+    void clear() { return REAL->clear(); }
+
     auto operator<<(const payload_t &event) { return REAL->operator<<(event); }
 
     auto operator<<(payload_t &&event) {
@@ -149,6 +151,8 @@ public:
     bool empty() const { return CONST_REAL->empty(); }
 
     std::size_t size() const { return CONST_REAL->size(); }
+
+    void clear() { return REAL->clear(); }
 
     std::optional<payload_t> try_get() { return REAL->try_get(); }
 
@@ -570,7 +574,7 @@ public:
 
         // [[unlikely]] (c++20).
         if (m_closed) {
-            //std::cerr << "Failed try_push --> closed\n";
+            // std::cerr << "Failed try_push --> closed\n";
             return {false, opt_payload(std::forward<T>(data)...)};
         }
 
@@ -1815,6 +1819,8 @@ class event_rstream : public event_stream<event_rstream<ts_policy, types...>> {
 public:
     using payload_t = typename event_channel_t::payload_t;
 
+    event_rstream() = delete;
+
     // Construct an rstream backed by a channel with the specified max capacity
     // and using ring-buffer semantics. See event_channel fmi.
     event_rstream(bool autoflush = false, std::size_t channel_capacity = 100)
@@ -1830,6 +1836,29 @@ public:
         auto chan = m_stream_channel.lock();
         if (chan) {
             chan->close();
+        }
+    }
+
+    bool empty() const {
+        const auto chan = m_stream_channel.lock();
+        if (!chan) {
+            return true;
+        }
+        return chan->empty();
+    }
+
+    std::size_t size() const {
+        const auto chan = m_stream_channel.lock();
+        if (!chan) {
+            return 0;
+        }
+        return chan->size();
+    }
+
+    void clear() {
+        auto chan = m_stream_channel.lock();
+        if (chan) {
+            chan->clear();
         }
     }
 
@@ -1952,6 +1981,12 @@ public:
     }
 
     ~event_wstream() { close(); }
+
+    void clear() { m_stream_channel->clear(); }
+
+    bool empty() const { return m_stream_channel->empty(); }
+
+    std::size_t size() const { return m_stream_channel->size(); }
 
     void close() { m_stream_channel->close(); }
 
@@ -2360,6 +2395,43 @@ private:
     static inline unsigned int m_DEFAULT_CHANCAP {100};
 };
 
+namespace notifiers {
+// Simple notifier that wraps a callback and invokes it
+// when notify() is called. Useful for wrapping very simple
+// lambdas.
+template<typename T>
+class callback_notifier : public impl::notifier {
+public:
+    callback_notifier() = delete;
+    virtual ~callback_notifier() = default;
+
+    callback_notifier(T callback) : m_callback(std::move(callback)) {}
+
+    bool notify(std::uint32_t events, std::uint32_t action) override {
+        if (action != impl::APPLY) {
+            return true;
+        }
+        if constexpr (std::is_invocable_r_v<bool, T, decltype(events)>) {
+            return m_callback(events);
+        } else if constexpr (std::is_invocable_r_v<bool, T>) {
+            return m_callback();
+        } else {
+            static_assert("callback_notifier instantiated with callback with "
+                          "invalid signature");
+        }
+    }
+
+private:
+    T m_callback;
+};
+
+template<typename T>
+std::shared_ptr<impl::notifier> make_callback_notifier(T callback) {
+    return std::make_shared<callback_notifier<T>>(callback);
+}
+};  // namespace notifiers
+
+
 }  // namespace impl
 
 //
@@ -2367,6 +2439,7 @@ private:
 // Thread-safe version of all the classes
 namespace ts {
 namespace interfaces = evchan::interfaces;
+namespace notifiers = evchan::impl::notifiers;
 
 template<typename... types>
 using event_channel =
@@ -2403,6 +2476,7 @@ using monitor = impl::monitor;
 namespace tu {
 
 namespace interfaces = evchan::interfaces;
+namespace notifiers = evchan::impl::notifiers;
 
 template<typename... types>
 using event_channel =
