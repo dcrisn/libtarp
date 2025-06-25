@@ -136,8 +136,14 @@ template<typename exception_t, std::convertible_to<std::string> T>
     throw exception_t(std::format("{}", s));
 }
 
-#endif
+template<typename exception_t, typename... vargs>
+void ok_or_throw(bool ok, vargs &&...args) {
+    if (!ok) {
+        do_throw<exception_t>(std::forward<vargs>(args)...);
+    }
+}
 
+#endif
 
 }  // namespace exception
 }  // namespace tarp
