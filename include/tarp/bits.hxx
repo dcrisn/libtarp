@@ -140,5 +140,62 @@ T get_bits(T num, unsigned pos, unsigned nbits) {
     return (masked >> shift);
 }
 
+// Set (value & mask) in the (mask << shift) bits of TARGET.
+// Return the updated TARGET.
+// Example:
+//   target=0b110000
+//   mask=0x3
+//   shift=1
+//   value=3
+//   updated_target=0b110110
+template<typename T, typename value_t>
+constexpr T set_bits(T target, T mask, T shift, value_t value) {
+    target &= ~(mask << shift);
+    target |= (static_cast<T>(value) & mask) << shift;
+    return target;
+}
+
+// Set 0x1 << shift in the target.
+// Return the updated TARGET.
+template<typename T>
+constexpr T set_bit(T target, T shift) {
+    target &= ~(0x1 << shift);
+    target |= (0x1 << shift);
+    return target;
+}
+
+// Set the (mask << shift) bits of TARGET to 0.
+// Return the updated TARGET.
+template<typename T>
+constexpr T clear_bits(T target, T mask, T shift) {
+    set_bits(target, mask, shift, 0);
+    return target;
+}
+
+// Set the bit at (0x1 << shift) in the target to 0.
+// Return the updated TARGET.
+template<typename T>
+constexpr T clear_bit(T target, T shift) {
+    set_bit(target, shift, 0);
+    return target;
+}
+
+// Get the (mask << shift) bits of TARGET, shifted right by SHIFT.
+// Example:
+//  target=0b1100
+//  mask=0x3
+//  shift=2
+//  result: 3
+template<typename T>
+constexpr T get_masked_bits(T target, T mask, T shift) {
+    return (target >> shift) & mask;
+}
+
+// Get the bit at (0x1 << shift) in the TARGET, shifted right by SHIFT.
+template<typename T>
+T get_bit(T target, T shift) {
+    return (target >> shift) & 0x1;
+}
+
 }  // namespace bits
 }  // namespace tarp
