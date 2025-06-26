@@ -1,3 +1,4 @@
+#include <cmath>
 #include <exception>
 #include <memory>
 #include <stdexcept>
@@ -75,6 +76,48 @@ enum testStatus test_invocation() {
         });
 
         actual = sig.emit();
+        if (actual != expected) {
+            return TEST_FAIL;
+        }
+    }
+
+    return testStatus::TEST_PASS;
+}
+
+template<typename ts_policy>
+enum testStatus test_move_only_arg() {
+    {
+        const int expected = 99;
+        int actual = 0;
+        S<ts_policy, int(std::unique_ptr<int>)> sig;
+        sig.connect_detached([&](auto x) {
+            // std::cerr << "called with unique ptr-> address is "
+            //           << static_cast<void*>(x.get()) << std::endl;
+            return *x;
+        });
+
+        actual = sig.emit(std::make_unique<int>(expected));
+
+        if (actual != expected) {
+            return TEST_FAIL;
+        }
+    }
+
+    {
+        struct mystruct {
+            int i = 0;
+        };
+
+        const int expected = 11;
+        int actual = 0;
+        S<ts_policy, int(mystruct)> sig;
+        sig.connect_detached([=](struct mystruct x) {
+            return x.i;
+        });
+
+        struct mystruct s;
+        s.i = expected;
+        actual = sig.emit(std::move(s));
         if (actual != expected) {
             return TEST_FAIL;
         }
@@ -212,6 +255,10 @@ int main(int argc, char **argv) {
     printf("TEST: [tu] test disconnection.\n");
     passed = run(monosignal::test_disconnection<TU>, TEST_PASS);
     update_test_counter(passed, test_disconnection);
+
+    printf("TEST: [tu] test move-only arg.\n");
+    passed = run(monosignal::test_move_only_arg<TU>, TEST_PASS);
+    update_test_counter(passed, test_move_only_arg);
 
     report_test_summary();
 #endif
