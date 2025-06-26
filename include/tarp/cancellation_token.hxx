@@ -31,6 +31,10 @@ public:
         if (!m_token) {
             return;
         }
+
+        if (m_observer_id.has_value()) {
+            m_token->remove_observer(*m_observer_id);
+        }
     }
 
     // cheap to copy and move. Meant to be passed by copy.
