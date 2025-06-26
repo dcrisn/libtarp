@@ -207,7 +207,8 @@ public:
     signal(void) = default;
 
     /* same as .emit(...) */
-    signal_output operator()(vargs... params) { return emit(params...); }
+    signal_output operator()(vargs... params) {
+        return emit(std::forward<decltype(params)>(params)...); }
 
     /* Invoke all connected callbacks in the order of their connection. */
     signal_output emit(vargs... params);
@@ -502,7 +503,8 @@ public:
     monosignal(void) = default;
 
     /* same as .emit(...) */
-    signal_output operator()(vargs... params) { return emit(params...); }
+    signal_output operator()(vargs... params) { return
+        emit(std::forward<decltype(params)>(params)...); }
 
     /* Invoke all connected callbacks in the order of their connection. */
     signal_output emit(vargs... params);
