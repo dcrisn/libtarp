@@ -395,6 +395,11 @@ std::uint32_t process_block(fletcher64_ctx &ctx,
 // namespace (fletcher16::, fletcher32::, fletcher64::) with last_block=false
 // for all but the last block; then call get_checksum at the end to compute the
 // actual checksum.
+//
+// If network_byte_order=true, then data is expected to be in
+// network byte order and the implementation will internally
+// convert the bytes to host-byte-order as appropriate for
+// internal calculations.
 template<bool network_byte_order>
 std::uint16_t fletcher16(const std::uint8_t *data, std::size_t len) {
     return fletcher::fletcher16::process_all<network_byte_order>(data, len);
