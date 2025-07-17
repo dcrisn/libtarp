@@ -11,7 +11,7 @@ namespace bitaat {
 
 // This macro generates two function overloads, one for processing data in
 // blocks, taking a ctx as argument, and one to process all data upfront,
-// that dispatches to the other overload. The following macro invocation 
+// that dispatches to the other overload. The following macro invocation
 //    make_functions(crc64_xz, std::uint64_t, crc64_ctx, crc64_xz);
 // generates the following function definitions:
 #if 0
@@ -58,8 +58,38 @@ make_functions(crc32c, std::uint32_t, crc32_ctx, crc32c);
 make_functions(crc32_iso_hdlc, std::uint32_t, crc32_ctx, crc32_hdlc);
 make_functions(crc64_go, std::uint64_t, crc64_ctx, crc64_go);
 make_functions(crc64_xz, std::uint64_t, crc64_ctx, crc64_xz);
-
+#undef make_functions
 }  // namespace bitaat
+
+namespace byteaat {
+#define make_functions(                                                   \
+  function_name, return_type, context_type, params_namespace)             \
+    return_type function_name(const std::uint8_t *msg,                    \
+                              std::size_t len,                            \
+                              context_type &ctx,                          \
+                              const lookup_table_t<return_type> &table) { \
+        using namespace params::params_namespace;                         \
+        return make_crc_1byte_aat<return_type,                            \
+                                  rinit,                                  \
+                                  xor_out,                                \
+                                  reflect_in,                             \
+                                  reflect_out>(msg, len, ctx, table);     \
+    }                                                                     \
+                                                                          \
+    return_type function_name(const std::uint8_t *msg,                    \
+                              std::size_t len,                            \
+                              const lookup_table_t<return_type> &table) { \
+        context_type ctx;                                                 \
+        return function_name(msg, len, ctx, table);                       \
+    }
+
+
+make_functions(crc16_gsm, std::uint16_t, crc16_ctx, crc16_gsm);
+make_functions(crc32c, std::uint32_t, crc32_ctx, crc32c);
+make_functions(crc64_xz, std::uint64_t, crc64_ctx, crc64_xz);
+#undef make_functions
+}  // namespace byteaat
+
 
 }  // namespace crc
 }  // namespace hash

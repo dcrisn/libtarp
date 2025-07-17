@@ -8,6 +8,7 @@
 // c stdlib
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
 namespace tarp {
 namespace hash {
@@ -215,6 +216,41 @@ std::uint64_t crc64_xz(const uint8_t *msg, std::size_t len);
 std::uint64_t crc64_xz(const uint8_t *msg, std::size_t len, crc64_ctx &ctx);
 
 }  // namespace bitaat
+
+namespace byteaat {
+template<typename T, typename = std::enable_if_t<std::is_unsigned_v<T>, T>>
+using lookup_table_t = std::array<T, 256>;
+
+// CRC-16 GSM
+std::uint16_t crc16_gsm(const uint8_t *msg,
+                        std::size_t len,
+                        const lookup_table_t<std::uint16_t> &);
+
+std::uint16_t crc16_gsm(const uint8_t *msg,
+                        std::size_t len,
+                        crc16_ctx &ctx,
+                        const lookup_table_t<std::uint16_t> &);
+
+// CRC-32/CASTAGNOLI
+std::uint32_t crc32c(const uint8_t *msg,
+                     std::size_t len,
+                     const lookup_table_t<std::uint32_t> &);
+
+std::uint32_t crc32c(const uint8_t *msg,
+                     std::size_t len,
+                     crc32_ctx &ctx,
+                     const lookup_table_t<std::uint32_t> &);
+
+std::uint64_t crc64_xz(const uint8_t *msg,
+                       std::size_t len,
+                       const lookup_table_t<std::uint64_t> &);
+
+std::uint64_t crc64_xz(const uint8_t *msg,
+                       std::size_t len,
+                       crc64_ctx &ctx,
+                       const lookup_table_t<std::uint64_t> &);
+
+};  // namespace byteaat
 
 //
 
