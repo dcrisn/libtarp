@@ -612,9 +612,9 @@ signal_output monosignal<SIGNAL_TEMPLATE_INSTANCE>::emit(vargs... params) {
     // to the parameter types specified in the signal signature.
     if constexpr (!std::is_void_v<R>){
        return std::invoke(m_observer->notify, std::forward<vargs>(params)...);
-    }
-
+    } else{
     std::invoke(m_observer->notify, std::forward<vargs>(params)...);
+    }
 }
 
 template<SIGNAL_TEMPLATE_SPEC>
