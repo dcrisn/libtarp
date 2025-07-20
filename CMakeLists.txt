@@ -19,7 +19,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(DEBUG "Build debug binaries" OFF)
 option(USE_SANITIZERS "Use program sanitizers" OFF)
-option(RUN_TESTS "Generate test targets" OFF)
+option(BUILD_TESTS "Generate test targets" OFF)
 option(BUILD_EXAMPLES "Build example binaries")
 
 # compilation options for both c and c++
@@ -92,7 +92,7 @@ if (USE_SANITIZERS)
     endforeach()
 endif()
 
-if (RUN_TESTS)
+if (BUILD_TESTS)
     message("Build will include tests")
 endif()
 
@@ -321,7 +321,7 @@ install(
 add_subdirectory(cmake)
 
 # tests
-if (RUN_TESTS)
+if (BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 

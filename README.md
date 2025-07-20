@@ -36,10 +36,10 @@ ninja -C build install
 
 ## Tests
 
-The tests do not get compiled by default. To enable them, pass the `RUN_TESTS`
+The tests do not get compiled by default. To enable them, pass the `BUILD_TESTS`
 flag when asking cmake to generate the build setup. For example:
 ```
-cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local/usr -DRUN_TESTS=1
+cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local/usr -DBUILD_TESTS=1
 ```
 
 Build and run all tests:
