@@ -136,7 +136,7 @@ enum testStatus test_count_push_pop(void){
     return TEST_PASS;
 }
 
-// test clear and destrog
+// test clear and destroy
 enum testStatus test_list_destruction(void){
     struct dllist a = DLLIST_INITIALIZER(destructor);
     struct dllist *b = Dll_new(destructor);
