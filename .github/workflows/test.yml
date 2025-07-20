@@ -24,5 +24,7 @@ jobs:
           sudo apt install -y build-essential
 
       - name: Run tests
-        run: make -C build tests
+        run: |
+          cmake -B build
+          make -C build tests
 
