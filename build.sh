@@ -3,6 +3,8 @@
 USE_SANITIZERS=0
 SAN_BUILDIR=buildsan
 
+sudo apt install -y ccache
+
 configure_build_normal(){
 cmake \
     -B build \
