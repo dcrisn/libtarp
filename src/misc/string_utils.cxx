@@ -852,12 +852,13 @@ std::string strerr(int errnum) {
     // thread-safe strerror.
     std::array<char, 256> buff {};
 
-#ifdef _GNU_SOURCE
-    // the GNU version of strerror_r rather than the XSI one
-    const char *errstr = strerror_r(errnum, &buff[0], buff.size());
-#else
+#if (_POSIX_C_SOURCE >= 200112L) && !_GNU_SOURCE
+    // XSI-compliant version
     strerror_r(res.errnum, buff, sizeof(buff));
     const char *errstr = buff;
+#else
+    // the GNU version of strerror_r rather than the XSI one
+    const char *errstr = strerror_r(errnum, &buff[0], buff.size());
 #endif
 
     return errstr;
