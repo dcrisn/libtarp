@@ -848,7 +848,7 @@ bool ends_with(const std::string &s,
     return changed != s;
 }
 
-std::string strerr(int errnum) {
+std::string strerr([[maybe_unused]]int errnum) {
     // thread-safe strerror.
     std::array<char, 256> buff {};
 

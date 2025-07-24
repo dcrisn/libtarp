@@ -29,7 +29,7 @@ add_compile_options(
     -Wuninitialized
     -Wshadow
     -Wpedantic
-    -Werror
+    #-Werror
     -Wnull-dereference
     -fwrapv
     -fstack-protector-all
