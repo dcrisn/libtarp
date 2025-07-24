@@ -127,7 +127,7 @@
 //    - FreeBSD:
 //    https://github.com/freebsd/freebsd-src/blob/62c332ce9c9cf015eabb0a4aa0c83d4e96652820/sys/sys/queue.h#L316
 //
-//    There is some debate as whether this sort of macro is pedantically
+//    There is some debate as to whether this sort of macro is pedantically
 //    standard C. However, it's unlikely to be problematic if used with care,
 //    given its widespread use as mentioned above.
 //
