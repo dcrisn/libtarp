@@ -7,6 +7,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/un.h>
+#include <sys/types.h>
 
 #include <tarp/common.h>
 

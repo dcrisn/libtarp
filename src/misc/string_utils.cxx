@@ -6,6 +6,9 @@
 #include <regex>
 #include <set>
 
+// strerror_r
+#include <cstring>
+
 #include <tarp/string_utils.hxx>
 
 using namespace std::string_literals;

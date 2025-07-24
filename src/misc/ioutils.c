@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
+// memcpy, memset etc
+#include <string.h>
+
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
