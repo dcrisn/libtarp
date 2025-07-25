@@ -853,7 +853,7 @@ std::string strerr([[maybe_unused]]int errnum) {
     std::array<char, 256> buff {};
 
 #if !defined(__GLIBC__) || ((_POSIX_C_SOURCE >= 200112L) && !_GNU_SOURCE)
-    strerror_r(res.errnum, buff, sizeof(buff));
+    strerror_r(errnum, buff, sizeof(buff));
     const char *errstr = buff.data();
 #else
     // the GNU version of strerror_r rather than the XSI one
