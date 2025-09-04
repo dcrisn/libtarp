@@ -729,7 +729,7 @@ std::string remove_suffix(const std::string &s,
     if (!case_sensitive) {
         bool matches = std::equal(suffix.begin(),
                                   suffix.end(),
-                                  s.begin(),
+                                  s.begin() + s.size() - suffix.size(),
                                   check_equal_case_insensitive);
         if (matches) {
             return s.substr(0, s.size() - suffix.size());
@@ -848,7 +848,7 @@ bool ends_with(const std::string &s,
     return changed != s;
 }
 
-std::string strerr([[maybe_unused]]int errnum) {
+std::string strerr([[maybe_unused]] int errnum) {
     // thread-safe strerror.
     std::array<char, 256> buff {};
 
