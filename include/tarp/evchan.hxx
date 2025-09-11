@@ -602,8 +602,7 @@ public:
         // full, and no ring-buffer semantics => failed push.
         // NOTE: in this case, the state does not change in any way: no need
         // to call refresh_channel_state().
-        auto ret = opt_payload(std::move(m_msgs.back()));
-        return {false, std::move(ret)};
+        return {false, opt_payload(std::forward<T>(data)...)};
     }
 
     // Return the oldest buffered item from the channel.
