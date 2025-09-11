@@ -1973,10 +1973,14 @@ class event_wstream
 public:
     using payload_t = typename event_channel_t::payload_t;
 
-    // Construct a stream backed by a channel with ring-buffer semantics and
-    // the given max capacity.
-    event_wstream(std::size_t chancap = 100) {
-        m_stream_channel = std::make_shared<event_channel_t>(chancap, true);
+    // Construct a stream backed by a channel with the given max capacity.
+    // If circular_buffer=true, then if the elments are enqueued faster
+    // that they are dequed, than the oldest elements are overwritten.
+    // Otherwise if circular_buffer=false, then enqueues are rejected
+    // when the buffer is full and consumer(s) must dequeue to make room.
+    event_wstream(std::size_t chancap = 100, bool circular_buffer = true) {
+        m_stream_channel =
+          std::make_shared<event_channel_t>(chancap, circular_buffer);
     }
 
     ~event_wstream() { close(); }
