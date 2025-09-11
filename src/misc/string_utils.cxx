@@ -537,6 +537,24 @@ std::string strip(const std::string &input,
     return lstrip(rstrip(input, characters), characters);
 }
 
+bool contains(const std::string &string,
+              const std::string &substring,
+              bool case_sensitive) {
+    auto it =
+      std::search(string.begin(),
+                  string.end(),
+                  substring.begin(),
+                  substring.end(),
+                  [case_sensitive](unsigned char ch1, unsigned char ch2) {
+                      if (case_sensitive) {
+                          return ch1 == ch2;
+                      }
+                      return std::toupper(ch1) == std::toupper(ch2);
+                  });
+
+    return (it != string.end());
+}
+
 std::string repeat(const std::string &s, unsigned n) {
     std::string result;
     for (unsigned i = 0; i < n; ++i) {

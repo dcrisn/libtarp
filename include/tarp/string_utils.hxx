@@ -52,6 +52,12 @@ std::pair<std::string, std::string> load(const std::string &path);
 std::vector<std::size_t> find_needle_positions(const std::string &haystack,
                                                const std::string &needle);
 
+// True if string contains substring, else false.
+// The position or the number of occurrences are irrelevant.
+bool contains(const std::string &string,
+              const std::string &substring,
+              bool case_sensitive = true);
+
 // Split the string s on the separator sep.
 // If drop_empty_tokens=true, then if the tokens resulting from the split are
 // empty strings, then they are discarded and only non-empty strings tokens are
