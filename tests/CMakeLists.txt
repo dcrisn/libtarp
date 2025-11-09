@@ -112,6 +112,11 @@ add_executable(evchan
 )
 CONFIGURE_TARGET(evchan)
 
+add_executable(bits
+    bits/bits.cxx
+)
+CONFIGURE_TARGET(bits)
+
 add_executable(hash.fletcher
     hash/fletcher.cxx
 )
