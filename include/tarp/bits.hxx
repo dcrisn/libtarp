@@ -168,16 +168,14 @@ constexpr T set_bit(T target, T shift) {
 // Return the updated TARGET.
 template<typename T>
 constexpr T clear_bits(T target, T mask, T shift) {
-    set_bits(target, mask, shift, 0);
-    return target;
+    return set_bits(target, mask, shift, 0);
 }
 
 // Set the bit at (0x1 << shift) in the target to 0.
 // Return the updated TARGET.
 template<typename T>
 constexpr T clear_bit(T target, T shift) {
-    set_bit(target, shift, 0);
-    return target;
+    return set_bit(target, shift, 0);
 }
 
 // Get the (mask << shift) bits of TARGET, shifted right by SHIFT.
