@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <tarp/bits.hxx>
 #include <tarp/math.h>
 
 namespace tarp {
@@ -206,6 +207,59 @@ inline bool is_bitstring(const std::string &s) {
         }
     }
     return true;
+}
+
+// Interpret the given buffer as a sequence of elements of type T,
+// and swap each T so that if the bytes were stored in big-endian
+// order, they will now be stored in little-endian order, and
+// vice versa.
+//
+// If the length of buf is not a multiple of sizeof(T), then if pad=true,
+// it is padded with 0s to ensure this is the case.
+// Otherwise no padding is performed and the swapping is done on the
+// bytes preset; however note this will change the significance
+// of the bytes. For example using T=std::uint32_t and given
+// a remainder of 3 bytes {a, b, c}, the final missing byte (0)
+// represents the most significant byte on a little endian system,
+// but the least significant byte on a most endian system. Therefore
+// swapping {a, b, c, [0]} to {c, b, a, [0]} is incorrect, since the actual
+// swap should be {a, b, c, 0} -> {0, c, b, a}.
+template<typename T> 
+void endian_swap(std::vector<std::uint8_t> &buff, bool pad) {
+    static_assert(std::is_unsigned_v<T>);
+
+    std::size_t remainder = buff.size() % sizeof(T);
+
+    if (remainder > 0) {
+        if (pad) {
+            buff.resize(buff.size() + sizeof(T) - remainder, 0);
+            remainder = 0;
+        } 
+    }
+
+    std::size_t offset = 0;
+    std::size_t len = buff.size();
+    std::uint8_t *ptr = buff.data();
+
+    while (len >= sizeof(T)) {
+        T tmp;
+        std::memcpy(&tmp, ptr + offset, sizeof(T));
+        tmp = bits::le2be(tmp);
+        std::memcpy(ptr + offset, &tmp, sizeof(T));
+        offset += sizeof(T);
+        len -= sizeof(T);
+    }
+
+    if (len > 0){
+        T tmp = 0;
+        std::memcpy(&tmp, ptr + offset, len);
+        tmp = bits::le2be(tmp);
+        std::uint8_t arr[sizeof(T)];
+        std::memcpy(arr, &tmp, sizeof(T));
+        std::memcpy(ptr + offset, &arr[sizeof(T)-remainder], len);
+        offset += sizeof(T);
+        len -= offset;
+    }
 }
 
 /////////////////////////////////////////////////////////
