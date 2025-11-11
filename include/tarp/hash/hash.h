@@ -17,8 +17,6 @@ uint64_t jenkins_oaat(const uint8_t *key, size_t len);
 uint64_t djb2(const uint8_t key[], size_t len);
 
 
-
-
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

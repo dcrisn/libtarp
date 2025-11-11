@@ -1,7 +1,9 @@
+#include <ios>
 #include <tarp/bits.hxx>
 #include <tarp/cxxcommon.hxx>
-#include <tarp/hash/checksum.hxx>
-#include <tarp/hash/crc.hxx>
+#include <tarp/hash/checksum/inet.hxx>
+#include <tarp/hash/checksum/fletcher.hxx>
+#include <tarp/hash/crc/crc.hxx>
 #include <tarp/string_utils.hxx>
 
 // prevent collision with match from string_utils
@@ -140,10 +142,35 @@ void print_help([[maybe_unused]] const char **argv) {
          "of u16s and u32s, respectively, in host byte order.\n";
 }
 
-int main(int argc, const char **argv) {
+
+#if 0
+// code to generate and print a lookup table.
+    std::array<std::uint32_t, 256> t;
+    tarp::hash::crc::make_lookup_table(tarp::hash::crc::params::crc32c::G,
+                                       t);
+    std::cerr << "{";
+    for (auto b : t) {
+        std::cerr << std::hex << std::showbase << std::setw(4)
+                  << std::setfill('0') << b << "," << std::endl;
+    }
+    std::cerr << "};";
+#endif
+
+int main([[maybe_unused]] int argc, [[maybe_unused]] const char **argv) {
     using namespace tarp::utils;
     using namespace std::string_literals;
 
+    std::vector<std::uint8_t> input = {0x61, 0x62, 0x63};
+    std::cerr << "input size: " << input.size() << std::endl;
+    auto cksum = tarp::hash::crc::bitaat::crc32c(input.data(), input.size());
+    std::cerr << "cksum is " << std::hex << cksum << std::endl;
+
+    input.resize(input.size() + 4);
+    cksum = tarp::bits::to_nbo(cksum);
+    memcpy(input.data() + (input.size() - 4), &cksum, sizeof(cksum));
+    cksum = tarp::hash::crc::bitaat::crc32_cksum(input.data(), input.size());
+    std::cerr << "cksum is " << std::hex << cksum << std::endl;
+#if 0
     if (argc < 2 || argc > 3) {
         print_help(argv);
         return -1;
@@ -283,6 +310,6 @@ int main(int argc, const char **argv) {
         std::cerr << "Unknown algorithm specified: '" << algo << "'\n";
         return -1;
     }
-
+#endif
     return 0;
 }

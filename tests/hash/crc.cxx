@@ -1,4 +1,4 @@
-#include <tarp/hash/crc.hxx>
+#include <tarp/hash/crc/crc.hxx>
 
 #include <functional>
 #include <map>

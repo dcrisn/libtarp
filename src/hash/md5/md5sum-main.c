@@ -2,9 +2,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <errno.h>
 
-#include <tarp/hash/md5sum.h>
+#include <tarp/hash/checksum/md5sum.h>
 
 
 static void usage(const char *const progname){

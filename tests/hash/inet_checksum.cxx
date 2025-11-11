@@ -1,17 +1,15 @@
 #include <cstdio>
 #include <random>
-#include <tarp/hash/checksum.hxx>
+#include <tarp/hash/checksum/inet.hxx>
 #include <tarp/ioutils.hxx>
 #include <tarp/string_utils.hxx>
 
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <tuple>
 #include <vector>
 
 namespace str = tarp::utils::str;
-namespace io = tarp::utils::io;
 namespace cksum = tarp::hash::checksum;
 
 // define in inet_checksum_inputs.cxx

@@ -13,7 +13,7 @@
 #include <tarp/common.h>
 #include <tarp/log.h>
 #include <tarp/bits.h>
-#include <tarp/hash/md5sum.h>
+#include <tarp/hash/checksum/md5sum.h>
 
 /*
  * References:

@@ -1,5 +1,5 @@
 #include <endian.h>
-#include <tarp/hash/checksum.hxx>
+#include <tarp/hash/checksum/fletcher.hxx>
 
 #include <iostream>
 #include <string>

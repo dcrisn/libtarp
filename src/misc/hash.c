@@ -1,9 +1,8 @@
 #include <endian.h>
 #include <tarp/common.h>
-#include <tarp/hash/md5sum.h>
+#include <tarp/hash/checksum/md5sum.h>
 #include <tarp/hash/hash.h>
 
-#include <string.h>
 #include <stdint.h>
 
 /*
