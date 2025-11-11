@@ -100,6 +100,12 @@ std::enable_if_t<std::is_enum_v<T>, T> to_hbo(T value) {
     return static_cast<T>(to_hbo(static_cast<underlying_t>(value)));
 }
 
+// big endian to little endian
+template<typename T>
+T be2le(T value){
+    return to_hbo(value);
+}
+
 // Swap the bytes in value from host byte order (hbo) to
 // network byte order (nbo).
 template<typename T>
@@ -123,6 +129,12 @@ template<typename T>
 std::enable_if_t<std::is_enum_v<T>, T> to_nbo(T value) {
     using underlying_t = std::underlying_type_t<T>;
     return static_cast<T>(to_nbo(static_cast<underlying_t>(value)));
+}
+
+// little endian to big-endian
+template<typename T>
+T le2be(T value){
+    return  to_nbo(value);
 }
 
 // C++ type-safe rewrites of the equivalent implementations in tarp/bits.h.
