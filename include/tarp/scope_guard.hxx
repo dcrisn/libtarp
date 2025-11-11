@@ -7,7 +7,7 @@
 
 namespace tarp {
 
-// A simple RAII wrapper that invoked a function in its destructor.
+// A simple RAII wrapper that invokes a function in its destructor.
 // Useful for cleanup handlers that would otherwise typically
 // rely on goto, as often seen in C code.
 template<class F>
