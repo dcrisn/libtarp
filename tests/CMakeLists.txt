@@ -127,6 +127,12 @@ add_executable(hash.crc
 )
 CONFIGURE_TARGET(hash.crc)
 
+add_executable(hash.inet
+    hash/inet_checksum.cxx
+    hash/inet_checksum_inputs.cxx
+)
+CONFIGURE_TARGET(hash.inet)
+
 add_executable(hasht
     hasht/hasht_tests.c
     hasht/tests.c
