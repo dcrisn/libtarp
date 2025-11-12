@@ -9,6 +9,7 @@
 // c stdlib
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
 extern "C" {
 #include <endian.h>
@@ -62,9 +63,9 @@ namespace inet {
 
 // Update the checksum's state with new bytes from
 // the given byte span.
-inline void update_checksum(const std::uint8_t *buff,
-                            std::size_t bufflen,
-                            inetcksum_ctx &ctx) {
+inline void update_checksum(inetcksum_ctx &ctx,
+                            const std::uint8_t *buff,
+                            std::size_t bufflen) {
     // Each call to update_checksum() assumes it is
     // the last call. And so if the buffer fed to it
     // is not a multiple of sizeof(u16)=2, then we're
@@ -75,7 +76,7 @@ inline void update_checksum(const std::uint8_t *buff,
     // In that case we have the following situation:
     // a b  c d  e
     //  |    |   |
-    // u16  u16  `we added this as a u8
+    // u16  u16  `we added this as 0e (LE) or e0 (BE)
     //
     // and now we have we're given another buffer, which
     // for the purposes of the checksum, is the same stream
@@ -91,9 +92,9 @@ inline void update_checksum(const std::uint8_t *buff,
     // bits off positionally and the all values hereafter
     // will be thrown off.
     // So the following conditional performs the required
-    // fixup. If we are in the situation where the last
-    // addend was a u8 (truncated=true), then we place it
-    // back in a buffer at index n, and put the next byte
+    // fixup. If we are in the situation where we last
+    // had a trailing byte, (truncated=true), then we place
+    // it back in a buffer at index n, and put the next byte
     // from the new span next to it at n[+1]. In essence
     // we join the start of this new buffer to the end
     // of the previous one. We subtract the last addend
@@ -102,34 +103,43 @@ inline void update_checksum(const std::uint8_t *buff,
     // the new value to the running checksum. Then adjust
     // the new buffer and carry on as usual.
     if (ctx.truncated && bufflen > 0) {
+        // get the previous contribution so we
+        // can undo it (subtract it)
+        std::uint16_t prev = 0;
+        std::memcpy(&prev, ctx.joint, sizeof(prev));
+
+        // next contribution
         ctx.joint[1] = *buff;
-        std::uint16_t v;
-        // interpret correctly no matter the endianness
-        std::memcpy(&v, ctx.joint, sizeof(v));
-        v -= ctx.joint[0];
-        ctx.sum += v;
+        std::uint16_t next = 0;
+        std::memcpy(&next, ctx.joint, sizeof(next));
+
+        next -= prev;
+        ctx.sum += next;
         bufflen--;
         buff++;
-        ctx.truncated = false;
-    }
 
-    std::uint16_t v = 0;
+        ctx.truncated = false;
+        std::memset(ctx.joint, 0, sizeof(std::uint16_t));
+    }
 
     // sizeof(u16)==2, so the number of u16s is bufflen/2
     const std::size_t n = bufflen >> 1;
 
     for (unsigned i = 0; i < n; ++i) {
+        std::uint16_t v = 0;
         // the safer way to do type punning, rather than reinterpret_cast
         std::memcpy(&v, buff, sizeof(std::uint16_t));
         buff += sizeof(std::uint16_t);
         ctx.sum += v;
+        //std::cerr << "adding " << v << ", sum=" << ctx.sum << std::endl;
     }
 
     // if bufflen is not a multiple of 2, we'll have a remainder of 1 byte
     if (bufflen & 0x1) {
-        v = 0;
+        std::uint16_t v = 0;
         std::memcpy(&v, buff, sizeof(std::uint8_t));
         ctx.sum += v;
+        //std::cerr << "adding " << v << ", sum=" << ctx.sum << std::endl;
 
         // so we can join up with the next buffer
         // if there is one.
@@ -138,11 +148,105 @@ inline void update_checksum(const std::uint8_t *buff,
     }
 }
 
-// Fold the u32 accumulator into a u16 checksum
-// and return it.
-inline std::uint16_t get_checksum(inetcksum_ctx &ctx) {
-    auto sum = ctx.sum;
+// Incremental checksum update.
+// This lets us update a checksum when a field changes,
+// without recomputing it from scratch.
+// get_checksum can be called as usual to then retrieve
+// the updated checksum.
+//
+// RFC1624-2:
+// > As RFC 1141 points out, the equation above is not useful for direct
+// > use in incremental updates since C and C' do not refer to the actual
+// > checksum stored in the header.  In addition, it is pointed out that
+// > RFC 1071 did not specify that all arithmetic must be performed using
+// > one's complement arithmetic.
+// >   HC' = ~(C + (-m) + m')    --    [Eqn. 3]
+// >       = ~(~HC + ~m + m')
+// With:
+// >   HC  - old checksum in header
+// >   C   - one's complement sum of old header
+// >   HC' - new checksum in header
+// >   C'  - one's complement sum of new header
+// >   m   - old value of a 16-bit field
+// >   m'  - new value of a 16-bit field
+//
+// ----------------------------------------------
+// ----------------------------------------------
+// NOTE: A tacit assumption in the RFCS seems to be that all inputs
+// to the checksum (both in general, and in particular here
+// for the incremental update procedure) are u16 words, always
+// starting at sizeof(u16) boundaries.
+// 
+// In other words, it appears incremental updates only work for
+// fields for which **all** of the following are true:
+// - they start (in the buffer over which the original checksum
+// was computed) at an offset that is a multiple of sizeof(u16).
+// For example: 0, 2, 4, 6, 128, but not 1, 3, 5, 7, 121.
+// - their size is a multiple of sizeof(u16). For example: u16,
+// u32, u64, but not u8, or a packed field of 5 bytes etc.
+// Therefore the cases where incremental updates are straightforwardly
+// applicable are quite narrow and it is easy to make mistakes.
+//
+// To understand the issue flagged here, consider an input buffer with
+// bytes {a, b, c, d, e}. Assume 'a' corresponds to a u8 field and {b,c}
+// to a u16 field. Assume we want to update the u16 field.
+// The incremental update procedure fundamentally subtracts the old {b,c}
+// and adds the new {b,c} value. However, notice {b,c} was never a u16
+// that was added to the sum in the original checksum! Because iterating
+// over the buffer would yield {a,b}, {c,d} .. as the u16 words!
+// Therefore subtracting {b,c} is not subtracting a contribution
+// that was ever made, and hence is incorrect. In short, in the
+// conditions given in the NOTE above, the byte significance
+// of the field will not coincide with the u16 word(s) that were
+// used in the original checksum and hence will break it.
+// Of course, incremental checksum can still be performed even
+// then, but only in a manual way, carefully including adjacent
+// fields as needed, forming the bytes into the exact same words
+// that would've been used in the original checksum. Inevitably,
+// a very error prone task.
+// ----------------------------------------------
+// ----------------------------------------------
+template<bool to_hbo, typename T>
+inline void update_checksum(inetcksum_ctx &ctx, T old_value, T new_value) {
+    static_assert(std::is_unsigned_v<T>);
+    static_assert(sizeof(T) >= sizeof(std::uint16_t));
 
+    if constexpr (to_hbo) {
+        old_value = bits::to_hbo(old_value);
+        new_value = bits::to_hbo(new_value);
+    }
+
+    const auto add = [&ctx](T value) {
+        constexpr std::size_t u16sz = sizeof(std::uint16_t);
+        std::uint8_t tmp[sizeof(T)];
+
+        std::memcpy(tmp, &value, sizeof(T));
+
+        // NOTE: this means u8s are rejected offhand;
+        // which is ok, incremental updates will not work
+        // with u8 or any field whose size is not a multiple
+        // of sizeof(u16) or that does not start at an offset
+        // that is a multiple of sizeof(u16).
+        constexpr std::size_t n = sizeof(T) / u16sz;
+
+        for (unsigned i = 0; i < n; ++i) {
+            std::uint16_t v = 0;
+            std::memcpy(&v, &tmp[i * u16sz], u16sz);
+            ctx.sum += v;
+            //std::cerr << "adding " << v << ", sum=" << ctx.sum << std::endl;
+        }
+    };
+
+    // subtract old contribution from sum;
+    // add new contribution to sum;
+    // see RFC1624-4.
+    add(~old_value);
+    add(new_value);
+
+    // no get_checksum() will return the updated checksum.
+}
+
+inline std::uint16_t fold_sum(std::uint32_t sum) {
     // avoid needless computation
     constexpr std::uint16_t mask = std::numeric_limits<std::uint16_t>::max();
 
@@ -153,8 +257,22 @@ inline std::uint16_t get_checksum(inetcksum_ctx &ctx) {
         sum = (sum & mask) + (sum >> 16);
     }
 
-    // checksum
-    return ~sum;
+    return sum;
+}
+
+// Fold the u32 accumulator into a u16 checksum
+// and return it.
+inline std::uint16_t get_checksum(inetcksum_ctx &ctx) {
+    // we calculate on temporary variable, not changing
+    // context variable, since update_checksum()
+    // could be called again!
+    auto sum = fold_sum(ctx.sum);
+
+    // RFC791-3.1:
+    // The checksum field is the 16 bit one's complement of the
+    // one's complement sum of all 16 bit words in the header.
+    const std::uint16_t cksum = ~sum;
+    return cksum;
 }
 
 // update the inet checksum state with the result of processing
@@ -163,7 +281,7 @@ inline std::uint16_t process_block(inetcksum_ctx &ctx,
                                    const std::uint8_t *data,
                                    std::size_t len,
                                    bool last_block) {
-    update_checksum(data, len, ctx);
+    update_checksum(ctx, data, len);
     if (last_block) {
         return get_checksum(ctx);
     }
@@ -172,7 +290,7 @@ inline std::uint16_t process_block(inetcksum_ctx &ctx,
 
 inline std::uint16_t process_all(const std::uint8_t *data, std::size_t len) {
     inetcksum_ctx ctx;
-    update_checksum(data, len, ctx);
+    update_checksum(ctx, data, len);
     return get_checksum(ctx);
 }
 }  // namespace inet
