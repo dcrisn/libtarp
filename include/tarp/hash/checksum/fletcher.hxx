@@ -248,7 +248,7 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
         // else we have enough bytes to clear the deficit and form
         // a full word
         std::memcpy(&oldval, ctx.joint, l);
-        std::memcpy(ctx.joint+l, buff, ctx.deficit);
+        std::memcpy(ctx.joint + l, buff, ctx.deficit);
         std::memcpy(&newval, ctx.joint, sizeof(word_t));
 
         if constexpr (swap) {
@@ -291,6 +291,11 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
     std::memcpy(ctx.joint, buff, bufflen);
     ctx.deficit = sizeof(word_t) - bufflen;
 }
+
+// TODO: implement incremental checksum update, following the example
+// in the inetcksum.cxx. The difference here is that the word
+// is bigger and differs between fletcher16,32,64, and hence
+// it's a bit more work and testing.
 
 }  // namespace impl
 
