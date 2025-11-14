@@ -842,6 +842,88 @@ TEST_CASE("incremental checksum update fuzz") {
 }
 #endif
 
+TEST_CASE("Edge case: incremental update of checksum with partial byte") {
+    using namespace tarp::hash::checksum;
+
+    SUBCASE("at offset 0") {
+        byte_vector buff;
+        buff.push_back(0xaa);
+        inetcksum_ctx ctx;
+        inet::update_checksum(ctx, buff.data(), buff.size());
+
+        auto cksum1 = inet::get_checksum(ctx);
+
+        // this will set truncated=true, in preparation for another byte
+        // that may arrive
+        REQUIRE(ctx.truncated == true);
+        REQUIRE(ctx.joint[0] == 0xaa);
+
+        // now what happens if we try to UPDATE this buffer
+        byte_vector change;
+        change.push_back(0xee);
+        tarp::hash::checksum::inet::update_checksum(
+          ctx, buff.data(), buff.size(), 0, change.size(), change.data());
+
+        // must have updated the joint buffer!!
+        REQUIRE(ctx.joint[0] == 0xee);
+        REQUIRE(ctx.truncated == true);
+        auto cksum2 = inet::get_checksum(ctx);
+        REQUIRE(cksum2 != cksum1);
+
+        // and we should be able to undo this.
+        tarp::hash::checksum::inet::update_checksum(
+          ctx, change.data(), change.size(), 0, 1, buff.data());
+        REQUIRE(ctx.joint[0] == 0xaa);
+        REQUIRE(ctx.truncated == true);
+        cksum2 = inet::get_checksum(ctx);
+        REQUIRE(cksum2 == cksum1);
+    }
+
+    SUBCASE("at higher even offset") {
+        byte_vector buff = {0xaa, 0xbb, 0xcc, 0xdd, 0xee};
+        inetcksum_ctx ctx;
+        inet::update_checksum(ctx, buff.data(), buff.size());
+
+        auto cksum1 = inet::get_checksum(ctx);
+
+        // this will set truncated=true, in preparation for another byte
+        // that may arrive
+        REQUIRE(ctx.truncated == true);
+        REQUIRE(ctx.joint[0] == 0xee);
+
+        // now what happens if we try to UPDATE this buffer
+        byte_vector change;
+        change.push_back(0x55);
+        tarp::hash::checksum::inet::update_checksum(ctx,
+                                                    buff.data(),
+                                                    buff.size(),
+                                                    buff.size() - 1,
+                                                    change.size(),
+                                                    change.data());
+
+        // must have updated the joint buffer!!
+        REQUIRE(ctx.joint[0] == 0x55);
+        REQUIRE(ctx.truncated == true);
+        auto cksum2 = inet::get_checksum(ctx);
+        REQUIRE(cksum2 != cksum1);
+
+        buff.back() = 0x55;
+        change.back() = 0xee;
+
+        // and we should be able to undo this.
+        tarp::hash::checksum::inet::update_checksum(ctx,
+                                                    buff.data(),
+                                                    buff.size(),
+                                                    buff.size() - 1,
+                                                    change.size(),
+                                                    change.data());
+        REQUIRE(ctx.joint[0] == 0xee);
+        REQUIRE(ctx.truncated == true);
+        cksum2 = inet::get_checksum(ctx);
+        REQUIRE(cksum2 == cksum1);
+    }
+}
+
 int main(int argc, char **argv) {
     doctest::Context ctx;
 

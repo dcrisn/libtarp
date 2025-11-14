@@ -83,12 +83,15 @@ void update_checksum(inetcksum_ctx &ctx,
         std::uint16_t oldval = 0, newval = 0;
 
         // final trailing byte, cannot pair, add directly.
+        // and we must replace the byte in the 'joint' array!
         if (change_offset + change_len == bufflen) {
             std::memcpy(&oldval,
                         buff + change_offset + change_len - 1,
                         sizeof(std::uint8_t));
 
-            std::memcpy(&newval, change + change_len - 1, sizeof(std::uint8_t));
+            const std::uint8_t *ptr = change + change_len - 1;
+            ctx.joint[0] = *ptr;
+            std::memcpy(&newval, ptr, sizeof(std::uint8_t));
         }
         // pair with the next byte in the original buffer
         else {
