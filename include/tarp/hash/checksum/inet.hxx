@@ -2,6 +2,7 @@
 
 // local project
 #include <tarp/bits.hxx>
+// #include <tarp/string_utils.hxx>
 
 // cxx stdlib
 #include <limits>
@@ -18,6 +19,8 @@ extern "C" {
 namespace tarp {
 namespace hash {
 namespace checksum {
+
+// using tarp::utils::str::int_to_hexstring;
 
 // state to enable procesing data in blocks
 struct inetcksum_ctx {
@@ -118,6 +121,10 @@ inline void update_checksum(inetcksum_ctx &ctx,
         bufflen--;
         buff++;
 
+        // std::cerr << "adding [truncated] " << int_to_hexstring(next)
+        //           << ", (subtracted " << int_to_hexstring(prev)
+        //           << "), sum=" << int_to_hexstring(ctx.sum) << std::endl;
+        //
         ctx.truncated = false;
         std::memset(ctx.joint, 0, sizeof(std::uint16_t));
     }
@@ -131,7 +138,8 @@ inline void update_checksum(inetcksum_ctx &ctx,
         std::memcpy(&v, buff, sizeof(std::uint16_t));
         buff += sizeof(std::uint16_t);
         ctx.sum += v;
-        //std::cerr << "adding " << v << ", sum=" << ctx.sum << std::endl;
+        // std::cerr << "[" << i << "] adding " << int_to_hexstring(v)
+        //           << ", sum=" << int_to_hexstring(ctx.sum) << std::endl;
     }
 
     // if bufflen is not a multiple of 2, we'll have a remainder of 1 byte
@@ -139,7 +147,8 @@ inline void update_checksum(inetcksum_ctx &ctx,
         std::uint16_t v = 0;
         std::memcpy(&v, buff, sizeof(std::uint8_t));
         ctx.sum += v;
-        //std::cerr << "adding " << v << ", sum=" << ctx.sum << std::endl;
+        // std::cerr << "adding trailing byte: " << int_to_hexstring(v)
+        //           << ", sum=" << int_to_hexstring(ctx.sum) << std::endl;
 
         // so we can join up with the next buffer
         // if there is one.
@@ -176,7 +185,7 @@ inline void update_checksum(inetcksum_ctx &ctx,
 // to the checksum (both in general, and in particular here
 // for the incremental update procedure) are u16 words, always
 // starting at sizeof(u16) boundaries.
-// 
+//
 // In other words, it appears incremental updates only work for
 // fields for which **all** of the following are true:
 // - they start (in the buffer over which the original checksum
@@ -233,7 +242,7 @@ inline void update_checksum(inetcksum_ctx &ctx, T old_value, T new_value) {
             std::uint16_t v = 0;
             std::memcpy(&v, &tmp[i * u16sz], u16sz);
             ctx.sum += v;
-            //std::cerr << "adding " << v << ", sum=" << ctx.sum << std::endl;
+            // std::cerr << "adding " << v << ", sum=" << ctx.sum << std::endl;
         }
     };
 
@@ -245,6 +254,29 @@ inline void update_checksum(inetcksum_ctx &ctx, T old_value, T new_value) {
 
     // no get_checksum() will return the updated checksum.
 }
+
+// Incremental checksum update.
+// This function, unlike the overload that takes a type T
+// field value as input, works even when:
+// - the number of changed bytes < sizeof(u16)
+// - the change starts at an odd offset (i.e. an offset
+//   that is not a multiple of sizeof(u16))
+// - the length of the change is odd (not a multiple of
+//   sizeof(u16))
+//
+// buff is the buffer that original checksum (that the update
+// is being applied to) was calculated over.
+// change is a buffer that contains the bytes that have
+// changed; the change occurs at
+// buff[change_offset] ... buff[change_offset+change_len].
+//
+// change_offset+change_len must be <= bufflen.
+void update_checksum(inetcksum_ctx &ctx,
+                     const std::uint8_t *buff,
+                     std::size_t bufflen,
+                     std::size_t change_offset,
+                     std::size_t change_len,
+                     const std::uint8_t *change);
 
 inline std::uint16_t fold_sum(std::uint32_t sum) {
     // avoid needless computation
