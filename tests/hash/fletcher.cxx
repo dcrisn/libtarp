@@ -1,10 +1,96 @@
-#include <endian.h>
 #include <tarp/hash/checksum/fletcher.hxx>
+
+#define DOCTEST_CONFIG_IMPLEMENT
+#include <doctest/doctest.h>
+
+#include <endian.h>
 
 #include <iostream>
 #include <string>
 #include <tuple>
 #include <vector>
+
+// implementations taken from
+// https://en.wikipedia.org/wiki/Fletcher%27s_checksum
+// in order to be able to test my implementations;
+// I can only assume the wikipedia code is correct;
+// finding reference test vectors for this checksum
+// appears impossible beyond the basic (and very very short)
+// strings in the wikipedia article.
+namespace reference {
+uint16_t fletcher16(const uint8_t *data, size_t len) {
+    uint32_t c0, c1;
+
+    /*  Found by solving for c1 overflow: */
+    /* n > 0 and n * (n+1) / 2 * (2^8-1) < (2^32-1). */
+    for (c0 = c1 = 0; len > 0;) {
+        size_t blocklen = len;
+        if (blocklen > 5802) {
+            blocklen = 5802;
+        }
+        len -= blocklen;
+        do {
+            c0 = c0 + *data++;
+            c1 = c1 + c0;
+        } while (--blocklen);
+        c0 = c0 % 255;
+        c1 = c1 % 255;
+    }
+    return (c1 << 8 | c0);
+}
+
+uint32_t fletcher32(const uint16_t *data, size_t len) {
+    uint32_t c0, c1;
+    len = (len + 1) & ~1; /* Round up len to words */
+
+    /* We similarly solve for n > 0 and n * (n+1) / 2 * (2^16-1) < (2^32-1)
+     * here. */
+    /* On modern computers, using a 64-bit c0/c1 could allow a group size of
+     * 23726746. */
+    for (c0 = c1 = 0; len > 0;) {
+        size_t blocklen = len;
+        if (blocklen > 360 * 2) {
+            blocklen = 360 * 2;
+        }
+        len -= blocklen;
+        do {
+            c0 = c0 + *data++;
+            c1 = c1 + c0;
+        } while ((blocklen -= 2));
+        c0 = c0 % 65535;
+        c1 = c1 % 65535;
+    }
+    return (c1 << 16 | c0);
+}
+
+uint32_t fletcher64(const uint16_t *data, size_t len) {
+    uint32_t c0, c1;
+    len = (len + 1) & ~1; /* Round up len to words */
+
+    /* We similarly solve for n > 0 and n * (n+1) / 2 * (2^16-1) < (2^32-1)
+     * here. */
+    /* On modern computers, using a 64-bit c0/c1 could allow a group size of
+     * 23726746. */
+    for (c0 = c1 = 0; len > 0;) {
+        size_t blocklen = len;
+        if (blocklen > 360 * 2) {
+            blocklen = 360 * 2;
+        }
+        len -= blocklen;
+        do {
+            c0 = c0 + *data++;
+            c1 = c1 + c0;
+        } while ((blocklen -= 2));
+        c0 = c0 % 92681;
+        c1 = c1 % 92681;
+    }
+    return (c1 << 16 | c0);
+}
+
+};  // namespace reference
+
+void test_random() {
+}
 
 template<typename cb_t, typename T>
 std::pair<bool, T> test(cb_t f, T expected_result, const std::string &input) {
@@ -19,7 +105,10 @@ std::pair<bool, T> test(cb_t f, T expected_result, const std::string &input) {
 
 using namespace tarp::hash::checksum;
 
-int main(int, const char **) {
+TEST_CASE("basics") {
+    std::uint64_t NUM_TESTS = 0;
+    std::uint64_t NUM_PASSED = 0;
+
     // Columns: host-byte-order input string, network-byte-order input string,
     // expected result. The expected result is the same in both cases but
     // when handling the network byte order input, endianness conversion must be
@@ -57,7 +146,6 @@ int main(int, const char **) {
                     << ", actual=" << actual << std::endl;
       };
 
-#if 1
     std::cerr << "Fletcher16 tests: \n";
     for (const auto &[input, expected_result] : fletcher16_tests) {
         auto [passed, res] = test(
@@ -67,9 +155,11 @@ int main(int, const char **) {
           expected_result,
           input);
 
+        NUM_TESTS++;
+        if (passed) NUM_PASSED++;
+
         print_passed_or_not(passed, false, input, expected_result, res);
     }
-#endif
 
     std::cerr << "Fletcher32 tests: \n";
     for (const auto &[host_byte_order_input,
@@ -82,6 +172,10 @@ int main(int, const char **) {
               },
               expected_result,
               host_byte_order_input);
+
+            NUM_TESTS++;
+            if (passed) NUM_PASSED++;
+
             print_passed_or_not(
               passed, false, host_byte_order_input, expected_result, res);
         }
@@ -93,12 +187,16 @@ int main(int, const char **) {
               },
               expected_result,
               network_byte_order_input);
+
+
+            NUM_TESTS++;
+            if (passed) NUM_PASSED++;
+
             print_passed_or_not(
               passed, true, network_byte_order_input, expected_result, res);
         }
     }
 
-#if 1
     std::cerr << "Fletcher64 tests: \n";
     for (const auto &[host_byte_order_input,
                       network_byte_order_input,
@@ -110,6 +208,9 @@ int main(int, const char **) {
               },
               expected_result,
               host_byte_order_input);
+
+            NUM_TESTS++;
+            if (passed) NUM_PASSED++;
 
             print_passed_or_not(
               passed, false, host_byte_order_input, expected_result, res);
@@ -123,11 +224,39 @@ int main(int, const char **) {
               expected_result,
               network_byte_order_input);
 
+
+            NUM_TESTS++;
+            if (passed) NUM_PASSED++;
+
             print_passed_or_not(
               passed, true, network_byte_order_input, expected_result, res);
         }
     }
-#endif
+
+    test_random();
+
+    std::cerr << "\n"
+              << "PASSED: " << NUM_PASSED << "/" << NUM_TESTS << std::endl;
+    REQUIRE(NUM_PASSED == NUM_TESTS);
+}
+
+int main(int argc, const char **argv) {
+    doctest::Context ctx;
+
+    ctx.setOption("abort-after",
+                  1);  // default - stop after 5 failed asserts
+
+    ctx.applyCommandLine(argc, argv);  // apply command line - argc / argv
+
+    ctx.setOption("no-breaks",
+                  true);  // override - don't break in the debugger
+
+    int res = ctx.run();  // run test cases unless with --no-run
+
+    if (ctx.shouldExit())  // query flags (and --exit) rely on this
+    {
+        return res;  // propagate the result of the tests
+    }
 
     return 0;
 }
