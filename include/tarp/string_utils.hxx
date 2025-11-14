@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <iomanip>
 #include <limits>
 #include <optional>
@@ -189,7 +190,7 @@ template<typename T>
 std::pair<std::optional<T>, std::string> hexstring_to_uint(const char *s);
 
 template<typename T>
-std::string int_to_hexstring(T i);
+std::string int_to_hexstring(T i, std::size_t ndigits = sizeof(T)*2);
 
 // Convert the byte array to a hexstring with no prefix. e.g. {1,255} will
 // become {01ff}.
@@ -224,7 +225,7 @@ inline bool is_bitstring(const std::string &s) {
 // but the least significant byte on a most endian system. Therefore
 // swapping {a, b, c, [0]} to {c, b, a, [0]} is incorrect, since the actual
 // swap should be {a, b, c, 0} -> {0, c, b, a}.
-template<typename T> 
+template<typename T>
 void endian_swap(std::vector<std::uint8_t> &buff, bool pad) {
     static_assert(std::is_unsigned_v<T>);
 
@@ -234,7 +235,7 @@ void endian_swap(std::vector<std::uint8_t> &buff, bool pad) {
         if (pad) {
             buff.resize(buff.size() + sizeof(T) - remainder, 0);
             remainder = 0;
-        } 
+        }
     }
 
     std::size_t offset = 0;
@@ -250,13 +251,13 @@ void endian_swap(std::vector<std::uint8_t> &buff, bool pad) {
         len -= sizeof(T);
     }
 
-    if (len > 0){
+    if (len > 0) {
         T tmp = 0;
         std::memcpy(&tmp, ptr + offset, len);
         tmp = bits::le2be(tmp);
         std::uint8_t arr[sizeof(T)];
         std::memcpy(arr, &tmp, sizeof(T));
-        std::memcpy(ptr + offset, &arr[sizeof(T)-remainder], len);
+        std::memcpy(ptr + offset, &arr[sizeof(T) - remainder], len);
         offset += sizeof(T);
         len -= offset;
     }
@@ -401,7 +402,7 @@ std::pair<std::optional<T>, std::string> hexstring_to_uint(const char *s) {
 }
 
 template<typename T>
-std::string int_to_hexstring(T i) {
+std::string int_to_hexstring(T i, std::size_t ndigits) {
     std::stringstream stream;
 
     // this whole song and dance here is needed because if T is a
@@ -412,7 +413,9 @@ std::string int_to_hexstring(T i) {
     static_assert(std::is_integral_v<T>);
     static_assert(sizeof(T) <= sizeof(std::uint64_t));
 
-    stream << std::setfill('0') << std::setw(width) << std::hex
+    ndigits = std::max(width, ndigits);
+
+    stream << std::setfill('0') << std::setw(ndigits) << std::hex
            << static_cast<std::uint64_t>(i);
     return stream.str();
 }
@@ -440,23 +443,70 @@ std::string hexstring_from_bytes(const T &bytes) {
 template<typename T>
 std::string to_string(const T &l,
                       const std::string &prefix = "",
-                      const std::string &postfix = "") {
-    std::string s = prefix;
-    unsigned i = 0;
+                      const std::string &postfix = "",
+                      bool hex = false) {
+    std::stringstream ss;
+    ss << prefix;
+    std::size_t i = 0;
     for (auto x : l) {
-        if constexpr (std::is_arithmetic_v<decltype(x)>) {
-            s += std::to_string(x);
+        if (hex) {
+            ss << int_to_hexstring(x);
         } else {
-            s += std::string {x};
+            if constexpr (std::is_arithmetic_v<decltype(x)>) {
+                ss << std::to_string(x);
+            } else {
+                ss << std::string {x};
+            }
         }
 
         if (i + 1 < l.size()) {
-            s += ", ";
+            ss << ", ";
         }
         ++i;
     }
-    s += postfix;
-    return s;
+    ss << postfix;
+    return ss.str();
+}
+
+// Convert the contents of a list/vector-like type to a string.
+// Return a string of the form
+//  {prefix + {(x, l[i]), (x+1, l[i+1]), ..., (x+n, l[n])} + postfix},
+//  where l[i] is the element in the given list and x starts at
+//  enumerate_start and increments for one at each element in the list.
+//  with enumerate_start=0, we have x=i.
+template<typename T>
+std::string enumerate(const T &l,
+                      std::size_t enumerate_start = 0,
+                      const std::string &prefix = "",
+                      const std::string &postfix = "",
+                      bool hex = false) {
+    std::stringstream ss;
+    ss << prefix;
+    std::size_t i = 0;
+    std::size_t ei = enumerate_start;
+    for (auto x : l) {
+        ss << "(" << ei << ",";
+        if (hex) {
+            ss << int_to_hexstring(x);
+        } else {
+            if constexpr (std::is_arithmetic_v<decltype(x)>) {
+                ss << std::to_string(x);
+            } else {
+                ss << std::string {x};
+            }
+        }
+
+        ss << ")";
+
+        if (i + 1 < l.size()) {
+            ss << ", ";
+        }
+
+        ++i;
+        ++ei;
+    }
+    ss << postfix;
+    return ss.str();
 }
 
 // Copy std::min(n, list.size()) elems out of list into a separate vector.
