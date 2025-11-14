@@ -129,7 +129,6 @@ CONFIGURE_TARGET(hash.crc)
 
 add_executable(hash.inet
     hash/inet_checksum.cxx
-    hash/inet_checksum_inputs.cxx
 )
 CONFIGURE_TARGET(hash.inet)
 

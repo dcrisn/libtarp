@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 #include <tarp/bits.hxx>
 #include <tarp/hash/checksum/inet.hxx>
@@ -60,11 +61,9 @@ static std::uint16_t inet_checksum_rfc(const std::uint8_t *buff,
     return cksum;
 }
 
-static std::uint16_t
-process_in_blocks(
-        tarp::hash::checksum::inetcksum_ctx &ctx,
-        const std::vector<std::uint8_t> &bytes,
-                  std::size_t blocksz){
+static std::uint16_t process_in_blocks(tarp::hash::checksum::inetcksum_ctx &ctx,
+                                       const std::vector<std::uint8_t> &bytes,
+                                       std::size_t blocksz) {
     // std::cerr << "Processing input of size " << bytes.size() << std::endl;
     std::size_t len = bytes.size();
     std::size_t offset = 0;
@@ -92,6 +91,7 @@ process_in_blocks(
     return cksum::inet::get_checksum(ctx);
 }
 
+#if 1
 // As per RFC1071, if a big endian machine and small endian
 // machine process the _same_ sequence of bytes hence being
 // interpreted differently based on the machine's endianness),
@@ -193,7 +193,6 @@ TEST_CASE("check hbo and nbo bytes produce same checksum") {
     }
 }
 
-#if 1
 // when you calculate the checksum over a span of bytes that INCLUDES
 // the checksum itself (e.g. at the receiver), you should get 0xffff.
 // RFC1071-1.3:
@@ -501,7 +500,213 @@ TEST_CASE("basic incremental checksum update") {
     // static assers that the input type is >= sizeof(u16), so it
     // will not compile.
 }
+#endif
 
+#if 1
+TEST_CASE("basic incremental checksum update -- buffer API") {
+    using namespace tarp::hash::checksum;
+
+    tarp::hash::checksum::inetcksum_ctx ctx, ctx2;
+
+    byte_vector buff {0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+    std::cerr << "#1\n";
+    inet::update_checksum(ctx, buff.data(), buff.size());
+    std::cerr << "#2\n";
+    auto cksum = inet::get_checksum(ctx);
+
+    // let's now say {0xc, 0xd} represents a u16 field
+    // we want to update to {0x8,0x8}
+    byte_vector change = {0x88, 0x88};
+    std::cerr << "#3\n";
+    inet::update_checksum(ctx, buff.data(), buff.size(), 2, 2, change.data());
+    std::cerr << "#4\n";
+    REQUIRE(inet::get_checksum(ctx) != cksum);
+
+    // check that the result is the same as if we caculated the
+    // checksum from scratch
+    byte_vector buff2 {0xaa, 0xbb, 0x88, 0x88, 0xee, 0xff};
+    std::cerr << "#5\n";
+    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    std::cerr << "#6\n";
+    REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
+
+    // now if we undo the change, we should get
+    // back the previous checksum. we use buff2 here,
+    // since that's the original buffer _with the change applied_,
+    // which we now want to undo.
+    change = {0xcc, 0xdd};
+    inet::update_checksum(ctx, buff2.data(), buff.size(), 2, 2, change.data());
+    REQUIRE(inet::get_checksum(ctx) == cksum);
+
+    // now let's trying updating a field that is u32:
+    // {cc,dd,ee,ff}
+    ctx = {};
+    inet::update_checksum(ctx, buff.data(), buff.size());
+    cksum = inet::get_checksum(ctx);
+    change = {0x11, 0x22, 0x33, 0x44};
+    inet::update_checksum(ctx, buff.data(), buff.size(), 2, 4, change.data());
+    REQUIRE(inet::get_checksum(ctx) != cksum);
+
+    // calculate from scratch
+    ctx2 = {};
+    buff2 = {0xaa, 0xbb, 0x11, 0x22, 0x33, 0x44};
+    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
+
+    // now if we undo the change, we should get
+    // back the previous checksum.
+    change = {0xcc, 0xdd, 0xee, 0xff};
+    inet::update_checksum(ctx, buff2.data(), buff2.size(), 2, 4, change.data());
+    REQUIRE(inet::get_checksum(ctx) == cksum);
+
+    //
+
+    // unlike the other API that takes actual integers in, this buffer
+    // based API works even if we start at an odd offset.
+    ctx = {};
+    inet::update_checksum(ctx, buff.data(), buff.size());
+    cksum = inet::get_checksum(ctx);
+    change = {0x11, 0x77};
+    inet::update_checksum(ctx, buff.data(), buff.size(), 1, 2, change.data());
+    REQUIRE(inet::get_checksum(ctx) != cksum);
+
+    // calculate from scratch
+    ctx2 = {};
+    buff2 = {0xaa, 0x11, 0x77, 0xdd, 0xee, 0xff};
+    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
+
+    // now if we undo the change, we should get
+    // back the previous checksum.
+    change = {0xbb, 0xcc};
+    inet::update_checksum(ctx, buff2.data(), buff2.size(), 1, 2, change.data());
+    REQUIRE(inet::get_checksum(ctx) == cksum);
+
+    //
+
+    // it also works if we update a single byte
+
+    // unlike the other API that takes actual integers in, this buffer
+    // based API works even if we start at an odd offset.
+    ctx = {};
+    inet::update_checksum(ctx, buff.data(), buff.size());
+    cksum = inet::get_checksum(ctx);
+    change = {0x35};
+    inet::update_checksum(ctx, buff.data(), buff.size(), 3, 1, change.data());
+    REQUIRE(inet::get_checksum(ctx) != cksum);
+
+    // calculate from scratch
+    ctx2 = {};
+    buff2 = {0xaa, 0xbb, 0xcc, 0x35, 0xee, 0xff};
+    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
+
+    // now if we undo the change, we should get
+    // back the previous checksum.
+    change = {0xdd};
+    inet::update_checksum(ctx, buff2.data(), buff2.size(), 3, 1, change.data());
+    REQUIRE(inet::get_checksum(ctx) == cksum);
+}
+#endif
+
+void check_buffer_based_incremental_update(const byte_vector &input,
+                                           byte_vector change,
+                                           std::size_t change_offset) {
+    using namespace tarp::hash::checksum;
+    inetcksum_ctx ctx1, ctx2, ctx3;
+    const std::size_t change_len = change.size();
+    
+    byte_vector buff2 = input;
+    std::copy_n(change.begin() , change.size(), buff2.begin()+change_offset);
+
+    std::cerr << "\n\nIncremental checksum update test: " << std::dec
+              << "change_offset=" << change_offset
+              << ", change_len=" << change_len << ", inputsz=" << input.size()
+              << "\n"
+              << "input=" << str::enumerate(input, 0, "[", "]", true)
+              << "\nbuff2=" << str::enumerate(buff2, 0, "[", "]", true)
+              << "\nchange=" << str::enumerate(change, 0, "[", "]", true);
+
+    std::cerr
+      << "\n------------------ calculating whole checksum on input buffer\n";
+    // calculate from scratch with original input
+    inet::update_checksum(ctx1, input.data(), input.size());
+    const auto cksum1 = inet::get_checksum(ctx1);
+
+    std::cerr
+      << "\n------------------ calculating whole checksum on changed buffer\n";
+    // calculate from scratch with changed overlaid
+    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    const auto cksum2 = inet::get_checksum(ctx2);
+
+    std::cerr << "\n------------------ incremental checksum update\n";
+    // now use the incremental update method
+    // start from the original cksum state;
+    ctx3 = ctx1;
+    inet::update_checksum(ctx3,
+                          input.data(),
+                          input.size(),
+                          change_offset,
+                          change_len,
+                          change.data());
+    const auto cksum3 = inet::get_checksum(ctx3);
+
+    // we get the same result when using incremental update method
+    // as when we calculate the entire checksum
+    REQUIRE(cksum3 == cksum2);
+
+    // now if we undo the change, we should get
+    // back the previous checksum.
+    change.resize(change_len);
+    std::copy_n(input.begin() + change_offset, change_len, change.begin());
+    inet::update_checksum(ctx3,
+                          buff2.data(),
+                          buff2.size(),
+                          change_offset,
+                          change_len,
+                          change.data());
+    REQUIRE(inet::get_checksum(ctx3) == cksum1);
+}
+
+TEST_CASE("incremental update, buffer api, misc tests") {
+    using namespace tarp::hash::checksum;
+    inetcksum_ctx ctx1, ctx2, ctx3;
+    constexpr std::size_t change_offset = 37;
+    //constexpr std::size_t change_len = 19;
+    //constexpr std::size_t buffersz = 86;
+
+    byte_vector input = {
+      114, 247, 55,  45,  117, 129, 89,  103, 212, 246, 118, 72,  208, 78,  50,
+      100, 134, 14,  249, 246, 77,  221, 198, 226, 15,  168, 178, 91,  53,  16,
+      19,  189, 146, 116, 27,  143, 24,  178, 44,  197, 19,  127, 218, 110, 169,
+      54,  146, 187, 138, 191, 81,  234, 169, 92,  221, 103, 185, 91,  156, 127,
+      184, 141, 51,  140, 217, 72,  94,  169, 68,  206, 91,  231, 88,  201, 148,
+      160, 202, 50,  193, 132, 78,  230, 236, 219, 227, 231};
+
+    byte_vector change = {168,
+                          43,
+                          77,
+                          52,
+                          24,
+                          254,
+                          26,
+                          188,
+                          59,
+                          254,
+                          31,
+                          119,
+                          203,
+                          133,
+                          15,
+                          34,
+                          1,
+                          248,
+                          191};
+
+    check_buffer_based_incremental_update(input, change, change_offset);
+}
+
+#if 1
 TEST_CASE("incremental checksum update fuzz") {
     using namespace tarp::hash::checksum;
 
@@ -510,11 +715,19 @@ TEST_CASE("incremental checksum update fuzz") {
     for (unsigned i = 0; i < N; ++i) {
         const auto fieldsz = rd::pick<unsigned>({2, 4, 8});
         const auto buffsz = rd::pick<std::size_t>(fieldsz, 121);
-        auto input = io::get_random_bytes(buffsz);
+        const auto input = io::get_random_bytes(buffsz);
         auto field_offset = rd::pick<std::size_t>(0, buffsz - fieldsz);
 
-        // if not a multiple of two, it won't work,
-        // so we have to adjust
+        // include edge cases as well (0, buffsz)
+        const auto change_offset = rd::pick<std::size_t>(0, buffsz);
+        const auto change_len = rd::pick<std::size_t>(0, buffsz - change_offset);
+        byte_vector change;
+
+        // for the integer-based incremental update API,
+        // if not a multiple of two it won't work,
+        // so we have to adjust;
+        // NOTE: for the buffer-based incremental update API,
+        // no issues though.
         if (field_offset % 2) {
             if (field_offset + fieldsz < buffsz) {
                 field_offset += 1;  // Align forward if there's room
@@ -538,28 +751,39 @@ TEST_CASE("incremental checksum update fuzz") {
         std::uint64_t oldu64 = 0, newu64 = 0;
 
         // initial checksum
-        inetcksum_ctx ctx1, ctx2;
+        inetcksum_ctx ctx1, ctx2, ctx3;
         inet::update_checksum(ctx1, input.data(), input.size());
         auto cksum = inet::get_checksum(ctx1);
         auto buff2 = input;
 
         std::cerr << "initial checksum: " << std::hex << cksum << std::endl;
-
-        // now update field
-
+        std::cerr << "----- incremental update begin\n";
+        // now update field;
+        // NOTE: we also populate the 'change' vector so we run
+        // a check for the buffer-based API as well.
         if (fieldsz == 2) {
             set(oldu16, newu16);
             std::memcpy(buff2.data() + field_offset, &newu16, 2);
             inet::update_checksum<false>(ctx1, oldu16, newu16);
+            // buffer API
+            change.resize(2);
+            std::memcpy(change.data(), &newu16, 2);
         } else if (fieldsz == 4) {
             set(oldu32, newu32);
             std::memcpy(buff2.data() + field_offset, &newu32, 4);
             inet::update_checksum<false>(ctx1, oldu32, newu32);
+            // buffer API
+            change.resize(4);
+            std::memcpy(change.data(), &newu32, 4);
         } else {
             set(oldu64, newu64);
             std::memcpy(buff2.data() + field_offset, &newu64, 8);
             inet::update_checksum<false>(ctx1, oldu64, newu64);
+            // buffer API
+            change.resize(8);
+            std::memcpy(change.data(), &newu64, 8);
         }
+        std::cerr << "----- incremental update end\n";
 
         // the checksum obtained via incremental update should be
         // the same as if we computed the checksum from scratch
@@ -569,6 +793,22 @@ TEST_CASE("incremental checksum update fuzz") {
         std::cerr << "inccksum=" << std::hex << inccksum << std::endl;
         std::cerr << "cksum2=" << std::hex << cksum2 << std::endl;
         REQUIRE(cksum2 == inet::get_checksum(ctx1));
+
+        // also use the buffer API to make sure we get the same result
+        check_buffer_based_incremental_update(input, change, field_offset);
+        // first calculate the initial checksum, before
+        // applying incremental change
+        inet::update_checksum(ctx3, input.data(), input.size());
+        // now apply change
+        inet::update_checksum(ctx3,
+                              input.data(),
+                              input.size(),
+                              field_offset,
+                              fieldsz,
+                              change.data());
+        const auto cksum3 = inet::get_checksum(ctx3);
+        std::cerr << "------ buffer-based API CHECK end\n";
+        REQUIRE(cksum3 == cksum2);
 
         // now if we undo the change, we should get
         // back the previous checksum. NOTE: if new val
@@ -583,6 +823,21 @@ TEST_CASE("incremental checksum update fuzz") {
         }
 
         REQUIRE(inet::get_checksum(ctx1) == cksum);
+
+        //------------------------------------------
+        // now also do a completely separate check for the buffer-based
+        // API alone; particularly since here we allow for lengths
+        // that are not a multiple of sizeof(u16), that are unaligned,
+        // that can be shorted than sizeof(u16) etc.
+        std::cerr << "------------------ CHECK with change_offset=" << std::dec
+                  << change_offset << " change_len=" << change_len
+                  << " buffersz=" << buffsz << std::endl;
+        change.resize(change_len);
+        for (auto &byte : change) {
+            byte = rd::pick<std::uint8_t>(0, 255);
+        }
+        check_buffer_based_incremental_update(input, change, change_offset);
+        //------------------------------------------
     }
 }
 #endif
