@@ -15,7 +15,7 @@
 #include <cstring>
 
 #include <tarp/bits.hxx>
-#include <tarp/math.h>
+#include <tarp/math.hxx>
 
 namespace tarp {
 namespace utils {

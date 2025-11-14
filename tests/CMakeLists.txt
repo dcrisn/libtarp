@@ -144,6 +144,11 @@ add_executable(heap
 )
 CONFIGURE_TARGET(heap)
 
+add_executable(math
+    math/tests.cxx
+)
+CONFIGURE_TARGET(math)
+
 add_executable(iniparse
     iniparse/tests.c
 )

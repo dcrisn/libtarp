@@ -1,13 +1,12 @@
 #pragma once
 
-#include <functional>
 #include <string>
 #include <stdexcept>
 
 #include <cstdint>
 #include <cmath>
 
-#include <tarp/math.h>
+#include <tarp/math.hxx>
 
 /*
  * This header defines various functions and classes that implement, among
