@@ -89,9 +89,6 @@ uint32_t fletcher64(const uint16_t *data, size_t len) {
 
 };  // namespace reference
 
-void test_random() {
-}
-
 template<typename cb_t, typename T>
 std::pair<bool, T> test(cb_t f, T expected_result, const std::string &input) {
     std::vector<std::uint8_t> bytes;
@@ -233,12 +230,12 @@ TEST_CASE("basics") {
         }
     }
 
-    test_random();
-
     std::cerr << "\n"
               << "PASSED: " << NUM_PASSED << "/" << NUM_TESTS << std::endl;
     REQUIRE(NUM_PASSED == NUM_TESTS);
 }
+
+
 
 int main(int argc, const char **argv) {
     doctest::Context ctx;
