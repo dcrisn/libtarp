@@ -318,7 +318,7 @@ install(
     "${TARP_PKGCONFIG_INSTALLATION_DIR}"
     )
 
-add_subdirectory(cmake)
+include(cmake/dependencies.cmake)
 
 # tests
 if (BUILD_TESTS)
