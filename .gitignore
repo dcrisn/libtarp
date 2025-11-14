@@ -5,6 +5,8 @@
 **/tags*
 tags*
 build/*
+buildsan/*
 staging*
 cross.cmake
 .cache*
+external
