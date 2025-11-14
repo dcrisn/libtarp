@@ -102,7 +102,7 @@ std::enable_if_t<std::is_enum_v<T>, T> to_hbo(T value) {
 
 // big endian to little endian
 template<typename T>
-T be2le(T value){
+T be2le(T value) {
     return to_hbo(value);
 }
 
@@ -133,8 +133,18 @@ std::enable_if_t<std::is_enum_v<T>, T> to_nbo(T value) {
 
 // little endian to big-endian
 template<typename T>
-T le2be(T value){
-    return  to_nbo(value);
+T le2be(T value) {
+    return to_nbo(value);
+}
+
+// big endian to little endian
+template<typename T>
+T byteswap(T value) {
+    // note it does not matter if we call
+    // be2le or le2be; the main thing is
+    // the bytes are swapped to the opposite
+    // order.
+    return be2le(value);
 }
 
 // C++ type-safe rewrites of the equivalent implementations in tarp/bits.h.
