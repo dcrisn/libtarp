@@ -190,7 +190,7 @@ template<typename T>
 std::pair<std::optional<T>, std::string> hexstring_to_uint(const char *s);
 
 template<typename T>
-std::string int_to_hexstring(T i, std::size_t ndigits = sizeof(T)*2);
+std::string int_to_hexstring(T i, std::size_t ndigits = sizeof(T) * 2);
 
 // Convert the byte array to a hexstring with no prefix. e.g. {1,255} will
 // become {01ff}.
@@ -464,6 +464,31 @@ std::string to_string(const T &l,
         }
         ++i;
     }
+    ss << postfix;
+    return ss.str();
+}
+
+// Convert a buffer to a string of bytes
+inline std::string to_string(const std::uint8_t *buff,
+                             std::size_t bufflen,
+                             const std::string &prefix = "",
+                             const std::string &postfix = "",
+                             bool hex = false) {
+    std::stringstream ss;
+    ss << prefix;
+    for (std::size_t i = 0; i < bufflen; ++i) {
+        const auto byte = buff[i];
+        if (hex) {
+            ss << int_to_hexstring(byte);
+        } else {
+            ss << std::to_string(static_cast<unsigned>(byte));
+        }
+
+        if (i + 1 < bufflen) {
+            ss << ", ";
+        }
+    }
+
     ss << postfix;
     return ss.str();
 }
