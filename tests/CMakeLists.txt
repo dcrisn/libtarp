@@ -122,6 +122,11 @@ add_executable(hash.fletcher
 )
 CONFIGURE_TARGET(hash.fletcher)
 
+add_executable(hash.adler32
+    hash/adler32.cxx
+)
+CONFIGURE_TARGET(hash.adler32)
+
 add_executable(hash.crc
     hash/crc.cxx
 )

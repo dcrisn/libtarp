@@ -146,6 +146,7 @@ add_library(libtarp_objects OBJECT
     src/misc/math.c
     src/misc/process.c
     src/misc/timeutils.c
+    src/misc/timeutils.cxx
     src/misc/threading.cxx
     src/misc/sched.cxx
     src/misc/string_utils.cxx
@@ -159,6 +160,7 @@ add_library(libtarp_objects OBJECT
     src/hash/md5/md5sum.c
     src/hash/checksum.cxx
     src/hash/inet_checksum.cxx
+    src/hash/adler32.cxx
     src/hash/crc/crc.cxx
     src/mods/avltree/avl.c
     src/mods/bst/bst.c

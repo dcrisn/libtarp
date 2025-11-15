@@ -117,7 +117,6 @@ namespace fletcher {
 
 namespace impl {
 
-
 // Find the maximum number of additions (inclusive)
 // that can be performed before overflow occurs.
 template<typename word, typename T>
@@ -159,7 +158,7 @@ inline constexpr T find_max_num_additions_without_overflow() {
     //     ....
     //     sum2 = sum1 * (1 + 2 + 3 + ... + n)
     //
-    // The sum 1 + 2 + 3 + ... + n is the triangular number formula:
+    // The sum   1 + 2 + 3 + ... + n is the triangular number formula:
     //     n * (n+1) / 2
     //
     // So the worst case for sum2 after n additions is:
