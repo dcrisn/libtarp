@@ -11,6 +11,7 @@
 #include <tarp/error.h>
 #include <tarp/log.h>
 #include <tarp/timeutils.h>
+#include <tarp/timeutils.hxx>
 
 #include <tarp/event.h>
 #include <tarp/event.hxx>
@@ -18,6 +19,7 @@
 
 using namespace std;
 using namespace tarp;
+using namespace tarp::time_utils;
 
 /* ======================================================
  * ========== Shims for use with the C api ==============
