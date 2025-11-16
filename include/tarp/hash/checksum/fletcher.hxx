@@ -188,9 +188,43 @@ static inline void update(context_t &ctx, typename context_t::word value) {
     ctx.sum1 = (ctx.sum1 + value);
     ctx.sum2 = (ctx.sum2 + ctx.sum1);
 
-    std::cerr << "=> adding value=" << static_cast<unsigned>(value)
-              << " sum1=" << ctx.sum1 << ", sum2=" << ctx.sum2 << std::endl;
+    // std::cerr << "=> adding value=" << static_cast<unsigned>(value)
+    //           << " sum1=" << ctx.sum1 << ", sum2=" << ctx.sum2 << std::endl;
     ctx.cnt++;
+}
+
+template<typename context_t>
+static inline void subtract(context_t &ctx, typename context_t::word value) {
+    constexpr auto M = context_t::modulus;
+
+    ctx.sum1 %= M;
+    ctx.sum2 %= M;
+
+    // undo the last sum1+sum2
+    if (ctx.sum2 >= ctx.sum1) {
+        ctx.sum2 -= ctx.sum1;
+    } else {
+        ctx.sum2 = (ctx.sum2 + M - ctx.sum1) % M;
+    }
+
+    // undo the last sum1 += value
+
+    // if sum1 > value, we can perform the subtraction
+    // directly with no risk of underflow
+    if (ctx.sum1 > value) {
+        ctx.sum1 -= value;
+    } else {
+        // else it means sum1 is below word::max, hence below
+        // the modulus; so if we add a whole modulus to it,
+        // we'll be between (modulus, 2*modulus), and in
+        // that specific case subtraction is the same as modulo.
+        ctx.sum1 = ctx.sum1 + context_t::modulus - value;
+        if (ctx.sum1 >= context_t::modulus) {
+            ctx.sum1 -= context_t::modulus;
+        }
+    }
+
+    ctx.cnt = 0;
 }
 
 // Calculate and return the fletcherX checksum from the
@@ -204,19 +238,19 @@ typename context_t::checksum_t get_checksum(context_t &ctx) {
     ctx.sum2 %= context_t::modulus;
     ctx.cnt = 0;
 
-    std::cerr << "reduction: ctx.sum1=" << ctx.sum1 << ", ctx.sum2=" << ctx.sum2
-              << " modulus=" << static_cast<std::uint64_t>(context_t::modulus)
-              << std::endl;
-
+    // std::cerr << "reduction: ctx.sum1=" << ctx.sum1 << ", ctx.sum2=" <<
+    // ctx.sum2
+    //           << " modulus=" <<
+    //           static_cast<std::uint64_t>(context_t::modulus)
+    //           << std::endl;
+    //
     checksum_t checksum = ctx.sum1 | (ctx.sum2 << tarp::bits::width_v<word>);
     return checksum;
 }
 
 // Process a block of data and update the current checksum
 // value based on it. len need not be a multiple of sizeof(T).
-//
-// If swap=true, then the bytes are swapped to reverse their endianness.
-template<bool swap, typename context_t>
+template<typename context_t>
 void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
     using word_t = typename context_t::word;
 
@@ -232,13 +266,9 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
             ctx.deficit -= bufflen;
             std::memcpy(&newval, ctx.joint, sizeof(word_t) - ctx.deficit);
 
-            if constexpr (swap) {
-                oldval = byteswap(oldval);
-                newval = byteswap(newval);
-            }
-
-            // subtract old contribution
-            update(ctx, -oldval);
+            // std::cerr << "--- deficit case 1\n";
+            //  subtract old contribution
+            subtract(ctx, oldval);
             // add new contribution
             update(ctx, newval);
             return;
@@ -250,12 +280,8 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
         std::memcpy(ctx.joint + l, buff, ctx.deficit);
         std::memcpy(&newval, ctx.joint, sizeof(word_t));
 
-        if constexpr (swap) {
-            oldval = byteswap(oldval);
-            newval = byteswap(newval);
-        }
-
-        update(ctx, -oldval);
+        // std::cerr << "--- deficit case 2\n";
+        subtract(ctx, oldval);
         update(ctx, newval);
 
         buff += ctx.deficit;
@@ -271,7 +297,7 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
     for (std::size_t i = 0; i < nwords; ++i) {
         word_t val;
         std::memcpy(&val, buff, sizeof(val));
-        if constexpr (swap) val = byteswap(val);
+        // std::cerr << "--- main case \n";
         update(ctx, val);
         bufflen -= sizeof(word_t);
         buff += sizeof(word_t);
@@ -284,7 +310,8 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
     // trailing bytes (< sizeof(word)) ?
     word_t val = 0;
     std::memcpy(&val, buff, bufflen);
-    if constexpr (swap) val = byteswap(val);
+
+    // std::cerr << "--- last trailing case \n";
     update(ctx, val);
 
     std::memcpy(ctx.joint, buff, bufflen);
@@ -299,6 +326,11 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
 }  // namespace impl
 
 namespace fletcher16 {
+inline void
+update(fletcher16_ctx &ctx, const std::uint8_t *buff, std::size_t bufflen) {
+    impl::update(ctx, buff, bufflen);
+}
+
 inline std::uint16_t get_checksum(fletcher16_ctx &ctx) {
     return impl::get_checksum(ctx);
 }
@@ -306,12 +338,22 @@ inline std::uint16_t get_checksum(fletcher16_ctx &ctx) {
 
 namespace fletcher32 {
 
+inline void
+update(fletcher32_ctx &ctx, const std::uint8_t *buff, std::size_t bufflen) {
+    impl::update(ctx, buff, bufflen);
+}
+
 inline std::uint32_t get_checksum(fletcher32_ctx &ctx) {
     return impl::get_checksum(ctx);
 }
 }  // namespace fletcher32
 
 namespace fletcher64 {
+inline void
+update(fletcher64_ctx &ctx, const std::uint8_t *buff, std::size_t bufflen) {
+    return impl::update(ctx, buff, bufflen);
+}
+
 inline std::uint64_t get_checksum(fletcher64_ctx &ctx) {
     return impl::get_checksum(ctx);
 }
@@ -329,24 +371,21 @@ inline std::uint64_t get_checksum(fletcher64_ctx &ctx) {
 // network byte order and the implementation will internally
 // convert the bytes to host-byte-order as appropriate for
 // internal calculations.
-template<bool endian_swap>
-std::uint16_t fletcher16(const std::uint8_t *data, std::size_t len) {
+inline std::uint16_t fletcher16(const std::uint8_t *data, std::size_t len) {
     fletcher16_ctx ctx;
-    fletcher::impl::update<endian_swap>(ctx, data, len);
+    fletcher::impl::update(ctx, data, len);
     return fletcher::fletcher16::get_checksum(ctx);
 }
 
-template<bool endian_swap>
-std::uint32_t fletcher32(const std::uint8_t *data, std::size_t len) {
+inline std::uint32_t fletcher32(const std::uint8_t *data, std::size_t len) {
     fletcher32_ctx ctx;
-    fletcher::impl::update<endian_swap>(ctx, data, len);
+    fletcher::impl::update(ctx, data, len);
     return fletcher::fletcher32::get_checksum(ctx);
 }
 
-template<bool endian_swap>
-std::uint64_t fletcher64(const std::uint8_t *data, std::size_t len) {
+inline std::uint64_t fletcher64(const std::uint8_t *data, std::size_t len) {
     fletcher64_ctx ctx;
-    fletcher::impl::update<endian_swap>(ctx, data, len);
+    fletcher::impl::update(ctx, data, len);
     return fletcher::fletcher64::get_checksum(ctx);
 }
 
