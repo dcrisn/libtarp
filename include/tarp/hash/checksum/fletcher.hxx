@@ -277,7 +277,12 @@ void update(context_t &ctx, const std::uint8_t *buff, std::size_t bufflen) {
 
     if (ctx.deficit > 0 && bufflen > 0) {
         word_t oldval = 0, newval = 0;
-        std::size_t l = sizeof(word_t) - ctx.deficit;
+        // This is sufficient, because the logic ensure underlow will
+        // never happen, but the compiler emits a warning:
+        // const std::size_t l = sizeof(word_t) - ctx.deficit;
+        // Therefore:
+        const std::size_t l =
+          sizeof(word_t) - std::min<std::size_t>(sizeof(word_t), ctx.deficit);
 
         // if still not enough bytes to form a word, then remain
         // in deficit state, but consume these new bytes.
