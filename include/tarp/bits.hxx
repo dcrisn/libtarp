@@ -6,6 +6,7 @@
 
 // c stdlib
 #include <cstdint>
+#include <cstring>
 
 namespace tarp {
 namespace bits {

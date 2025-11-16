@@ -1,5 +1,7 @@
 #include <tarp/hash/checksum/inet.hxx>
 
+#include <stdexcept>
+
 namespace tarp {
 namespace hash {
 namespace checksum {
