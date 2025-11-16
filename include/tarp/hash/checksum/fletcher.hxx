@@ -194,23 +194,43 @@ static inline void update(context_t &ctx, typename context_t::word value) {
 }
 
 template<typename context_t>
-static inline void subtract(context_t &ctx, typename context_t::word value) {
+inline void subtract(context_t &ctx, typename context_t::word value) {
     constexpr auto M = context_t::modulus;
 
-    ctx.sum1 %= M;
-    ctx.sum2 %= M;
+    // 2*M
+    static constexpr decltype(M) twoM = M << 1;
+
+    // The following perform subtraction instead of modulo
+    // where possible; this will commonly be the case if
+    // subtract() is called continuously (for example,
+    // to process byte-at-a-time, even where the word
+    // is u16 (fletcher32) or u32 (fletcher64));
+    // in fact, because this function is only ever called
+    // to subtract the contribution of a _partial_ word
+    // (i.e. we by definition do _not_ have a full word
+    // when this function is called), then the % will
+    // never be used! (but leaving it in for safety).
+    // ---------
+    if (ctx.sum1 >= M) {
+        if (ctx.sum1 < twoM) ctx.sum1 -= M;
+        else ctx.sum1 %= M;
+    }
+
+    if (ctx.sum2 >= M) {
+        if (ctx.sum2 < twoM) ctx.sum2 -= M;
+        else ctx.sum2 %= M;
+    }
+    // ---------
 
     // undo the last sum1+sum2
     if (ctx.sum2 >= ctx.sum1) {
         ctx.sum2 -= ctx.sum1;
     } else {
-        ctx.sum2 = (ctx.sum2 + M - ctx.sum1) % M;
+        ctx.sum2 = ctx.sum2 + M - ctx.sum1;
+        if (ctx.sum2 >= M) ctx.sum2 -= M;
     }
 
-    // undo the last sum1 += value
-
-    // if sum1 > value, we can perform the subtraction
-    // directly with no risk of underflow
+    // undo the last 'sum1 += value'
     if (ctx.sum1 > value) {
         ctx.sum1 -= value;
     } else {
@@ -218,12 +238,13 @@ static inline void subtract(context_t &ctx, typename context_t::word value) {
         // the modulus; so if we add a whole modulus to it,
         // we'll be between (modulus, 2*modulus), and in
         // that specific case subtraction is the same as modulo.
-        ctx.sum1 = ctx.sum1 + context_t::modulus - value;
-        if (ctx.sum1 >= context_t::modulus) {
-            ctx.sum1 -= context_t::modulus;
-        }
+        ctx.sum1 = ctx.sum1 + M - value;
+        if (ctx.sum1 >= M) ctx.sum1 -= M;
     }
 
+    // when we reach here sum1 and sum2 are < M
+    // (we will've performed a % or equivalent reduction);
+    // hence we can reset the counter to 0.
     ctx.cnt = 0;
 }
 
