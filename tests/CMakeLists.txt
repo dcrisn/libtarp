@@ -186,4 +186,8 @@ add_executable(signals
 )
 CONFIGURE_TARGET(signals)
 
+add_executable(word_iterator
+    word_iterator/main.cxx
+)
+CONFIGURE_TARGET(word_iterator)
 
