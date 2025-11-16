@@ -6,7 +6,6 @@
 
 // c stdlib
 #include <cstdint>
-#include <iostream>
 
 namespace tarp {
 namespace bits {
@@ -216,6 +215,20 @@ template<typename T>
 T get_bit(T target, T shift) {
     return (target >> shift) & 0x1;
 }
+
+// Utility function to check host endianness at _runtime_;
+// NOTE: this is obsolete starting with c++20 where
+// there's std::endian::native for compile-time checks.
+inline bool is_little_endian() {
+    std::uint16_t val = 0x01;
+    std::uint8_t arr[sizeof(std::uint16_t)];
+    std::memcpy(arr, &val, sizeof(std::uint16_t));
+
+    // least significant byte first
+    return arr[0] == 0x01;
+}
+
+
 
 }  // namespace bits
 }  // namespace tarp
