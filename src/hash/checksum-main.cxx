@@ -1,8 +1,9 @@
 #include <ios>
 #include <tarp/bits.hxx>
 #include <tarp/cxxcommon.hxx>
-#include <tarp/hash/checksum/inet.hxx>
+#include <tarp/hash/checksum/adler32.hxx>
 #include <tarp/hash/checksum/fletcher.hxx>
+#include <tarp/hash/checksum/inet.hxx>
 #include <tarp/hash/crc/crc.hxx>
 #include <tarp/string_utils.hxx>
 
@@ -27,6 +28,8 @@ namespace keys {
 static inline constexpr auto fletcher16 = "fletcher16";
 static inline constexpr auto fletcher32 = "fletcher32";
 static inline constexpr auto fletcher64 = "fletcher64";
+static inline constexpr auto inet4 = "inet4";
+static inline constexpr auto adler32 = "adler32";
 static inline constexpr auto crc8blt = "crc8-bluetooth";
 static inline constexpr auto crc16_modbus = "crc16-modbus";
 static inline constexpr auto crc16_kermit = "crc16-kermit";
@@ -83,18 +86,12 @@ T print_fletcher_checksum_of_file(fileread_func &&process_file,
                                   checksum_getter_t &&checksum_getter) {
     T checksum = 0;
     context_t ctx;
-    std::uint32_t remaining = 0;
-    std::uint32_t next_idx = 0;
 
     auto process_block = [&](auto *buffer, auto len) {
-        next_idx = data_block_processor(ctx, buffer, len, false);
-        remaining = len - next_idx;
+        data_block_processor(ctx, buffer, len);
     };
 
     auto on_finished = [&](auto *buffer) {
-        if (remaining > 0) {
-            data_block_processor(ctx, buffer + next_idx, remaining, true);
-        }
         checksum = checksum_getter(ctx);
     };
 
@@ -127,6 +124,8 @@ void print_help([[maybe_unused]] const char **argv) {
     std::cerr << "   --fletcher16         16-bit fletcher checksum\n";
     std::cerr << "   --fletcher32         32-bit fletcher checksum\n";
     std::cerr << "   --fletcher64         64-bit fletcher checksum\n";
+    std::cerr << "   --adler32            adler32 checksum\n";
+    std::cerr << "   --inet4              ipv4 [and tcp] header checksum \n";
     std::cerr << "   --crc8-bluetooth     CRC-8/BLUETOOH\n";
     std::cerr << "   --crc16-modbus       CRC-16/MODBUS\n";
     std::cerr << "   --crc16-kermit       CRC-16/KERMIT\n";
@@ -144,6 +143,11 @@ void print_help([[maybe_unused]] const char **argv) {
 
 
 #if 0
+// --------------------------
+// ignore, just a convenient place
+// to put some crc lookup autogen code;
+// unrelated to this program!
+// --------------------------
 // code to generate and print a lookup table.
     std::array<std::uint32_t, 256> t;
     tarp::hash::crc::make_lookup_table(tarp::hash::crc::params::crc32c::G,
@@ -160,6 +164,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char **argv) {
     using namespace tarp::utils;
     using namespace std::string_literals;
 
+#if 0
+    // ----------------------
+    //  ignore, just used for testing; unrelated to this program!
+    // ----------------------
     std::vector<std::uint8_t> input = {0x61, 0x62, 0x63};
     std::cerr << "input size: " << input.size() << std::endl;
     auto cksum = tarp::hash::crc::bitaat::crc32c(input.data(), input.size());
@@ -170,7 +178,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char **argv) {
     memcpy(input.data() + (input.size() - 4), &cksum, sizeof(cksum));
     cksum = tarp::hash::crc::bitaat::crc32_cksum(input.data(), input.size());
     std::cerr << "cksum is " << std::hex << cksum << std::endl;
-#if 0
+#endif
+
+#if 1
     if (argc < 2 || argc > 3) {
         print_help(argv);
         return -1;
@@ -250,19 +260,32 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char **argv) {
         using namespace checksum;
         using namespace checksum::fletcher::fletcher16;
         print_fletcher_checksum_of_file<std::uint16_t, fletcher16_ctx>(
-          process_file, process_block<false>, get_checksum);
+          process_file, update, get_checksum);
 
     } else if (algo == keys::fletcher32) {
         using namespace checksum;
         using namespace checksum::fletcher::fletcher32;
         print_fletcher_checksum_of_file<std::uint32_t, fletcher32_ctx>(
-          process_file, process_block<false>, get_checksum);
+          process_file, update, get_checksum);
 
     } else if (algo == keys::fletcher64) {
         using namespace checksum;
         using namespace checksum::fletcher::fletcher64;
         print_fletcher_checksum_of_file<std::uint64_t, fletcher64_ctx>(
-          process_file, process_block<false>, get_checksum);
+          process_file, update, get_checksum);
+    }
+
+    else if (algo == keys::adler32) {
+        using namespace checksum;
+        using namespace checksum::adler;
+        print_fletcher_checksum_of_file<std::uint32_t, adler32_ctx>(
+          process_file, update, get_checksum);
+    }
+
+    else if (algo == keys::inet4) {
+        using namespace checksum;
+        print_fletcher_checksum_of_file<std::uint16_t, inetcksum_ctx>(
+          process_file, inet::update, inet::get_checksum);
     }
 
     else if (algo == keys::crc8blt) {
