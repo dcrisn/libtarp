@@ -66,15 +66,14 @@ namespace inet {
 
 // Update the checksum's state with new bytes from
 // the given byte span.
-inline void update_checksum(inetcksum_ctx &ctx,
-                            const std::uint8_t *buff,
-                            std::size_t bufflen) {
-    // Each call to update_checksum() assumes it is
+inline void
+update(inetcksum_ctx &ctx, const std::uint8_t *buff, std::size_t bufflen) {
+    // Each call to update() assumes it is
     // the last call. And so if the buffer fed to it
     // is not a multiple of sizeof(u16)=2, then we're
     // left with 1 single byte at the end that is added
     // to the running sum as a u8 (as per the RFC1071 code).
-    // However, update_checksum may then be invoked again
+    // However, update may then be invoked again
     // (with a non-zero buffer).
     // In that case we have the following situation:
     // a b  c d  e
@@ -215,15 +214,10 @@ inline void update_checksum(inetcksum_ctx &ctx,
 // a very error prone task.
 // ----------------------------------------------
 // ----------------------------------------------
-template<bool to_hbo, typename T>
-inline void update_checksum(inetcksum_ctx &ctx, T old_value, T new_value) {
+template<typename T>
+inline void update_change(inetcksum_ctx &ctx, T old_value, T new_value) {
     static_assert(std::is_unsigned_v<T>);
     static_assert(sizeof(T) >= sizeof(std::uint16_t));
-
-    if constexpr (to_hbo) {
-        old_value = bits::to_hbo(old_value);
-        new_value = bits::to_hbo(new_value);
-    }
 
     const auto add = [&ctx](T value) {
         constexpr std::size_t u16sz = sizeof(std::uint16_t);
@@ -271,12 +265,12 @@ inline void update_checksum(inetcksum_ctx &ctx, T old_value, T new_value) {
 // buff[change_offset] ... buff[change_offset+change_len].
 //
 // change_offset+change_len must be <= bufflen.
-void update_checksum(inetcksum_ctx &ctx,
-                     const std::uint8_t *buff,
-                     std::size_t bufflen,
-                     std::size_t change_offset,
-                     std::size_t change_len,
-                     const std::uint8_t *change);
+void update_change(inetcksum_ctx &ctx,
+            const std::uint8_t *buff,
+            std::size_t bufflen,
+            std::size_t change_offset,
+            std::size_t change_len,
+            const std::uint8_t *change);
 
 inline std::uint16_t fold_sum(std::uint32_t sum) {
     // avoid needless computation
@@ -296,7 +290,7 @@ inline std::uint16_t fold_sum(std::uint32_t sum) {
 // and return it.
 inline std::uint16_t get_checksum(inetcksum_ctx &ctx) {
     // we calculate on temporary variable, not changing
-    // context variable, since update_checksum()
+    // context variable, since update()
     // could be called again!
     auto sum = fold_sum(ctx.sum);
 
@@ -313,7 +307,7 @@ inline std::uint16_t process_block(inetcksum_ctx &ctx,
                                    const std::uint8_t *data,
                                    std::size_t len,
                                    bool last_block) {
-    update_checksum(ctx, data, len);
+    update(ctx, data, len);
     if (last_block) {
         return get_checksum(ctx);
     }
@@ -322,7 +316,7 @@ inline std::uint16_t process_block(inetcksum_ctx &ctx,
 
 inline std::uint16_t process_all(const std::uint8_t *data, std::size_t len) {
     inetcksum_ctx ctx;
-    update_checksum(ctx, data, len);
+    update(ctx, data, len);
     return get_checksum(ctx);
 }
 }  // namespace inet

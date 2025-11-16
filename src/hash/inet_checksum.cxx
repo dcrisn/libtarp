@@ -6,7 +6,7 @@ namespace tarp {
 namespace hash {
 namespace checksum {
 namespace inet {
-void update_checksum(inetcksum_ctx &ctx,
+void update_change(inetcksum_ctx &ctx,
                      const std::uint8_t *buff,
                      std::size_t bufflen,
                      std::size_t change_offset,

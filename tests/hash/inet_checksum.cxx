@@ -75,14 +75,14 @@ static std::uint16_t process_in_blocks(tarp::hash::checksum::inetcksum_ctx &ctx,
         std::cerr << "processing block of size " << std::dec << blocksz
                   << " at offset " << offset << " ctx.sum=" << ctx.sum
                   << std::endl;
-        cksum::inet::update_checksum(ctx, bytes.data() + offset, blocksz);
+        cksum::inet::update(ctx, bytes.data() + offset, blocksz);
         len -= blocksz;
         offset += blocksz;
     }
 
     // if len not a multiple of the blocksz, we have one pass left.
     if (len > 0) {
-        cksum::inet::update_checksum(ctx, bytes.data() + offset, len);
+        cksum::inet::update(ctx, bytes.data() + offset, len);
         std::cerr << "processing block of size " << std::dec << len
                   << " at offset " << offset << " ctx.sum=" << ctx.sum
                   << std::endl;
@@ -164,7 +164,7 @@ TEST_CASE("check hbo and nbo bytes produce same checksum") {
         if (use_blocked(rng)) {
             a = process_in_blocks(hboctx, hboin, pick_blocksize(rng));
         } else {
-            tarp::hash::checksum::inet::update_checksum(
+            tarp::hash::checksum::inet::update(
               hboctx, hboin.data(), hboin.size());
             a = tarp::hash::checksum::inet::get_checksum(hboctx);
         }
@@ -174,7 +174,7 @@ TEST_CASE("check hbo and nbo bytes produce same checksum") {
             b = process_in_blocks(nboctx, nboin, pick_blocksize(rng));
         } else {
             std::cerr << "updating checksum\n";
-            tarp::hash::checksum::inet::update_checksum(
+            tarp::hash::checksum::inet::update(
               nboctx, nboin.data(), nboin.size());
             b = tarp::hash::checksum::inet::get_checksum(nboctx);
             std::cerr << "updateded checksum to " << std::hex << b
@@ -393,7 +393,7 @@ TEST_CASE("basic incremental checksum update") {
     std::uint16_t newfield = 0x3285;
     ctx.sum = 0x22D0;
     REQUIRE(inet::get_checksum(ctx) == 0xDD2F);
-    inet::update_checksum<false>(ctx, oldfield, newfield);
+    inet::update_change(ctx, oldfield, newfield);
     REQUIRE(inet::get_checksum(ctx) == 0x0000);
     //--------------------
 
@@ -402,7 +402,7 @@ TEST_CASE("basic incremental checksum update") {
     std::cerr << "ctx.sum is " << ctx.sum << std::endl;
     byte_vector buff {0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
     std::cerr << "#1\n";
-    inet::update_checksum(ctx, buff.data(), buff.size());
+    inet::update(ctx, buff.data(), buff.size());
     std::cerr << "#2\n";
     auto cksum = inet::get_checksum(ctx);
     // let's now say {0xc, 0xd} represents a u16 field
@@ -410,7 +410,7 @@ TEST_CASE("basic incremental checksum update") {
     oldfield = 0xddcc;
     newfield = 0x8888;
     std::cerr << "#3\n";
-    inet::update_checksum<false>(ctx, oldfield, newfield);
+    inet::update_change(ctx, oldfield, newfield);
     std::cerr << "#4\n";
     REQUIRE(inet::get_checksum(ctx) != cksum);
 
@@ -418,33 +418,33 @@ TEST_CASE("basic incremental checksum update") {
     // checksum from scratch
     byte_vector buff2 {0xaa, 0xbb, 0x88, 0x88, 0xee, 0xff};
     std::cerr << "#5\n";
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     std::cerr << "#6\n";
     REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
 
     // now if we undo the change, we should get
     // back the previous checksum.
-    inet::update_checksum<false>(ctx, newfield, oldfield);
+    inet::update_change(ctx, newfield, oldfield);
     REQUIRE(inet::get_checksum(ctx) == cksum);
 
     // now let's trying updating a field that is u32:
     // {cc,dd,ee,ff}
     ctx = {};
-    inet::update_checksum(ctx, buff.data(), buff.size());
+    inet::update(ctx, buff.data(), buff.size());
     cksum = inet::get_checksum(ctx);
     std::uint32_t oldu32field = 0xffeeddcc;
     std::uint32_t newu32field = 0x44332211;
-    inet::update_checksum<false>(ctx, oldu32field, newu32field);
+    inet::update_change(ctx, oldu32field, newu32field);
     REQUIRE(inet::get_checksum(ctx) != cksum);
 
     ctx2 = {};
     buff2 = {0xaa, 0xbb, 0x11, 0x22, 0x33, 0x44};
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
 
     // now if we undo the change, we should get
     // back the previous checksum.
-    inet::update_checksum<false>(ctx, newu32field, oldu32field);
+    inet::update_change(ctx, newu32field, oldu32field);
     REQUIRE(inet::get_checksum(ctx) == cksum);
 
     // NOW: a fundamental thing that RFC1624 (and earlier ones)
@@ -473,7 +473,7 @@ TEST_CASE("basic incremental checksum update") {
 
     oldfield = 0xccbb;
     newfield = 0x7711;
-    inet::update_checksum<false>(ctx, oldfield, newfield);
+    inet::update_change(ctx, oldfield, newfield);
     REQUIRE(inet::get_checksum(ctx) != cksum);
 
     // we will NOT get the same result as if we calculated the
@@ -483,11 +483,11 @@ TEST_CASE("basic incremental checksum update") {
     // in the comment above.
     ctx2 = {};
     buff2 = {0xaa, 0x11, 0x77, 0x88, 0xee, 0xff};
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     REQUIRE_FALSE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
 
     // undoing the change gives back previous value
-    inet::update_checksum<false>(ctx, newfield, oldfield);
+    inet::update_change(ctx, newfield, oldfield);
     REQUIRE(inet::get_checksum(ctx) == cksum);
 
     //
@@ -510,7 +510,7 @@ TEST_CASE("basic incremental checksum update -- buffer API") {
 
     byte_vector buff {0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
     std::cerr << "#1\n";
-    inet::update_checksum(ctx, buff.data(), buff.size());
+    inet::update(ctx, buff.data(), buff.size());
     std::cerr << "#2\n";
     auto cksum = inet::get_checksum(ctx);
 
@@ -518,7 +518,7 @@ TEST_CASE("basic incremental checksum update -- buffer API") {
     // we want to update to {0x8,0x8}
     byte_vector change = {0x88, 0x88};
     std::cerr << "#3\n";
-    inet::update_checksum(ctx, buff.data(), buff.size(), 2, 2, change.data());
+    inet::update_change(ctx, buff.data(), buff.size(), 2, 2, change.data());
     std::cerr << "#4\n";
     REQUIRE(inet::get_checksum(ctx) != cksum);
 
@@ -526,7 +526,7 @@ TEST_CASE("basic incremental checksum update -- buffer API") {
     // checksum from scratch
     byte_vector buff2 {0xaa, 0xbb, 0x88, 0x88, 0xee, 0xff};
     std::cerr << "#5\n";
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     std::cerr << "#6\n";
     REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
 
@@ -535,28 +535,28 @@ TEST_CASE("basic incremental checksum update -- buffer API") {
     // since that's the original buffer _with the change applied_,
     // which we now want to undo.
     change = {0xcc, 0xdd};
-    inet::update_checksum(ctx, buff2.data(), buff.size(), 2, 2, change.data());
+    inet::update_change(ctx, buff2.data(), buff.size(), 2, 2, change.data());
     REQUIRE(inet::get_checksum(ctx) == cksum);
 
     // now let's trying updating a field that is u32:
     // {cc,dd,ee,ff}
     ctx = {};
-    inet::update_checksum(ctx, buff.data(), buff.size());
+    inet::update(ctx, buff.data(), buff.size());
     cksum = inet::get_checksum(ctx);
     change = {0x11, 0x22, 0x33, 0x44};
-    inet::update_checksum(ctx, buff.data(), buff.size(), 2, 4, change.data());
+    inet::update_change(ctx, buff.data(), buff.size(), 2, 4, change.data());
     REQUIRE(inet::get_checksum(ctx) != cksum);
 
     // calculate from scratch
     ctx2 = {};
     buff2 = {0xaa, 0xbb, 0x11, 0x22, 0x33, 0x44};
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
 
     // now if we undo the change, we should get
     // back the previous checksum.
     change = {0xcc, 0xdd, 0xee, 0xff};
-    inet::update_checksum(ctx, buff2.data(), buff2.size(), 2, 4, change.data());
+    inet::update_change(ctx, buff2.data(), buff2.size(), 2, 4, change.data());
     REQUIRE(inet::get_checksum(ctx) == cksum);
 
     //
@@ -564,22 +564,22 @@ TEST_CASE("basic incremental checksum update -- buffer API") {
     // unlike the other API that takes actual integers in, this buffer
     // based API works even if we start at an odd offset.
     ctx = {};
-    inet::update_checksum(ctx, buff.data(), buff.size());
+    inet::update(ctx, buff.data(), buff.size());
     cksum = inet::get_checksum(ctx);
     change = {0x11, 0x77};
-    inet::update_checksum(ctx, buff.data(), buff.size(), 1, 2, change.data());
+    inet::update_change(ctx, buff.data(), buff.size(), 1, 2, change.data());
     REQUIRE(inet::get_checksum(ctx) != cksum);
 
     // calculate from scratch
     ctx2 = {};
     buff2 = {0xaa, 0x11, 0x77, 0xdd, 0xee, 0xff};
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
 
     // now if we undo the change, we should get
     // back the previous checksum.
     change = {0xbb, 0xcc};
-    inet::update_checksum(ctx, buff2.data(), buff2.size(), 1, 2, change.data());
+    inet::update_change(ctx, buff2.data(), buff2.size(), 1, 2, change.data());
     REQUIRE(inet::get_checksum(ctx) == cksum);
 
     //
@@ -589,22 +589,22 @@ TEST_CASE("basic incremental checksum update -- buffer API") {
     // unlike the other API that takes actual integers in, this buffer
     // based API works even if we start at an odd offset.
     ctx = {};
-    inet::update_checksum(ctx, buff.data(), buff.size());
+    inet::update(ctx, buff.data(), buff.size());
     cksum = inet::get_checksum(ctx);
     change = {0x35};
-    inet::update_checksum(ctx, buff.data(), buff.size(), 3, 1, change.data());
+    inet::update_change(ctx, buff.data(), buff.size(), 3, 1, change.data());
     REQUIRE(inet::get_checksum(ctx) != cksum);
 
     // calculate from scratch
     ctx2 = {};
     buff2 = {0xaa, 0xbb, 0xcc, 0x35, 0xee, 0xff};
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     REQUIRE(inet::get_checksum(ctx2) == inet::get_checksum(ctx));
 
     // now if we undo the change, we should get
     // back the previous checksum.
     change = {0xdd};
-    inet::update_checksum(ctx, buff2.data(), buff2.size(), 3, 1, change.data());
+    inet::update_change(ctx, buff2.data(), buff2.size(), 3, 1, change.data());
     REQUIRE(inet::get_checksum(ctx) == cksum);
 }
 #endif
@@ -615,9 +615,9 @@ void check_buffer_based_incremental_update(const byte_vector &input,
     using namespace tarp::hash::checksum;
     inetcksum_ctx ctx1, ctx2, ctx3;
     const std::size_t change_len = change.size();
-    
+
     byte_vector buff2 = input;
-    std::copy_n(change.begin() , change.size(), buff2.begin()+change_offset);
+    std::copy_n(change.begin(), change.size(), buff2.begin() + change_offset);
 
     std::cerr << "\n\nIncremental checksum update test: " << std::dec
               << "change_offset=" << change_offset
@@ -630,25 +630,25 @@ void check_buffer_based_incremental_update(const byte_vector &input,
     std::cerr
       << "\n------------------ calculating whole checksum on input buffer\n";
     // calculate from scratch with original input
-    inet::update_checksum(ctx1, input.data(), input.size());
+    inet::update(ctx1, input.data(), input.size());
     const auto cksum1 = inet::get_checksum(ctx1);
 
     std::cerr
       << "\n------------------ calculating whole checksum on changed buffer\n";
     // calculate from scratch with changed overlaid
-    inet::update_checksum(ctx2, buff2.data(), buff2.size());
+    inet::update(ctx2, buff2.data(), buff2.size());
     const auto cksum2 = inet::get_checksum(ctx2);
 
     std::cerr << "\n------------------ incremental checksum update\n";
     // now use the incremental update method
     // start from the original cksum state;
     ctx3 = ctx1;
-    inet::update_checksum(ctx3,
-                          input.data(),
-                          input.size(),
-                          change_offset,
-                          change_len,
-                          change.data());
+    inet::update_change(ctx3,
+                 input.data(),
+                 input.size(),
+                 change_offset,
+                 change_len,
+                 change.data());
     const auto cksum3 = inet::get_checksum(ctx3);
 
     // we get the same result when using incremental update method
@@ -659,12 +659,12 @@ void check_buffer_based_incremental_update(const byte_vector &input,
     // back the previous checksum.
     change.resize(change_len);
     std::copy_n(input.begin() + change_offset, change_len, change.begin());
-    inet::update_checksum(ctx3,
-                          buff2.data(),
-                          buff2.size(),
-                          change_offset,
-                          change_len,
-                          change.data());
+    inet::update_change(ctx3,
+                 buff2.data(),
+                 buff2.size(),
+                 change_offset,
+                 change_len,
+                 change.data());
     REQUIRE(inet::get_checksum(ctx3) == cksum1);
 }
 
@@ -672,8 +672,8 @@ TEST_CASE("incremental update, buffer api, misc tests") {
     using namespace tarp::hash::checksum;
     inetcksum_ctx ctx1, ctx2, ctx3;
     constexpr std::size_t change_offset = 37;
-    //constexpr std::size_t change_len = 19;
-    //constexpr std::size_t buffersz = 86;
+    // constexpr std::size_t change_len = 19;
+    // constexpr std::size_t buffersz = 86;
 
     byte_vector input = {
       114, 247, 55,  45,  117, 129, 89,  103, 212, 246, 118, 72,  208, 78,  50,
@@ -720,7 +720,8 @@ TEST_CASE("incremental checksum update fuzz") {
 
         // include edge cases as well (0, buffsz)
         const auto change_offset = rd::pick<std::size_t>(0, buffsz);
-        const auto change_len = rd::pick<std::size_t>(0, buffsz - change_offset);
+        const auto change_len =
+          rd::pick<std::size_t>(0, buffsz - change_offset);
         byte_vector change;
 
         // for the integer-based incremental update API,
@@ -752,7 +753,7 @@ TEST_CASE("incremental checksum update fuzz") {
 
         // initial checksum
         inetcksum_ctx ctx1, ctx2, ctx3;
-        inet::update_checksum(ctx1, input.data(), input.size());
+        inet::update(ctx1, input.data(), input.size());
         auto cksum = inet::get_checksum(ctx1);
         auto buff2 = input;
 
@@ -764,21 +765,21 @@ TEST_CASE("incremental checksum update fuzz") {
         if (fieldsz == 2) {
             set(oldu16, newu16);
             std::memcpy(buff2.data() + field_offset, &newu16, 2);
-            inet::update_checksum<false>(ctx1, oldu16, newu16);
+            inet::update_change(ctx1, oldu16, newu16);
             // buffer API
             change.resize(2);
             std::memcpy(change.data(), &newu16, 2);
         } else if (fieldsz == 4) {
             set(oldu32, newu32);
             std::memcpy(buff2.data() + field_offset, &newu32, 4);
-            inet::update_checksum<false>(ctx1, oldu32, newu32);
+            inet::update_change(ctx1, oldu32, newu32);
             // buffer API
             change.resize(4);
             std::memcpy(change.data(), &newu32, 4);
         } else {
             set(oldu64, newu64);
             std::memcpy(buff2.data() + field_offset, &newu64, 8);
-            inet::update_checksum<false>(ctx1, oldu64, newu64);
+            inet::update_change(ctx1, oldu64, newu64);
             // buffer API
             change.resize(8);
             std::memcpy(change.data(), &newu64, 8);
@@ -787,7 +788,7 @@ TEST_CASE("incremental checksum update fuzz") {
 
         // the checksum obtained via incremental update should be
         // the same as if we computed the checksum from scratch
-        inet::update_checksum(ctx2, buff2.data(), buff2.size());
+        inet::update(ctx2, buff2.data(), buff2.size());
         const auto cksum2 = inet::get_checksum(ctx2);
         const auto inccksum = inet::get_checksum(ctx1);
         std::cerr << "inccksum=" << std::hex << inccksum << std::endl;
@@ -798,14 +799,14 @@ TEST_CASE("incremental checksum update fuzz") {
         check_buffer_based_incremental_update(input, change, field_offset);
         // first calculate the initial checksum, before
         // applying incremental change
-        inet::update_checksum(ctx3, input.data(), input.size());
+        inet::update(ctx3, input.data(), input.size());
         // now apply change
-        inet::update_checksum(ctx3,
-                              input.data(),
-                              input.size(),
-                              field_offset,
-                              fieldsz,
-                              change.data());
+        inet::update_change(ctx3,
+                     input.data(),
+                     input.size(),
+                     field_offset,
+                     fieldsz,
+                     change.data());
         const auto cksum3 = inet::get_checksum(ctx3);
         std::cerr << "------ buffer-based API CHECK end\n";
         REQUIRE(cksum3 == cksum2);
@@ -815,11 +816,11 @@ TEST_CASE("incremental checksum update fuzz") {
         // was randomly picked to be equal to newval,
         // tehn no change ever was made! -- this is a good test too.
         if (fieldsz == 2) {
-            inet::update_checksum<false>(ctx1, newu16, oldu16);
+            inet::update_change(ctx1, newu16, oldu16);
         } else if (fieldsz == 4) {
-            inet::update_checksum<false>(ctx1, newu32, oldu32);
+            inet::update_change(ctx1, newu32, oldu32);
         } else {
-            inet::update_checksum<false>(ctx1, newu64, oldu64);
+            inet::update_change(ctx1, newu64, oldu64);
         }
 
         REQUIRE(inet::get_checksum(ctx1) == cksum);
@@ -849,7 +850,7 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
         byte_vector buff;
         buff.push_back(0xaa);
         inetcksum_ctx ctx;
-        inet::update_checksum(ctx, buff.data(), buff.size());
+        inet::update(ctx, buff.data(), buff.size());
 
         auto cksum1 = inet::get_checksum(ctx);
 
@@ -861,7 +862,7 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
         // now what happens if we try to UPDATE this buffer
         byte_vector change;
         change.push_back(0xee);
-        tarp::hash::checksum::inet::update_checksum(
+        tarp::hash::checksum::inet::update_change(
           ctx, buff.data(), buff.size(), 0, change.size(), change.data());
 
         // must have updated the joint buffer!!
@@ -871,7 +872,7 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
         REQUIRE(cksum2 != cksum1);
 
         // and we should be able to undo this.
-        tarp::hash::checksum::inet::update_checksum(
+        tarp::hash::checksum::inet::update_change(
           ctx, change.data(), change.size(), 0, 1, buff.data());
         REQUIRE(ctx.joint[0] == 0xaa);
         REQUIRE(ctx.truncated == true);
@@ -882,7 +883,7 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
     SUBCASE("at higher even offset") {
         byte_vector buff = {0xaa, 0xbb, 0xcc, 0xdd, 0xee};
         inetcksum_ctx ctx;
-        inet::update_checksum(ctx, buff.data(), buff.size());
+        inet::update(ctx, buff.data(), buff.size());
 
         auto cksum1 = inet::get_checksum(ctx);
 
@@ -894,12 +895,12 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
         // now what happens if we try to UPDATE this buffer
         byte_vector change;
         change.push_back(0x55);
-        tarp::hash::checksum::inet::update_checksum(ctx,
-                                                    buff.data(),
-                                                    buff.size(),
-                                                    buff.size() - 1,
-                                                    change.size(),
-                                                    change.data());
+        tarp::hash::checksum::inet::update_change(ctx,
+                                           buff.data(),
+                                           buff.size(),
+                                           buff.size() - 1,
+                                           change.size(),
+                                           change.data());
 
         // must have updated the joint buffer!!
         REQUIRE(ctx.joint[0] == 0x55);
@@ -911,12 +912,12 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
         change.back() = 0xee;
 
         // and we should be able to undo this.
-        tarp::hash::checksum::inet::update_checksum(ctx,
-                                                    buff.data(),
-                                                    buff.size(),
-                                                    buff.size() - 1,
-                                                    change.size(),
-                                                    change.data());
+        tarp::hash::checksum::inet::update_change(ctx,
+                                           buff.data(),
+                                           buff.size(),
+                                           buff.size() - 1,
+                                           change.size(),
+                                           change.data());
         REQUIRE(ctx.joint[0] == 0xee);
         REQUIRE(ctx.truncated == true);
         cksum2 = inet::get_checksum(ctx);
