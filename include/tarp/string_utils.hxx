@@ -449,14 +449,14 @@ std::string to_string(const T &l,
     ss << prefix;
     std::size_t i = 0;
     for (auto x : l) {
-        if (hex) {
-            ss << int_to_hexstring(x);
-        } else {
-            if constexpr (std::is_arithmetic_v<decltype(x)>) {
-                ss << std::to_string(x);
+        if constexpr (std::is_arithmetic_v<decltype(x)>) {
+            if (hex) {
+                ss << int_to_hexstring(x);
             } else {
-                ss << std::string {x};
+                ss << std::to_string(x);
             }
+        } else {
+            ss << std::string {x};
         }
 
         if (i + 1 < l.size()) {
