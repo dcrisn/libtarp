@@ -1,9 +1,8 @@
-#include "tarp/ioutils.hxx"
-#include <limits>
-#include <sstream>
-#include <stdexcept>
+#include "tarp/timeutils.hxx"
 #include <tarp/hash/checksum/fletcher.hxx>
+#include <tarp/ioutils.hxx>
 #include <tarp/random.hxx>
+#include <tarp/stopwatch.hxx>
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest/doctest.h>
@@ -11,12 +10,16 @@
 #include <endian.h>
 
 #include <iostream>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
 
 using byte_vector = std::vector<std::uint8_t>;
 namespace rd = tarp::random;
+using namespace tarp::hash::checksum;
 
 // implementations taken from
 // https://en.wikipedia.org/wiki/Fletcher%27s_checksum
@@ -123,8 +126,8 @@ std::pair<bool, T> test(cb_t f, T expected_result, const std::string &input) {
     return {(res == expected_result), res};
 }
 
-using namespace tarp::hash::checksum;
 
+#if 1
 TEST_CASE("basics") {
     std::uint64_t NUM_TESTS = 0;
     std::uint64_t NUM_PASSED = 0;
@@ -263,7 +266,6 @@ TEST_CASE("unaligned inputs, fletcher32") {
     REQUIRE(cksum == ref);
 }
 
-#if 1
 TEST_CASE("fletcher fuzz test - random inputs and block sizes") {
     constexpr std::size_t N = 1000;
 
@@ -357,9 +359,7 @@ TEST_CASE("fletcher fuzz test - random inputs and block sizes") {
 
     std::cerr << "All " << N << " fuzz tests passed!" << std::endl;
 }
-#endif
 
-#if 1
 TEST_CASE("fletcher edge cases") {
     // Empty input
     {
@@ -486,7 +486,6 @@ TEST_CASE("fletcher deficit handling - unaligned buffers") {
 
     std::cerr << "Deficit handling tests passed!" << std::endl;
 }
-#endif
 
 // Tests
 // - odd length, even lengths, power of 2 lengths;
@@ -613,7 +612,30 @@ TEST_CASE("fletcher block processing - systematic coverage") {
 
     std::cerr << "Systematic block processing test passed!" << std::endl;
 }
+#endif
 
+TEST_CASE("byte-at-a-time perf") {
+
+    fletcher32_ctx ctx;
+    const auto buff = rd::bytes(10'100'000);
+    const auto *ptr = buff.data();
+
+    const auto cksum = fletcher32(buff.data(), buff.size());
+
+    tarp::StopWatch<tarp::time_utils::fractional_ms> sw;
+    sw.start();
+    for (std::size_t i = 0; i < buff.size(); ++i) {
+        fletcher::fletcher32::update(ctx, ptr + i, 1);
+    }
+    const auto cksum2 = fletcher::fletcher32::get_checksum(ctx);
+    sw.stop();
+    REQUIRE(cksum == cksum2);
+
+    std::cerr << "Fletcher32 byte-at-a-time on buffer of size " << buff.size()
+              << " took " << sw.get_time().count() << "ms" << std::endl;
+
+
+}
 
 int main(int argc, const char **argv) {
     doctest::Context ctx;
