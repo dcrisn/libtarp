@@ -110,6 +110,21 @@ std::vector<std::uint8_t> get_cycling_bytes(unsigned num);
 // Get a vector of n bytes, with each element == byte.
 std::vector<std::uint8_t> repeat(std::uint8_t byte, unsigned n);
 
+// Pad buffer with trailing zeros to align to word_size bytes
+void pad_to_alignment(std::vector<std::uint8_t> &buff, std::size_t word_size);
+
+// Pad buffer with trailing zeros to align to word_size bytes;
+// Returns the padded buffer (original is not modified)
+std::vector<std::uint8_t>
+get_aligned_buffer(const std::vector<std::uint8_t> &buff,
+                   std::size_t word_size);
+
+void endian_swap(std::vector<std::uint8_t> &buff, std::size_t word_size);
+
+std::vector<std::uint8_t>
+get_endian_swapped(const std::vector<std::uint8_t> &buff,
+                   std::size_t word_size);
+
 // Creates a file under the given directory path
 // with a name that starts with file_name_prefix.
 // This is followed by '.' and then a unique suffix at most

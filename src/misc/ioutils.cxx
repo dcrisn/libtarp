@@ -224,6 +224,26 @@ std::vector<std::uint8_t> repeat(std::uint8_t byte, unsigned n) {
     return bytes;
 }
 
+// Pad buffer with trailing zeros to align to word_size bytes
+void pad_to_alignment(std::vector<std::uint8_t> &buff, std::size_t word_size) {
+    const std::size_t remainder = buff.size() % word_size;
+    if (remainder != 0) {
+        const std::size_t padding = word_size - remainder;
+        buff.reserve(buff.size() + padding);
+        buff.insert(buff.end(), padding, 0);
+    }
+}
+
+// Pad buffer with trailing zeros to align to word_size bytes;
+// Returns the padded buffer (original is not modified)
+std::vector<std::uint8_t>
+get_aligned_buffer(const std::vector<std::uint8_t> &buff,
+                   std::size_t word_size) {
+    auto padded = buff;
+    pad_to_alignment(padded, word_size);
+    return padded;
+}
+
 std::pair<std::string, std::string>
 make_unique_file(const std::string &dirpath,
                  const std::string &file_name_prefix) {
