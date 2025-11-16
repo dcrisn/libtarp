@@ -227,7 +227,8 @@ TEST_CASE(" test calculation over bytes including checksum") {
         const auto n = 2 + (bytes.size() % 2 ? 1 : 0);
         bytes.resize(bytes.size() + n);
 
-        std::memcpy(bytes.data() + bytes.size() - 2,
+        std::memcpy(bytes.data() + bytes.size() -
+                      std::min<std::size_t>(2, bytes.size()),
                     &sender_cksum,
                     sizeof(std::uint16_t));
 
@@ -644,11 +645,11 @@ void check_buffer_based_incremental_update(const byte_vector &input,
     // start from the original cksum state;
     ctx3 = ctx1;
     inet::update_change(ctx3,
-                 input.data(),
-                 input.size(),
-                 change_offset,
-                 change_len,
-                 change.data());
+                        input.data(),
+                        input.size(),
+                        change_offset,
+                        change_len,
+                        change.data());
     const auto cksum3 = inet::get_checksum(ctx3);
 
     // we get the same result when using incremental update method
@@ -660,11 +661,11 @@ void check_buffer_based_incremental_update(const byte_vector &input,
     change.resize(change_len);
     std::copy_n(input.begin() + change_offset, change_len, change.begin());
     inet::update_change(ctx3,
-                 buff2.data(),
-                 buff2.size(),
-                 change_offset,
-                 change_len,
-                 change.data());
+                        buff2.data(),
+                        buff2.size(),
+                        change_offset,
+                        change_len,
+                        change.data());
     REQUIRE(inet::get_checksum(ctx3) == cksum1);
 }
 
@@ -802,11 +803,11 @@ TEST_CASE("incremental checksum update fuzz") {
         inet::update(ctx3, input.data(), input.size());
         // now apply change
         inet::update_change(ctx3,
-                     input.data(),
-                     input.size(),
-                     field_offset,
-                     fieldsz,
-                     change.data());
+                            input.data(),
+                            input.size(),
+                            field_offset,
+                            fieldsz,
+                            change.data());
         const auto cksum3 = inet::get_checksum(ctx3);
         std::cerr << "------ buffer-based API CHECK end\n";
         REQUIRE(cksum3 == cksum2);
@@ -896,11 +897,11 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
         byte_vector change;
         change.push_back(0x55);
         tarp::hash::checksum::inet::update_change(ctx,
-                                           buff.data(),
-                                           buff.size(),
-                                           buff.size() - 1,
-                                           change.size(),
-                                           change.data());
+                                                  buff.data(),
+                                                  buff.size(),
+                                                  buff.size() - 1,
+                                                  change.size(),
+                                                  change.data());
 
         // must have updated the joint buffer!!
         REQUIRE(ctx.joint[0] == 0x55);
@@ -913,11 +914,11 @@ TEST_CASE("Edge case: incremental update of checksum with partial byte") {
 
         // and we should be able to undo this.
         tarp::hash::checksum::inet::update_change(ctx,
-                                           buff.data(),
-                                           buff.size(),
-                                           buff.size() - 1,
-                                           change.size(),
-                                           change.data());
+                                                  buff.data(),
+                                                  buff.size(),
+                                                  buff.size() - 1,
+                                                  change.size(),
+                                                  change.data());
         REQUIRE(ctx.joint[0] == 0xee);
         REQUIRE(ctx.truncated == true);
         cksum2 = inet::get_checksum(ctx);
