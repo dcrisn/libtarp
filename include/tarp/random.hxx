@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <random>
 #include <stdexcept>
 
@@ -326,6 +327,118 @@ inline float randfloat(float min = 0.0f, float max = 1.0f) {
 
 // --------------------------
 
+namespace pgen {
+// Interface for a class that returns a probability [0.0 to 1.0]
+// that changes in some way any time p(advance=true) is called,
+// or returns the last generated probability if p(advance=false)
+// is called.
+// Example are:
+//  - probability that increases or decreases
+//    linearly/exponentially/logarithmically
+//
+// For example, if you want to simulate selection near the beginning
+// of a list, then you can start with a probability of 0.7 and use
+// some sort of decrasing probability generator.
+class probability_generator {
+public:
+    virtual float p(bool advance = true) = 0;
+};
+
+class linear : public probability_generator {
+public:
+    // pass step_delta > 0 for increase, and step_delta < 0 for decrease.
+    linear(float initial_probability, float step_delta, float limit)
+        : m_initial_p(initial_probability)
+        , m_step_delta(step_delta)
+        , m_limit(limit) {
+        if (initial_probability < 0) {
+            throw std::invalid_argument(
+              "initial_probability cannot be negative");
+        }
+        if (limit < 0) {
+            throw std::invalid_argument("limit cannot be negative");
+        }
+    }
+
+    float p(bool advance = true) override {
+        // linear equation: a=bx+c
+        // Here:
+        //   c=initial_proabability
+        //   b=step_delta
+        // Hence the probability at step n is 'bn+c', and the
+        // step increase is increase_per_step.
+        float p = m_initial_p + (m_steps * m_step_delta);
+        if (advance) m_steps++;
+
+        auto result = std::clamp(p, 0.0f, 1.0f);
+
+        // increase
+        if (m_step_delta > 0) {
+            result = std::min<float>(result, m_limit);
+        }
+        // decrease
+        else {
+            result = std::max<float>(result, m_limit);
+        }
+
+        return result;
+    }
+
+    const double m_initial_p = 0.0;
+    std::size_t m_steps = 0;
+    double m_step_delta = 0.0;
+    double m_limit = 0;
+};
+
+//
+class exponential : public probability_generator {
+public:
+    // Use base>1 for exponential growth;
+    // Use 0 < base < 1 for exponential decay;
+    // NOTE: if base==1, then this is always ==initial_proabability.
+    exponential(float initial_probability, float base, float limit)
+        : m_initial_p(initial_probability), m_base(base), m_limit(limit) {
+        if (base <= 0) {
+            throw std::invalid_argument("base must be > 0");
+        }
+        if (limit < 0) {
+            throw std::invalid_argument("limit cannot be negative");
+        }
+    }
+
+    float p(bool advance = true) override {
+        // exponential equation: y=a*b^x
+        // Here:
+        //   a=initial_proabability [initial value]
+        //   b=exponent base
+        //   x=exponent
+        // Hence the probability at step n is 'a*b^n'; that is,
+        // the probability increases by (current_probability * base)
+        // at each step. The increment itself increases as
+        // current_probability increases.
+        float p = m_initial_p * std::pow(m_base, m_steps);
+        if (advance) m_steps++;
+        p = std::clamp<float>(p, 0, 1);
+
+        // increase
+        if (m_base > 1) {
+            p = std::min<float>(p, m_limit);
+        }
+        // decrease
+        else {
+            p = std::max<float>(p, m_limit);
+        }
+
+        return p;
+    }
+
+    const double m_initial_p = 0.0;
+    const float m_base = 0;
+    const float m_limit = 0;
+    std::size_t m_steps = 0;
+};
+
+}  // namespace pgen
 
 }  // namespace random
 };  // namespace tarp

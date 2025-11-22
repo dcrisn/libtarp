@@ -154,6 +154,11 @@ add_executable(math
 )
 CONFIGURE_TARGET(math)
 
+add_executable(random
+    random/tests.cxx
+)
+CONFIGURE_TARGET(random)
+
 add_executable(iniparse
     iniparse/tests.c
 )
