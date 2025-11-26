@@ -100,12 +100,6 @@ std::enable_if_t<std::is_enum_v<T>, T> to_hbo(T value) {
     return static_cast<T>(to_hbo(static_cast<underlying_t>(value)));
 }
 
-// big endian to little endian
-template<typename T>
-T be2le(T value) {
-    return to_hbo(value);
-}
-
 // Swap the bytes in value from host byte order (hbo) to
 // network byte order (nbo).
 template<typename T>
@@ -129,22 +123,6 @@ template<typename T>
 std::enable_if_t<std::is_enum_v<T>, T> to_nbo(T value) {
     using underlying_t = std::underlying_type_t<T>;
     return static_cast<T>(to_nbo(static_cast<underlying_t>(value)));
-}
-
-// little endian to big-endian
-template<typename T>
-T le2be(T value) {
-    return to_nbo(value);
-}
-
-// big endian to little endian
-template<typename T>
-T byteswap(T value) {
-    // note it does not matter if we call
-    // be2le or le2be; the main thing is
-    // the bytes are swapped to the opposite
-    // order.
-    return be2le(value);
 }
 
 // C++ type-safe rewrites of the equivalent implementations in tarp/bits.h.
@@ -229,6 +207,57 @@ inline bool is_little_endian() {
     return arr[0] == 0x01;
 }
 
+// Swap the endianness of x such that if the bytes
+// are in big endian order they will be in little-endian
+// order and vice versa.
+// NOTE: useful prior to c++23, which has std::byteswap in the stdlib.
+template<typename T>
+T byteswap(T x) {
+    static_assert(std::is_unsigned_v<T>);
+    if constexpr (std::is_same_v<T, std::uint8_t>) {
+        return x;
+    }
+
+    else if constexpr (std::is_same_v<T, std::uint16_t>) {
+        return (x >> 8) | (x << 8);
+    }
+
+    else if constexpr (std::is_same_v<T, std::uint32_t>) {
+        return (x << 24) | (x >> 24) | ((x & 0xff00) << 8) |
+               ((x & 0xff0000) >> 8);
+    }
+
+    else if constexpr (std::is_same_v<T, std::uint64_t>) {
+        return (x >> 56) | ((x & 0x00'ff'00'00'00'00'00'00) >> 40) |
+               ((x & 0x00'00'ff'00'00'00'00'00) >> 24) |
+               ((x & 0x00'00'00'ff'00'00'00'00) >> 8) |
+               ((x & 0x00'00'00'00'ff'00'00'00) << 8) |
+               ((x & 0x00'00'00'00'00'ff'00'00) << 24) |
+               ((x & 0x00'00'00'00'00'00'ff'00) << 40) | (x << 56);
+    }
+
+    else {
+        static_assert(false, "conditional branch not covered in byteswap");
+    }
+}
+
+template<unsigned n, typename T>
+T rotate_left(T x) {
+    static_assert(std::is_unsigned_v<T>);
+
+    static constexpr T w = sizeof(T) << 3;
+    static_assert(n < (sizeof(T) << 3));
+    return (x << n) | (x >> (w - n));
+}
+
+template<unsigned n, typename T>
+T rotate_right(T x) {
+    static_assert(std::is_unsigned_v<T>);
+
+    static constexpr T w = sizeof(T) << 3;
+    static_assert(n < (sizeof(T) << 3));
+    return (x >> n) | (x << (w - n));
+}
 
 
 }  // namespace bits
