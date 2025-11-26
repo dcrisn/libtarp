@@ -245,7 +245,7 @@ void endian_swap(std::vector<std::uint8_t> &buff, bool pad) {
     while (len >= sizeof(T)) {
         T tmp;
         std::memcpy(&tmp, ptr + offset, sizeof(T));
-        tmp = bits::le2be(tmp);
+        tmp = bits::byteswap(tmp);
         std::memcpy(ptr + offset, &tmp, sizeof(T));
         offset += sizeof(T);
         len -= sizeof(T);
@@ -254,7 +254,7 @@ void endian_swap(std::vector<std::uint8_t> &buff, bool pad) {
     if (len > 0) {
         T tmp = 0;
         std::memcpy(&tmp, ptr + offset, len);
-        tmp = bits::le2be(tmp);
+        tmp = bits::byteswap(tmp);
         std::uint8_t arr[sizeof(T)];
         std::memcpy(arr, &tmp, sizeof(T));
         std::memcpy(ptr + offset, &arr[sizeof(T) - remainder], len);

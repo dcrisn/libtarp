@@ -11,7 +11,6 @@
 namespace tarp {
 namespace hash {
 namespace checksum {
-using bits::byteswap;
 
 // Wikipedia [nov 2025, https://en.wikipedia.org/wiki/Fletcher%27s_checksum]:
 // > The Fletcher checksum cannot distinguish between blocks of all 0 bits
