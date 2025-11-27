@@ -10,6 +10,7 @@ namespace tarp {
 namespace hash {
 namespace checksum {
 
+namespace sha {
 namespace detail {
 std::array<sha256_ctx::word_t, 64> sha256_constants {
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
@@ -84,17 +85,17 @@ void process_last(sha256_ctx &ctx) {
     std::uint64_t len = bits::to_nbo(std::uint64_t(ctx.msglen) << 3);
     std::memcpy(ctx.buff.data() + offset, &len, sizeof(std::uint64_t));
 
-    //std::cerr << "process block1\n";
+    // std::cerr << "process block1\n";
     process_block(ctx, ctx.buff.data());
     if (offset > 64) {
-        //std::cerr << "process block2\n";
+        // std::cerr << "process block2\n";
         process_block(ctx, ctx.buff.data() + 64);
     }
-    //std::cerr << "process block2 end\n";
+    // std::cerr << "process block2 end\n";
 }
 
 void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
-    //std::cerr << "#1\n";
+    // std::cerr << "#1\n";
     using namespace detail;
     using word_t = sha256_ctx::word_t;
     using C = sha256_ctx;
@@ -125,7 +126,7 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
     using bits::rotate_left;
     using bits::rotate_right;
 
-    //std::cerr << "#2\n";
+    // std::cerr << "#2\n";
 
     // operations given on p10.
     constexpr auto sum0 = [](word_t x) {
@@ -141,7 +142,7 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
         return rotate_right<17>(x) ^ rotate_right<19>(x) ^ (x >> 10);
     };
 
-    //std::cerr << "#3\n";
+    // std::cerr << "#3\n";
 
     // rest of the words [17..64] are computed
     for (unsigned i = 16; i < sched.size(); ++i) {
@@ -149,10 +150,10 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
           op1(sched[i - 2]) + sched[i - 7] + op0(sched[i - 15]) + sched[i - 16];
     }
 
-    //std::cerr << "#4\n";
+    // std::cerr << "#4\n";
 
     for (unsigned i = 0; i < sched.size(); ++i) {
-        //std::cerr << "iteration: " << i << std::endl;
+        // std::cerr << "iteration: " << i << std::endl;
         T1 = h + sum1(e) + choose(e, f, g) + sha256_constants[i] + sched[i];
         T2 = sum0(a) + majority(a, b, c);
         h = g;
@@ -165,7 +166,7 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
         a = T1 + T2;
     }
 
-    //std::cerr << "#5\n";
+    // std::cerr << "#5\n";
 
     // compute the i-th intermediate hash value
     ctx.hash[0] = ctx.hash[0] + a;
@@ -177,7 +178,7 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
     ctx.hash[6] = ctx.hash[6] + g;
     ctx.hash[7] = ctx.hash[7] + h;
 
-    //std::cerr << "#6\n";
+    // std::cerr << "#6\n";
 }
 
 
@@ -191,7 +192,7 @@ void process(sha256_ctx &ctx,
     using namespace detail;
 
     while (len > 0) {
-        //std::cerr << "in loop\n";
+        // std::cerr << "in loop\n";
         const std::size_t n =
           std::min(context_t::BLOCK_SIZE_BYTES - ctx.offset, len);
         std::memcpy(ctx.buff.data() + ctx.offset, data, n);
@@ -202,17 +203,17 @@ void process(sha256_ctx &ctx,
         len -= n;
 
         if (ctx.offset == context_t::BLOCK_SIZE_BYTES) {
-            //std::cerr << "before call to process_bloclk\n";
+            // std::cerr << "before call to process_bloclk\n";
             process_block(ctx, ctx.buff.data());
-            //std::cerr << "after call to process_bloclk\n";
+            // std::cerr << "after call to process_bloclk\n";
             ctx.offset = 0;
         }
     }
 
     if (last_chunk) {
-        //std::cerr << "before call to process_last\n";
+        // std::cerr << "before call to process_last\n";
         process_last(ctx);
-        //std::cerr << "after call to process_last\n";
+        // std::cerr << "after call to process_last\n";
     }
 }
 
@@ -224,8 +225,10 @@ std::string get_hashstring(sha256_ctx &ctx) {
     }
     return ss.str();
 }
+}  // namespace sha
 
 std::string sha256sum(const std::uint8_t *data, std::size_t len) {
+    using namespace sha;
     sha256_ctx ctx;
     process(ctx, data, len, true);
     return get_hashstring(ctx);

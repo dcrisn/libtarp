@@ -6,8 +6,8 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
-#include <type_traits>
 #include <string>
+#include <type_traits>
 
 namespace tarp {
 namespace hash {
@@ -60,15 +60,13 @@ struct sha256_ctx {
                                 0x5be0cd19};
 };
 
+namespace sha {
 void process(sha256_ctx &ctx,
              const std::uint8_t *data,
              std::size_t len,
              bool last_chunk);
 
-std::string sha256sum(const std::uint8_t *data, std::size_t len);
-
 std::string get_hashstring(sha256_ctx &ctx);
-
 
 namespace detail {
 // Majority function: return the bit at each position
@@ -98,8 +96,9 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data);
 // Pad the current and last chunk.
 void process_last(sha256_ctx &ctx);
 }  // namespace detail
+}  // namespace sha
 
-
+std::string sha256sum(const std::uint8_t *data, std::size_t len);
 
 }  // namespace checksum
 }  // namespace hash
