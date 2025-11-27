@@ -71,6 +71,57 @@ namespace str = tarp::utils::string_utils;
 // ======================================================
 // ======================================================
 
+// Process bytes in random chunks;
+std::string process_in_chunks(const std::vector<std::uint8_t> &bytes) {
+    const std::size_t size = bytes.size();
+    sha256_ctx ctx;
+
+    if (size == 0) {
+        sha::process(ctx, nullptr, 0, true);
+        return sha::get_hashstring(ctx);
+    }
+
+    std::size_t offset = 0;
+    const std::uint8_t *ptr = bytes.data();
+
+    while (offset < size) {
+        const auto chunksz = rd::randsz(1, size - offset);
+        const bool islast = (offset + chunksz) == size;
+
+        // std::cerr << "process SIZE=" << size << " offset=" << offset
+        //           << " chunksz=" << chunksz
+        //           << " islast=" << (islast ? "true" : "false") << std::endl;
+
+        sha::process(ctx, ptr + offset, chunksz, islast);
+
+        offset += chunksz;
+    }
+
+    return sha::get_hashstring(ctx);
+}
+
+// Process byte by byte
+std::string byte_aat(const std::vector<std::uint8_t> &bytes) {
+    std::size_t size = bytes.size();
+    sha256_ctx ctx;
+
+    if (size == 0) {
+        sha::process(ctx, nullptr, 0, true);
+        return sha::get_hashstring(ctx);
+    }
+
+    const std::uint8_t *ptr = bytes.data();
+    while (size > 0) {
+        const auto chunksz = 1;
+        const bool islast = chunksz == size;
+        sha::process(ctx, ptr, chunksz, islast);
+
+        size -= chunksz;
+        ptr += chunksz;
+    }
+
+    return sha::get_hashstring(ctx);
+}
 
 TEST_CASE("Basic test vectors") {
     // Test vectors taken from:
@@ -105,10 +156,18 @@ TEST_CASE("Basic test vectors") {
     for (const auto &[input, expected] : tests) {
         const std::vector<std::uint8_t> buff(input.begin(), input.end());
         const auto actual = sha256sum(buff.data(), buff.size());
-        std::cerr << "hash: " << actual << std::endl;
+        // std::cerr << "\n\n";
+        // std::cerr << "== INPUT: " << input << std::endl;
+        // std::cerr << "hash: " << actual << std::endl;
 
         std::string s = "expected=" + expected + ", actual=" + actual;
         REQUIRE_MESSAGE(actual == expected, s);
+
+        const auto actual2 = process_in_chunks(buff);
+        CHECK(actual2 == actual);
+
+        const auto actual3 = byte_aat(buff);
+        REQUIRE(actual3 == actual);
     }
 }
 
@@ -129,6 +188,12 @@ TEST_CASE("block size edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
     SUBCASE("input of size equal to block size") {
         const std::string M =
@@ -139,6 +204,12 @@ TEST_CASE("block size edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
     SUBCASE("input of size one more than block size") {
         const std::string M =
@@ -149,6 +220,12 @@ TEST_CASE("block size edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
     SUBCASE("input of size one less than 2x block size") {
         const std::string M =
@@ -160,6 +237,12 @@ TEST_CASE("block size edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
     SUBCASE("input of size equal to 2x block size") {
         const std::string M =
@@ -171,6 +254,12 @@ TEST_CASE("block size edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
     SUBCASE("input of size one more than block size") {
         const std::string M =
@@ -181,6 +270,12 @@ TEST_CASE("block size edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, bytes);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 }
 
@@ -206,6 +301,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 
     // edge/limit: single block padding
@@ -218,6 +319,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 
     // this will require padding and will result in two blocks
@@ -230,6 +337,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 
     SUBCASE("input of size 57 bytes") {
@@ -241,6 +354,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 
     SUBCASE("input of size 54+64 bytes") {
@@ -253,6 +372,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 
     SUBCASE("input of size 55+64 bytes") {
@@ -265,6 +390,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 
     // this will end up taking 3 blocks
@@ -278,6 +409,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 
     SUBCASE("input of size 57+64 bytes") {
@@ -290,6 +427,12 @@ TEST_CASE("padding edge cases") {
         std::vector<std::uint8_t> bytes(M.begin(), M.end());
         const auto actual = sha256sum(bytes.data(), bytes.size());
         REQUIRE_MESSAGE(actual == expected, M);
+
+        const auto actual2 = process_in_chunks(bytes);
+        REQUIRE_MESSAGE(actual2 == actual, M);
+
+        const auto actual3 = byte_aat(bytes);
+        REQUIRE_MESSAGE(actual3 == actual, M);
     }
 }
 
@@ -510,6 +653,12 @@ TEST_CASE("short test vectors") {
 
         std::string s = "expected=" + expected + ", actual=" + actual;
         REQUIRE_MESSAGE(actual == expected, s);
+
+        const auto actual2 = process_in_chunks(buff);
+        CHECK(actual2 == actual);
+
+        const auto actual3 = byte_aat(buff);
+        REQUIRE(actual3 == actual);
     }
 }
 
@@ -8034,6 +8183,12 @@ TEST_CASE("long test vectors") {
 
         std::string s = "expected=" + expected + ", actual=" + actual;
         REQUIRE_MESSAGE(actual == expected, s);
+
+        const auto actual2 = process_in_chunks(buff);
+        CHECK(actual2 == actual);
+
+        const auto actual3 = byte_aat(buff);
+        REQUIRE(actual3 == actual);
     }
 }
 
@@ -8191,6 +8346,19 @@ TEST_CASE("pseudorandom ('monte carlo') test") {
             // Hash it
             MD[i] = str::hexstring_to_bytes(sha256sum(Mi.data(), Mi.size()), e);
             REQUIRE(e.empty());
+
+            // ----- also check that when we process in random chunks
+            // we get the same result.
+            const auto actual = MD[i];
+            const auto actual2 =
+              str::hexstring_to_bytes(process_in_chunks(Mi), e);
+            REQUIRE(e.empty());
+            const auto actual3 = str::hexstring_to_bytes(byte_aat(Mi), e);
+            REQUIRE(e.empty());
+
+            REQUIRE(actual2 == actual);
+            REQUIRE(actual3 == actual);
+            // ---------
         }
 
         // Update seed for next iteration and store checkpoint
