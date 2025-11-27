@@ -158,6 +158,7 @@ add_library(libtarp_objects OBJECT
     src/misc/buffer.cxx
     src/misc/event.cxx
     src/hash/md5/md5sum.c
+    src/hash/sha/sha256.cxx
     src/hash/checksum.cxx
     src/hash/inet_checksum.cxx
     src/hash/adler32.cxx

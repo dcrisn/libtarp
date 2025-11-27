@@ -805,7 +805,7 @@ std::vector<std::uint8_t> hexstring_to_bytes(const std::string &s,
 
     // must be a multiple of 2
     if (input.size() % 2) {
-        error_string = "bad hexstring";
+        error_string = "bad hexstring length";
         return {};
     }
 

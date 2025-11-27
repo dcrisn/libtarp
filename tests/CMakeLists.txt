@@ -137,6 +137,11 @@ add_executable(hash.inet
 )
 CONFIGURE_TARGET(hash.inet)
 
+add_executable(hash.sha256
+    hash/sha256.cxx
+)
+CONFIGURE_TARGET(hash.sha256)
+
 add_executable(hasht
     hasht/hasht_tests.c
     hasht/tests.c
