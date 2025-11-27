@@ -1,3 +1,4 @@
+#include "tarp/hash/checksum/sha256.hxx"
 #include <ios>
 #include <tarp/bits.hxx>
 #include <tarp/cxxcommon.hxx>
@@ -37,6 +38,7 @@ static inline constexpr auto crc32_iso_hdlc = "crc32";
 static inline constexpr auto crc32c = "crc32c";
 static inline constexpr auto crc64go = "crc64go";
 static inline constexpr auto crc64xz = "crc64xz";
+static inline constexpr auto sha256 = "sha256";
 };  // namespace keys
 
 // print the data digest as a hexstring
@@ -75,15 +77,15 @@ T print_crc_of_file(fileread_func &&process_file) {
     return checksum;
 }
 
-// process data and print the fletcher checksum computed from its contents.
+// process data and print a checksum computed from its contents.
 template<typename T,
          typename context_t,
          typename fileread_func,
          typename data_block_processor_t,
          typename checksum_getter_t>
-T print_fletcher_checksum_of_file(fileread_func &&process_file,
-                                  data_block_processor_t &&data_block_processor,
-                                  checksum_getter_t &&checksum_getter) {
+T print_checksum_of_file(fileread_func &&process_file,
+                         data_block_processor_t &&data_block_processor,
+                         checksum_getter_t &&checksum_getter) {
     T checksum = 0;
     context_t ctx;
 
@@ -97,6 +99,35 @@ T print_fletcher_checksum_of_file(fileread_func &&process_file,
 
     process_file(process_block, on_finished);
     print_checksum(checksum);
+    return checksum;
+}
+
+// NOTE: we cannot use the print_checksum_of_file because
+// the sha expects an extra parameter (islast=true|false)
+// because the message must always be padded when finished.
+template<typename T,
+         typename context_t,
+         typename fileread_func,
+         typename data_block_processor_t,
+         typename checksum_getter_t>
+T print_sha_checksum_of_file(fileread_func &&process_file,
+                            data_block_processor_t &&data_block_processor,
+                            checksum_getter_t &&checksum_getter) {
+    T checksum {};
+    context_t ctx;
+
+    auto process_block = [&](auto *buffer, auto len) {
+        data_block_processor(ctx, buffer, len, false);
+    };
+
+    auto on_finished = [&](auto *buffer) {
+        data_block_processor(ctx, buffer, 0, true);
+        checksum = checksum_getter(ctx);
+    };
+
+    process_file(process_block, on_finished);
+    std::cout << checksum << std::endl;
+
     return checksum;
 }
 
@@ -133,12 +164,9 @@ void print_help([[maybe_unused]] const char **argv) {
     std::cerr << "   --crc32c             CRC-32/CASTAGNOLI\n";
     std::cerr << "   --crc64go            CRC-64/GO-ISO\n";
     std::cerr << "   --crc64xz            CRC-64/XZ\n";
-
+    std::cerr << "   --sha256             SHA-2 256-bit (SHA256) checksum\n";
     std::cerr << "\n";
     std::cerr << "The checksum will be brinted as a hexstring.\n";
-    std::cerr
-      << "For fletcher32 and fletcher64 the input is read as a sequence\n"
-         "of u16s and u32s, respectively, in host byte order.\n";
 }
 
 
@@ -259,33 +287,39 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char **argv) {
     if (algo == keys::fletcher16) {
         using namespace checksum;
         using namespace checksum::fletcher::fletcher16;
-        print_fletcher_checksum_of_file<std::uint16_t, fletcher16_ctx>(
+        print_checksum_of_file<std::uint16_t, fletcher16_ctx>(
           process_file, update, get_checksum);
 
     } else if (algo == keys::fletcher32) {
         using namespace checksum;
         using namespace checksum::fletcher::fletcher32;
-        print_fletcher_checksum_of_file<std::uint32_t, fletcher32_ctx>(
+        print_checksum_of_file<std::uint32_t, fletcher32_ctx>(
           process_file, update, get_checksum);
 
     } else if (algo == keys::fletcher64) {
         using namespace checksum;
         using namespace checksum::fletcher::fletcher64;
-        print_fletcher_checksum_of_file<std::uint64_t, fletcher64_ctx>(
+        print_checksum_of_file<std::uint64_t, fletcher64_ctx>(
           process_file, update, get_checksum);
     }
 
     else if (algo == keys::adler32) {
         using namespace checksum;
         using namespace checksum::adler;
-        print_fletcher_checksum_of_file<std::uint32_t, adler32_ctx>(
+        print_checksum_of_file<std::uint32_t, adler32_ctx>(
           process_file, update, get_checksum);
     }
 
     else if (algo == keys::inet4) {
         using namespace checksum;
-        print_fletcher_checksum_of_file<std::uint16_t, inetcksum_ctx>(
+        print_checksum_of_file<std::uint16_t, inetcksum_ctx>(
           process_file, inet::update, inet::get_checksum);
+    }
+
+    else if (algo == keys::sha256) {
+        using namespace checksum;
+        print_sha_checksum_of_file<std::string, sha256_ctx>(
+          process_file, sha::process, sha::get_hashstring);
     }
 
     else if (algo == keys::crc8blt) {
