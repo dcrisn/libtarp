@@ -66,7 +66,12 @@ void process(sha256_ctx &ctx,
              std::size_t len,
              bool last_chunk);
 
+void reset(sha256_ctx &ctx);
+
 std::string get_hashstring(sha256_ctx &ctx);
+
+std::array<std::uint8_t, sha256_ctx::DIGEST_SIZE_BYTES>
+get_hashbytes(sha256_ctx &ctx);
 
 namespace detail {
 // Majority function: return the bit at each position
@@ -95,10 +100,26 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data);
 
 // Pad the current and last chunk.
 void process_last(sha256_ctx &ctx);
+
 }  // namespace detail
 }  // namespace sha
 
 std::string sha256sum(const std::uint8_t *data, std::size_t len);
+
+std::array<std::uint8_t, sha256_ctx::DIGEST_SIZE_BYTES>
+sha256_hmac_bytes(const std::uint8_t *msg,
+                  std::size_t msglen,
+                  const std::uint8_t *key,
+                  std::size_t keylen);
+
+std::string
+sha256_hmac_hashstring(const std::uint8_t *msg,
+                  std::size_t msglen,
+                  const std::uint8_t *key,
+                  std::size_t keylen);
+
+
+
 
 }  // namespace checksum
 }  // namespace hash

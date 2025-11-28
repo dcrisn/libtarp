@@ -1,5 +1,6 @@
-#include "tarp/bits.hxx"
+#include <tarp/bits.hxx>
 #include <tarp/hash/checksum/sha256.hxx>
+#include <tarp/string_utils.hxx>
 
 #include <cstring>
 #include <iomanip>
@@ -217,6 +218,10 @@ void process(sha256_ctx &ctx,
     }
 }
 
+void reset(sha256_ctx &ctx) {
+    ctx = sha256_ctx {};
+}
+
 std::string get_hashstring(sha256_ctx &ctx) {
     std::ostringstream ss;
     for (auto &word : ctx.hash) {
@@ -224,6 +229,18 @@ std::string get_hashstring(sha256_ctx &ctx) {
            << word;
     }
     return ss.str();
+}
+
+std::array<std::uint8_t, sha256_ctx::DIGEST_SIZE_BYTES>
+get_hashbytes(sha256_ctx &ctx) {
+    std::array<std::uint8_t, sha256_ctx::DIGEST_SIZE_BYTES> hash;
+    std::memcpy(hash.data(), ctx.hash.data(), hash.size());
+
+    // the bytes are words stored in big-endian, so on a little-endian
+    // machine we need to endian-swap each word to make sure the
+    // most significant bytes come first.
+    utils::str::to_nbo<sha256_ctx::word_t>(hash.data(), hash.size());
+    return hash;
 }
 }  // namespace sha
 
@@ -234,6 +251,60 @@ std::string sha256sum(const std::uint8_t *data, std::size_t len) {
     return get_hashstring(ctx);
 }
 
+// RFC2104.
+std::array<std::uint8_t, sha256_ctx::DIGEST_SIZE_BYTES>
+sha256_hmac_bytes(const std::uint8_t *msg,
+                  std::size_t msglen,
+                  const std::uint8_t *key,
+                  std::size_t keylen) {
+    using block_t = std::array<std::uint8_t, sha256_ctx::BLOCK_SIZE_BYTES>;
+
+    block_t ipad;
+    constexpr unsigned IPAD = 0x36;
+
+    block_t opad;
+    constexpr unsigned OPAD = 0x5c;
+
+    block_t k;
+    std::memset(k.data(), 0, k.size());
+
+    sha256_ctx ctx;
+
+    // > The authentication key K can be of any length up to B, the
+    // > block length of the hash function.  Applications that use keys
+    // > longer than B bytes will first hash the key using H and then use
+    // > the resultant L byte string as the actual key to HMAC.
+    if (keylen <= sha256_ctx::BLOCK_SIZE_BYTES) {
+        std::memcpy(k.data(), key, keylen);
+    } else {
+        sha::process(ctx, key, keylen, true);
+        const auto digested_key = sha::get_hashbytes(ctx);
+        std::memcpy(k.data(), digested_key.data(), digested_key.size());
+    }
+
+    for (unsigned i = 0; i < k.size(); ++i) {
+        ipad[i] = IPAD ^ k[i];
+        opad[i] = OPAD ^ k[i];
+    }
+
+    sha::reset(ctx);
+    sha::process(ctx, ipad.data(), ipad.size(), false);
+    sha::process(ctx, msg, msglen, true);
+    const auto ipad_hashed = sha::get_hashbytes(ctx);
+
+    sha::reset(ctx);
+    sha::process(ctx, opad.data(), opad.size(), false);
+    sha::process(ctx, ipad_hashed.data(), ipad_hashed.size(), true);
+    return sha::get_hashbytes(ctx);
+}
+
+std::string sha256_hmac_hashstring(const std::uint8_t *msg,
+                                   std::size_t msglen,
+                                   const std::uint8_t *key,
+                                   std::size_t keylen) {
+    return utils::str::hexstring_from_bytes(
+      sha256_hmac_bytes(msg, msglen, key, keylen));
+}
 
 }  // namespace checksum
 }  // namespace hash

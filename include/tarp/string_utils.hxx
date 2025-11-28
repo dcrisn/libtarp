@@ -263,6 +263,63 @@ void endian_swap(std::vector<std::uint8_t> &buff, bool pad) {
     }
 }
 
+// Interpret the given buffer as a sequence of elements of type T,
+// and convert each T in place from network byte order to
+// host byte order (no conversion if the native endianness is
+// big endian i.e. network byte order).
+// If buffsz is a multiple of sizeof(T), the whole buffer is
+// processed and buffsz is returned. Otherwise the processing
+// stops as soon as fewer than sizeof(T) bytes remain, and
+// the return value will be the offset in buff (< buffsz)
+// of the next byte to be processed.
+template<typename T>
+std::size_t to_hbo(std::uint8_t *buff, std::size_t buffsz) {
+    static_assert(std::is_unsigned_v<T>);
+
+    std::size_t offset = 0;
+
+    while (buffsz >= sizeof(T)) {
+        T tmp;
+        std::memcpy(&tmp, buff, sizeof(T));
+        tmp = bits::to_hbo(tmp);
+        std::memcpy(buff, &tmp, sizeof(T));
+        buff += sizeof(T);
+        offset += sizeof(T);
+        buffsz -= sizeof(T);
+    }
+
+    return offset;
+}
+
+
+// Interpret the given buffer as a sequence of elements of type T,
+// and convert each T in place from host byte order to
+// network byte order (no conversion if the native endianness is
+// big endian i.e. network byte order).
+// If buffsz is a multiple of sizeof(T), the whole buffer is
+// processed and buffsz is returned. Otherwise the processing
+// stops as soon as fewer than sizeof(T) bytes remain, and
+// the return value will be the offset in buff (< buffsz)
+// of the next byte to be processed.
+template<typename T>
+std::size_t to_nbo(std::uint8_t *buff, std::size_t buffsz) {
+    static_assert(std::is_unsigned_v<T>);
+
+    std::size_t offset = 0;
+
+    while (buffsz >= sizeof(T)) {
+        T tmp;
+        std::memcpy(&tmp, buff, sizeof(T));
+        tmp = bits::to_nbo(tmp);
+        std::memcpy(buff, &tmp, sizeof(T));
+        buff += sizeof(T);
+        offset += sizeof(T);
+        buffsz -= sizeof(T);
+    }
+
+    return offset;
+}
+
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////

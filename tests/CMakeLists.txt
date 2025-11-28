@@ -142,6 +142,11 @@ add_executable(hash.sha256
 )
 CONFIGURE_TARGET(hash.sha256)
 
+add_executable(hash.sha256_hmac
+    hash/sha256_hmac.cxx
+)
+CONFIGURE_TARGET(hash.sha256_hmac)
+
 add_executable(hasht
     hasht/hasht_tests.c
     hasht/tests.c
