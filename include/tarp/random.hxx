@@ -440,5 +440,11 @@ public:
 
 }  // namespace pgen
 
+// Get a specified number of cryptographically secure
+// random bytes.
+// For example, by reading from /dev/urandom.
+std::vector<std::uint8_t> get_secure_random_bytes(std::size_t n,
+                                                  std::string *e);
+
 }  // namespace random
 };  // namespace tarp

@@ -141,6 +141,7 @@ add_library(libtarp_objects OBJECT
     src/misc/hash.c
     src/misc/ioutils.c
     src/misc/ioutils.cxx
+    src/misc/random.cxx
     src/misc/linux-event.c
     src/misc/log.c
     src/misc/math.c
