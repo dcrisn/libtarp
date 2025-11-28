@@ -66,6 +66,8 @@ void process(sha256_ctx &ctx,
              std::size_t len,
              bool last_chunk);
 
+// clear the state so that the context can be used
+// for the processing of a new separate message.
 void reset(sha256_ctx &ctx);
 
 std::string get_hashstring(sha256_ctx &ctx);
@@ -77,7 +79,7 @@ namespace detail {
 // Majority function: return the bit at each position
 // that appears most often.
 template<typename T>
-constexpr T majority(T x, T y, T z) {
+inline constexpr T majority(T x, T y, T z) {
     static_assert(std::is_unsigned_v<T>);
     return (x & y) ^ (x & z) ^ (y & z);
 }
@@ -86,7 +88,8 @@ constexpr T majority(T x, T y, T z) {
 // use the bit in y if the bit in x is 1,
 // else use the bit in z.
 template<typename T>
-constexpr T choose(T x, T y, T z) {
+inline constexpr T choose(T x, T y, T z) {
+    static_assert(std::is_unsigned_v<T>);
     return (x & y) ^ ((~x) & z);
 }
 
@@ -112,12 +115,10 @@ sha256_hmac_bytes(const std::uint8_t *msg,
                   const std::uint8_t *key,
                   std::size_t keylen);
 
-std::string
-sha256_hmac_hashstring(const std::uint8_t *msg,
-                  std::size_t msglen,
-                  const std::uint8_t *key,
-                  std::size_t keylen);
-
+std::string sha256_hmac_hashstring(const std::uint8_t *msg,
+                                   std::size_t msglen,
+                                   const std::uint8_t *key,
+                                   std::size_t keylen);
 
 
 
