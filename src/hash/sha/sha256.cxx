@@ -30,7 +30,8 @@ void process_last(sha256_ctx &ctx) {
     using context_t = std::decay_t<decltype(ctx)>;
 
     //--------------------
-    // 5.1:
+    // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
+    // Section 5.1:
     // The purpose of this padding is to ensure that the padded message
     // is a multiple of 512 or 1024 bits, depending on the algorithm.
     // Padding can be inserted before hash computation begins on a message,
@@ -43,7 +44,7 @@ void process_last(sha256_ctx &ctx) {
     //   l+1+k = 448 mod 512
     //--------------------
     // => therefore:
-    //  k = (n*448) - l - 1
+    //    k = (n*448) - l - 1
     // For k to be non-negative, then we have two cases -- since
     // we only pad the very last chunk of an input IFF its size
     // is smaller than 512 bits (64 bytes):
@@ -62,7 +63,9 @@ void process_last(sha256_ctx &ctx) {
     // NOTE: while the official algorithm works with bitstrings,
     // hence even with lengths that are not byte multiples, the
     // implementation here will only allow for byte multiples
-    // since in practice this is the common case.
+    // since in practice this is the common case. In other words,
+    // this is a byte-oriented implementation -- to use the term
+    // in the standard document.
 
     // Since each chunk is processed in fixed blocks, then
     // the last chunk is the only one that may need padding,
@@ -86,17 +89,13 @@ void process_last(sha256_ctx &ctx) {
     std::uint64_t len = bits::to_nbo(std::uint64_t(ctx.msglen) << 3);
     std::memcpy(ctx.buff.data() + offset, &len, sizeof(std::uint64_t));
 
-    // std::cerr << "process block1\n";
     process_block(ctx, ctx.buff.data());
     if (offset > 64) {
-        // std::cerr << "process block2\n";
         process_block(ctx, ctx.buff.data() + 64);
     }
-    // std::cerr << "process block2 end\n";
 }
 
 void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
-    // std::cerr << "#1\n";
     using namespace detail;
     using word_t = sha256_ctx::word_t;
     using C = sha256_ctx;
@@ -120,14 +119,35 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
 
     // first 16 words are the block itself
     std::memcpy(sched.data(), data, C::WORD_SIZE * 16);
-    for (auto &w : sched) {
-        w = bits::to_hbo(w);
-    }
+
+    // SHA256 stores words in big-endian order; hence
+    // we must convert them to native endianness here
+    // when working with them.
+#define DO_ONE(pos) \
+    { sched[pos] = bits::to_hbo(sched[pos]); }
+#define DO_FOUR(pos) \
+    DO_ONE(pos);     \
+    DO_ONE(pos + 1); \
+    DO_ONE(pos + 2); \
+    DO_ONE(pos + 3);
+#define DO_EIGHT(pos) \
+    DO_FOUR(pos);     \
+    DO_FOUR(pos + 4);
+
+    // NOTE: here we do the same as:
+    // for (unsigned i = 0; i < 16; ++i) {
+    //     sched[i] = bits::to_hbo(shed[i]);
+    // }
+    // However, we unroll the loop for instruction
+    // parallelism.
+    DO_EIGHT(0);
+    DO_EIGHT(8);
+#undef DO_ONE
+#undef DO_FOUR
+#undef DO_EIGHT
 
     using bits::rotate_left;
     using bits::rotate_right;
-
-    // std::cerr << "#2\n";
 
     // operations given on p10.
     constexpr auto sum0 = [](word_t x) {
@@ -143,43 +163,58 @@ void process_block(sha256_ctx &ctx, const std::uint8_t *data) {
         return rotate_right<17>(x) ^ rotate_right<19>(x) ^ (x >> 10);
     };
 
-    // std::cerr << "#3\n";
-
     // rest of the words [17..64] are computed
     for (unsigned i = 16; i < sched.size(); ++i) {
         sched[i] =
           op1(sched[i - 2]) + sched[i - 7] + op0(sched[i - 15]) + sched[i - 16];
     }
 
-    // std::cerr << "#4\n";
-
-    for (unsigned i = 0; i < sched.size(); ++i) {
-        // std::cerr << "iteration: " << i << std::endl;
-        T1 = h + sum1(e) + choose(e, f, g) + sha256_constants[i] + sched[i];
-        T2 = sum0(a) + majority(a, b, c);
-        h = g;
-        g = f;
-        f = e;
-        e = d + T1;
-        d = c;
-        c = b;
-        b = a;
-        a = T1 + T2;
+#define DO_ONE(i)                                                            \
+    {                                                                        \
+        T1 = h + sum1(e) + choose(e, f, g) + sha256_constants[i] + sched[i]; \
+        T2 = sum0(a) + majority(a, b, c);                                    \
+        h = g;                                                               \
+        g = f;                                                               \
+        f = e;                                                               \
+        e = d + T1;                                                          \
+        d = c;                                                               \
+        c = b;                                                               \
+        b = a;                                                               \
+        a = T1 + T2;                                                         \
     }
+#define DO_FOUR(pos) \
+    DO_ONE(pos);     \
+    DO_ONE(pos + 1); \
+    DO_ONE(pos + 2); \
+    DO_ONE(pos + 3);
+#define DO_EIGHT(pos) \
+    DO_FOUR(pos);     \
+    DO_FOUR(pos + 4);
 
-    // std::cerr << "#5\n";
+    // do the schedule;
+    // same as:
+    //   for (unsigned i = 0 ; i < sched.size(); ++i) DO_ONE(i)
+    DO_EIGHT(0);
+    DO_EIGHT(8);
+    DO_EIGHT(16);
+    DO_EIGHT(24);
+    DO_EIGHT(32);
+    DO_EIGHT(40);
+    DO_EIGHT(48);
+    DO_EIGHT(56);
+#undef DO_ONE
+#undef DO_FOUR
+#undef DO_EIGHT
 
     // compute the i-th intermediate hash value
-    ctx.hash[0] = ctx.hash[0] + a;
-    ctx.hash[1] = ctx.hash[1] + b;
-    ctx.hash[2] = ctx.hash[2] + c;
-    ctx.hash[3] = ctx.hash[3] + d;
-    ctx.hash[4] = ctx.hash[4] + e;
-    ctx.hash[5] = ctx.hash[5] + f;
-    ctx.hash[6] = ctx.hash[6] + g;
-    ctx.hash[7] = ctx.hash[7] + h;
-
-    // std::cerr << "#6\n";
+    ctx.hash[0] += a;
+    ctx.hash[1] += b;
+    ctx.hash[2] += c;
+    ctx.hash[3] += d;
+    ctx.hash[4] += e;
+    ctx.hash[5] += f;
+    ctx.hash[6] += g;
+    ctx.hash[7] += h;
 }
 
 
@@ -192,8 +227,7 @@ void process(sha256_ctx &ctx,
     using context_t = std::decay_t<decltype(ctx)>;
     using namespace detail;
 
-    while (len > 0) {
-        // std::cerr << "in loop\n";
+    const auto process_one = [&]() {
         const std::size_t n =
           std::min(context_t::BLOCK_SIZE_BYTES - ctx.offset, len);
         std::memcpy(ctx.buff.data() + ctx.offset, data, n);
@@ -204,17 +238,32 @@ void process(sha256_ctx &ctx,
         len -= n;
 
         if (ctx.offset == context_t::BLOCK_SIZE_BYTES) {
-            // std::cerr << "before call to process_bloclk\n";
             process_block(ctx, ctx.buff.data());
-            // std::cerr << "after call to process_bloclk\n";
             ctx.offset = 0;
         }
+    };
+
+    // if we have a partial block, must complete this first.
+    if (ctx.offset > 0) {
+        process_one();
+    }
+
+    // now process full blocks as much as possible, avoiding the
+    // extra copy
+    while (len >= context_t::BLOCK_SIZE_BYTES) {
+        ctx.msglen += context_t::BLOCK_SIZE_BYTES;
+        process_block(ctx, data);
+        data += context_t::BLOCK_SIZE_BYTES;
+        len -= context_t::BLOCK_SIZE_BYTES;
+    }
+
+    // now consume any remaining bytes
+    if (len > 0) {
+        process_one();
     }
 
     if (last_chunk) {
-        // std::cerr << "before call to process_last\n";
         process_last(ctx);
-        // std::cerr << "after call to process_last\n";
     }
 }
 
