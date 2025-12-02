@@ -180,6 +180,11 @@ add_executable(misc
 )
 CONFIGURE_TARGET(misc)
 
+add_executable(callback
+    callback/main.cxx
+)
+CONFIGURE_TARGET(callback)
+
 add_executable(pipeline
     pipeline/pipeline.cxx
 )
